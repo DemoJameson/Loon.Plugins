@@ -5,6 +5,10 @@ const CACHE_STATUS = {
     FOUND: 1,
     NOT_FOUND: 2
 };
+const MEDIA_TYPE = {
+    SHOW: 1,
+    MOVIE: 2
+};
 const preferredLanguage = "zh-CN";
 const body = $response.body;
 const requestUrl = ($request && $request.url) ? $request.url : "";
@@ -216,12 +220,12 @@ function extractNormalizedTranslation(items) {
 }
 
 async function getTranslation(cache, mediaType, traktId) {
-    const cacheKey = mediaType + ":" + String(traktId);
+    const cacheKey = String(traktId);
     if (isFresh(cache[cacheKey])) {
         return cache[cacheKey];
     }
 
-    const path = mediaType === "movie" ? "movies" : "shows";
+    const path = mediaType === MEDIA_TYPE.MOVIE ? "movies" : "shows";
     const url = "https://apiz.trakt.tv/" + path + "/" + encodeURIComponent(traktId) + "/translations/zh?extended=all";
     const translations = normalizeTranslations(await fetchJson(url));
     const merged = extractNormalizedTranslation(translations);
@@ -246,7 +250,7 @@ async function processInBatches(items, worker) {
     }
 }
 
-function applyTranslation(item, entry) {
+function applyShowTranslation(item, entry) {
     if (!item || !item.show || !entry || !entry.translation) {
         return;
     }
@@ -294,73 +298,7 @@ function applyTranslationToDetail(data, entry) {
     }
 }
 
-function collectUniqueIds(arr, mediaType) {
-    const seen = {};
-    const ids = [];
-
-    arr.forEach((item) => {
-        const traktId = mediaType === "show"
-            ? (item && item.show && item.show.ids ? item.show.ids.trakt : null)
-            : (item && item.movie && item.movie.ids ? item.movie.ids.trakt : null);
-
-        if (traktId === undefined || traktId === null) {
-            return;
-        }
-
-        const cacheKey = mediaType + ":" + String(traktId);
-        if (!seen[cacheKey]) {
-            seen[cacheKey] = true;
-            ids.push(traktId);
-        }
-    });
-
-    return ids;
-}
-
-function applyTranslationsToItems(arr, cache, mediaType) {
-    arr.forEach((item) => {
-        const traktId = mediaType === "show"
-            ? (item && item.show && item.show.ids ? item.show.ids.trakt : null)
-            : (item && item.movie && item.movie.ids ? item.movie.ids.trakt : null);
-
-        if (traktId === undefined || traktId === null) {
-            return;
-        }
-
-        const entry = cache[mediaType + ":" + String(traktId)];
-        if (mediaType === "show") {
-            applyTranslation(item, entry);
-            return;
-        }
-
-        applyMovieTranslation(item, entry);
-    });
-}
-
-async function handleMediaList(mediaType, logLabel) {
-    const arr = JSON.parse(body);
-    if (!Array.isArray(arr) || arr.length === 0) {
-        $done({ body: body });
-        return;
-    }
-
-    const cache = loadCache();
-    const traktIds = collectUniqueIds(arr, mediaType);
-
-    await processInBatches(traktIds, async (traktId) => {
-        try {
-            await getTranslation(cache, mediaType, traktId);
-        } catch (e) {
-            console.log("Trakt " + logLabel + " translation fetch failed for " + mediaType + "_id=" + traktId + ": " + e);
-        }
-    });
-
-    applyTranslationsToItems(arr, cache, mediaType);
-    saveCache(cache);
-    $done({ body: JSON.stringify(arr) });
-}
-
-function collectMixedMediaIds(arr) {
+function collectMediaIds(arr) {
     const seen = {};
     const showIds = [];
     const movieIds = [];
@@ -368,7 +306,7 @@ function collectMixedMediaIds(arr) {
     arr.forEach((item) => {
         const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
         if (showId !== undefined && showId !== null) {
-            const showKey = "show:" + String(showId);
+            const showKey = String(showId);
             if (!seen[showKey]) {
                 seen[showKey] = true;
                 showIds.push(showId);
@@ -377,7 +315,7 @@ function collectMixedMediaIds(arr) {
 
         const movieId = item && item.movie && item.movie.ids ? item.movie.ids.trakt : null;
         if (movieId !== undefined && movieId !== null) {
-            const movieKey = "movie:" + String(movieId);
+            const movieKey = String(movieId);
             if (!seen[movieKey]) {
                 seen[movieKey] = true;
                 movieIds.push(movieId);
@@ -391,21 +329,21 @@ function collectMixedMediaIds(arr) {
     };
 }
 
-function applyTranslationsToMixedItems(arr, cache) {
+function applyTranslationsToItems(arr, cache) {
     arr.forEach((item) => {
         const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
         if (showId !== undefined && showId !== null) {
-            applyTranslation(item, cache["show:" + String(showId)]);
+            applyShowTranslation(item, cache[String(showId)]);
         }
 
         const movieId = item && item.movie && item.movie.ids ? item.movie.ids.trakt : null;
         if (movieId !== undefined && movieId !== null) {
-            applyMovieTranslation(item, cache["movie:" + String(movieId)]);
+            applyMovieTranslation(item, cache[String(movieId)]);
         }
     });
 }
 
-async function handleMixedMediaList(logLabel) {
+async function handleMediaList(logLabel) {
     const arr = JSON.parse(body);
     if (!Array.isArray(arr) || arr.length === 0) {
         $done({ body: body });
@@ -413,11 +351,11 @@ async function handleMixedMediaList(logLabel) {
     }
 
     const cache = loadCache();
-    const ids = collectMixedMediaIds(arr);
+    const ids = collectMediaIds(arr);
 
     await processInBatches(ids.showIds, async (showId) => {
         try {
-            await getTranslation(cache, "show", showId);
+            await getTranslation(cache, MEDIA_TYPE.SHOW, showId);
         } catch (e) {
             console.log("Trakt " + logLabel + " translation fetch failed for show_id=" + showId + ": " + e);
         }
@@ -425,18 +363,18 @@ async function handleMixedMediaList(logLabel) {
 
     await processInBatches(ids.movieIds, async (movieId) => {
         try {
-            await getTranslation(cache, "movie", movieId);
+            await getTranslation(cache, MEDIA_TYPE.MOVIE, movieId);
         } catch (e) {
             console.log("Trakt " + logLabel + " translation fetch failed for movie_id=" + movieId + ": " + e);
         }
     });
 
-    applyTranslationsToMixedItems(arr, cache);
+    applyTranslationsToItems(arr, cache);
     saveCache(cache);
     $done({ body: JSON.stringify(arr) });
 }
 
-function handleMediaDetail(mediaType) {
+function handleMediaDetail() {
     const data = JSON.parse(body);
     if (!data || typeof data !== "object" || Array.isArray(data)) {
         $done({ body: body });
@@ -450,7 +388,7 @@ function handleMediaDetail(mediaType) {
     }
 
     const cache = loadCache();
-    const entry = cache[mediaType + ":" + String(traktId)];
+    const entry = cache[String(traktId)];
     applyTranslationToDetail(data, entry);
     $done({ body: JSON.stringify(data) });
 }
@@ -496,112 +434,112 @@ function handleUserSettings() {
         }
 
         if (/\/sync\/progress\/up_next_nitro(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("show", "up_next");
+            await handleMediaList("up_next");
             return;
         }
 
         if (/\/sync\/playback\/movies(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("movie", "playback movie");
+            await handleMediaList("playback movie");
             return;
         }
 
         if (/\/users\/me\/watchlist\/shows\/released\/desc(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("show", "watchlist show");
+            await handleMediaList("watchlist show");
             return;
         }
 
         if (/\/users\/me\/watchlist\/movies\/released\/desc(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("movie", "watchlist movie");
+            await handleMediaList("watchlist movie");
             return;
         }
 
         if (/\/calendars\/my\/shows\/\d{4}-\d{2}-\d{2}\/\d+(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("show", "calendar show");
+            await handleMediaList("calendar show");
             return;
         }
 
         if (/\/calendars\/my\/movies\/\d{4}-\d{2}-\d{2}\/\d+(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("movie", "calendar movie");
+            await handleMediaList("calendar movie");
             return;
         }
 
         if (/\/users\/[^\/]+?\/history\/episodes\/?(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("show", "history episode");
+            await handleMediaList("history episode");
             return;
         }
 
         if (/\/users\/[^\/]+?\/history\/movies\/?(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("movie", "history movie");
+            await handleMediaList("history movie");
             return;
         }
 
         if (/\/users\/[^\/]+?\/history\/?(?:\?|$)/.test(requestUrl)) {
-            await handleMixedMediaList("history");
+            await handleMediaList("history");
             return;
         }
 
         if (/\/users\/[^\/]+?\/collection\/media(?:\?|$)/.test(requestUrl)) {
-            await handleMixedMediaList("collection media");
+            await handleMediaList("collection media");
             return;
         }
 
         if (/\/users\/me\/following\/activities(?:\?|$)/.test(requestUrl)) {
-            await handleMixedMediaList("following activities");
+            await handleMediaList("following activities");
             return;
         }
 
         if (/\/users\/[^\/]+?\/lists\/\d+\/items(?:\?|$)/.test(requestUrl)) {
-            await handleMixedMediaList("list items");
+            await handleMediaList("list items");
             return;
         }
 
         if (/\/users\/[^\/]+?\/favorites\/?(?:\?.*)?$/.test(requestUrl)) {
-            await handleMixedMediaList("favorites");
+            await handleMediaList("favorites");
             return;
         }
 
         if (/\/media\/trending(?:\?|$)/.test(requestUrl)) {
-            await handleMixedMediaList("media trending");
+            await handleMediaList("media trending");
             return;
         }
 
         if (/\/media\/recommendations(?:\?|$)/.test(requestUrl)) {
-            await handleMixedMediaList("media recommendations");
+            await handleMediaList("media recommendations");
             return;
         }
 
         if (/\/media\/anticipated(?:\?|$)/.test(requestUrl)) {
-            await handleMixedMediaList("media anticipated");
+            await handleMediaList("media anticipated");
             return;
         }
 
         if (/\/media\/popular\/next(?:\?|$)/.test(requestUrl)) {
-            await handleMixedMediaList("media popular next");
+            await handleMediaList("media popular next");
             return;
         }
 
         if (/\/users\/me\/watchlist(?:\?|$)/.test(requestUrl)) {
-            await handleMixedMediaList("watchlist");
+            await handleMediaList("watchlist");
             return;
         }
 
         if (/\/users\/me\/watchlist\/shows(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("show", "watchlist show");
+            await handleMediaList("watchlist show");
             return;
         }
 
         if (/\/users\/me\/watchlist\/movies(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("movie", "watchlist movie");
+            await handleMediaList("watchlist movie");
             return;
         }
 
         if (/\/shows\/[^\/]+(?:\?.*)?$/.test(requestUrl)) {
-            handleMediaDetail("show");
+            handleMediaDetail();
             return;
         }
 
         if (/\/movies\/[^\/]+(?:\?.*)?$/.test(requestUrl)) {
-            handleMediaDetail("movie");
+            handleMediaDetail();
             return;
         }
 
