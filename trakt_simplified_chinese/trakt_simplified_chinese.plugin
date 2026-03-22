@@ -1,0 +1,51 @@
+#!name=优化 Trakt 简体中文体验
+#!desc=首页翻译为中文，详情页优先使用简体中文。
+#!icon=https://app.trakt.tv/pwa/android/icon_192.png
+#!homepage=https://github.com/DemoJameson/Loon.Plugins
+#!openUrl=https://apps.apple.com/app/id1514873602
+#!author=DemoJameson
+
+[Script]
+# 拦截 Trakt.tv 的 translations/zh 接口，按 zh-CN 优先级排序
+http-response ^https:\/\/apiz\.trakt\.tv\/.+\/translations\/zh(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=10, tag=Trakt Translations
+# 拦截 up_next_nitro，按 show.ids.trakt 获取并缓存简体中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/sync\/progress\/up_next_nitro(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Up Next
+# 拦截 playback/movies，按 movie.ids.trakt 获取并缓存简体中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/sync\/playback\/movies(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Playback Movies
+# 拦截 watchlist/shows，按 show.ids.trakt 获取并缓存简体中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/shows\/released\/desc(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Watchlist Shows
+# 拦截 watchlist/movies，按 movie.ids.trakt 获取并缓存简体中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/movies\/released\/desc(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Watchlist Movies
+# 拦截 calendars/my/shows，按 show.ids.trakt 获取并缓存简体中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/calendars\/my\/shows\/\d{4}-\d{2}-\d{2}\/\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Calendar Shows
+# 拦截 calendars/my/movies，按 movie.ids.trakt 获取并缓存简体中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/calendars\/my\/movies\/\d{4}-\d{2}-\d{2}\/\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Calendar Movies
+# 拦截 history，混合处理 show 和 movie 的中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/history\/?(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt History
+# 拦截 history/episodes，按 show.ids.trakt 获取并缓存简体中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/history\/episodes\/?(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt History Episodes
+# 拦截 history/movies，按 movie.ids.trakt 获取并缓存简体中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/history\/movies\/?(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt History Movies
+# 拦截 collection/media，混合处理 show 和 movie 的中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/collection\/media(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Collection Media
+# 拦截 following/activities，混合处理 show 和 movie 的中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/following\/activities(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Following Activities
+# 拦截 list/items，混合处理 show 和 movie 的中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/lists\/\d+\/items(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt List Items
+# 拦截 media/trending，混合处理 show 和 movie 的中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/media\/trending(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Media Trending
+# 拦截 media/recommendations，混合处理 show 和 movie 的中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/media\/recommendations(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Media Recommendations
+# 拦截 media/anticipated，混合处理 show 和 movie 的中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/media\/anticipated(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Media Anticipated
+# 拦截 media/popular/next，混合处理 show 和 movie 的中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/media\/popular\/next(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Media Popular Next
+# 拦截 watchlist，混合处理 show 和 movie 的中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Watchlist
+# 拦截 watchlist/shows，按 show.ids.trakt 获取并缓存简体中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/shows(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Watchlist Shows Flat
+# 拦截 watchlist/movies，按 movie.ids.trakt 获取并缓存简体中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/movies(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Watchlist Movies Flat
+
+[MITM]
+hostname = apiz.trakt.tv
