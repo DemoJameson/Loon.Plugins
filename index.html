@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Loon Plugins</title>
+  <meta name="description" content="DemoJameson 的 Loon 插件列表与一键导入页面。">
+  <style>
+    :root {
+      --bg: #f4efe4;
+      --panel: rgba(255, 252, 245, 0.82);
+      --panel-strong: #fffaf1;
+      --text: #1e1f1c;
+      --muted: #605b50;
+      --line: rgba(30, 31, 28, 0.12);
+      --accent: #b24a2b;
+      --accent-strong: #8c351c;
+      --shadow: 0 24px 60px rgba(66, 38, 19, 0.12);
+      --radius: 24px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(178, 74, 43, 0.18), transparent 34%),
+        radial-gradient(circle at top right, rgba(146, 169, 132, 0.22), transparent 28%),
+        linear-gradient(180deg, #f8f3e8 0%, var(--bg) 100%);
+    }
+
+    a {
+      color: inherit;
+    }
+
+    .shell {
+      width: min(1100px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 56px 0 64px;
+    }
+
+    .hero,
+    .card,
+    .notice {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .hero {
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+
+    .hero-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(178, 74, 43, 0.1);
+      color: var(--accent-strong);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    .repo-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel-strong);
+      color: var(--text);
+      transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+    }
+
+    .repo-link:hover {
+      transform: translateY(-1px);
+      border-color: rgba(30, 31, 28, 0.26);
+      background: #fff;
+    }
+
+    .repo-link svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+
+    h1 {
+      margin: 18px 0 12px;
+      font-size: clamp(36px, 6vw, 64px);
+      line-height: 0.96;
+      letter-spacing: -0.04em;
+    }
+
+    .lead {
+      max-width: 760px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.7;
+    }
+
+    .notice {
+      display: none;
+      margin-bottom: 24px;
+      padding: 24px;
+    }
+
+    .notice.visible {
+      display: block;
+    }
+
+    .notice h2 {
+      margin: 0 0 10px;
+      font-size: 24px;
+    }
+
+    .notice p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 0 18px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+    }
+
+    .button.primary {
+      background: var(--accent);
+      color: #fff9f4;
+    }
+
+    .button.primary:hover {
+      background: var(--accent-strong);
+    }
+
+    .button.secondary {
+      border-color: var(--line);
+      background: var(--panel-strong);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      padding: 24px;
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+      flex: 1;
+    }
+
+    .meta {
+      margin: 16px 0 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .footer {
+      margin-top: 22px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(30, 31, 28, 0.06);
+      font-family: "Consolas", "SFMono-Regular", monospace;
+      font-size: 0.92em;
+    }
+
+    @media (max-width: 640px) {
+      .shell {
+        width: min(100% - 20px, 1100px);
+        padding: 24px 0 40px;
+      }
+
+      .hero,
+      .card,
+      .notice {
+        border-radius: 20px;
+      }
+
+      .hero,
+      .card,
+      .notice {
+        padding: 20px;
+      }
+
+      .lead {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="hero-top">
+        <span class="eyebrow">Github Pages</span>
+        <a
+          class="repo-link"
+          href="https://github.com/DemoJameson/Loon.Plugins"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="查看 GitHub 仓库"
+          title="查看 GitHub 仓库"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.73 0 8.33c0 3.68 2.29 6.8 5.47 7.9.4.08.55-.18.55-.4 0-.2-.01-.86-.01-1.57-2.01.45-2.53-.51-2.69-.98-.09-.25-.48-.98-.82-1.18-.28-.16-.68-.57-.01-.58.63-.01 1.08.6 1.23.85.72 1.27 1.87.91 2.33.69.07-.54.28-.91.5-1.12-1.78-.21-3.64-.92-3.64-4.08 0-.9.31-1.63.82-2.2-.08-.21-.36-1.07.08-2.23 0 0 .67-.22 2.2.84A7.32 7.32 0 0 1 8 3.86c.68 0 1.37.09 2.01.27 1.53-1.06 2.2-.84 2.2-.84.44 1.16.16 2.02.08 2.23.51.57.82 1.3.82 2.2 0 3.17-1.87 3.87-3.65 4.08.29.26.54.77.54 1.55 0 1.12-.01 2.02-.01 2.29 0 .22.14.49.55.4A8.33 8.33 0 0 0 16 8.33C16 3.73 12.42 0 8 0Z"></path>
+          </svg>
+        </a>
+      </div>
+      <h1>Loon Plugins</h1>
+      <p class="lead">
+        这里集中展示当前仓库里的 Loon 插件，并提供适合在 Github Pages、Markdown 和移动端浏览器中使用的一键导入入口。
+      </p>
+    </section>
+
+    <section class="notice" id="import-notice" aria-live="polite">
+      <h2 id="import-title">正在准备导入</h2>
+      <p id="import-text">
+        页面会自动尝试拉起 Loon。如果没有自动跳转，可以手动点击下方按钮。
+      </p>
+      <div class="actions">
+        <a class="button primary" id="import-button" href="#">打开 Loon 导入</a>
+        <a class="button secondary" id="raw-button" href="#" target="_blank" rel="noreferrer">查看插件文件</a>
+      </div>
+      <div class="footer">
+        当前支持参数：<code>?plugin=&lt;plugin-url&gt;</code>
+      </div>
+    </section>
+
+    <section class="grid" id="plugin-list"></section>
+  </main>
+
+  <script>
+    const baseImportPage = "https://demojameson.github.io/Loon.Plugins/";
+    const plugins = [
+      {
+        id: "trakt_simplified_chinese",
+        name: "Trakt Simplified Chinese",
+        description: "优先补全和显示 Trakt 的简体中文标题、简介等内容。",
+        pluginUrl: "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.plugin"
+      },
+      {
+        id: "fix_infuse_image_language",
+        name: "Fix Infuse Image Language",
+        description: "调整 TMDB 图片语言排序，改善 Infuse 图片语言匹配。",
+        pluginUrl: "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.plugin"
+      }
+    ];
+
+    function buildImportPageUrl(pluginUrl) {
+      return baseImportPage + "?plugin=" + encodeURIComponent(pluginUrl);
+    }
+
+    function buildLoonUrl(pluginUrl) {
+      return "loon://import?plugin=" + encodeURIComponent(pluginUrl);
+    }
+
+    function renderPlugins() {
+      const list = document.getElementById("plugin-list");
+      list.innerHTML = plugins.map((plugin) => {
+        return `
+          <article class="card">
+            <h2>${plugin.name}</h2>
+            <p>${plugin.description}</p>
+            <div class="actions">
+              <a class="button primary" href="${buildImportPageUrl(plugin.pluginUrl)}">导入到 Loon</a>
+              <a class="button secondary" href="${plugin.pluginUrl}" target="_blank" rel="noreferrer">查看插件</a>
+            </div>
+            <div class="meta">${plugin.id}</div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function triggerImport(pluginUrl) {
+      const loonUrl = buildLoonUrl(pluginUrl);
+      const notice = document.getElementById("import-notice");
+      const importButton = document.getElementById("import-button");
+      const rawButton = document.getElementById("raw-button");
+      const importText = document.getElementById("import-text");
+      const matchedPlugin = plugins.find((item) => item.pluginUrl === pluginUrl);
+
+      document.getElementById("import-title").textContent = matchedPlugin
+        ? "正在导入 " + matchedPlugin.name
+        : "正在导入插件";
+      importText.textContent = "页面会自动尝试拉起 Loon。如果没有自动跳转，可以手动点击下方按钮。";
+      importButton.href = loonUrl;
+      rawButton.href = pluginUrl;
+      notice.classList.add("visible");
+
+      window.setTimeout(() => {
+        window.location.href = loonUrl;
+      }, 120);
+    }
+
+    renderPlugins();
+
+    const params = new URLSearchParams(window.location.search);
+    const pluginUrl = params.get("plugin");
+    if (pluginUrl) {
+      triggerImport(pluginUrl);
+    }
+  </script>
+</body>
+</html>

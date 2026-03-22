@@ -2,6 +2,10 @@
 
 个人使用的 Loon 插件仓库，主要收录一些影视相关插件。
 
+Github Pages 页面：
+
+- 插件列表首页：<https://demojameson.github.io/Loon.Plugins/>
+
 ## 插件列表
 
 | 插件 | 说明 | 导入 Loon |
@@ -38,5 +42,5 @@
 
 [trakt-plugin]: https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.plugin
 [infuse-plugin]: https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.plugin
-[trakt-import]: https://gocy.pages.dev/#loon://import?plugin=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.plugin
-[infuse-import]: https://gocy.pages.dev/#loon://import?plugin=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.plugin
+[trakt-import]: https://demojameson.github.io/Loon.Plugins/?plugin=https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FLoon.Plugins%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.plugin
+[infuse-import]: https://demojameson.github.io/Loon.Plugins/?plugin=https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FLoon.Plugins%2Fmain%2Ffix_infuse_image_language%2Ffix_infuse_image_language.plugin
