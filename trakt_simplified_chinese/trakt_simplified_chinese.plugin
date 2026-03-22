@@ -50,6 +50,10 @@ http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist(\?.*)?$ script-pa
 http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/shows(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Watchlist Shows Flat
 # 拦截 watchlist/movies，按 movie.ids.trakt 获取并缓存简体中文信息
 http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/movies(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Watchlist Movies Flat
+# 拦截 shows
+http-response ^https:\/\/apiz\.trakt\.tv\/shows\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Show Detail
+# 拦截 movies
+http-response ^https:\/\/apiz\.trakt\.tv\/movies\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Movie Detail
 
 [MITM]
 hostname = apiz.trakt.tv

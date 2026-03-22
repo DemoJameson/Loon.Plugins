@@ -278,6 +278,22 @@ function applyMovieTranslation(item, entry) {
     }
 }
 
+function applyTranslationToDetail(data, entry) {
+    if (!data || !entry || !entry.translation) {
+        return;
+    }
+
+    if (entry.translation.title) {
+        data.title = entry.translation.title;
+    }
+    if (entry.translation.overview) {
+        data.overview = entry.translation.overview;
+    }
+    if (entry.translation.tagline) {
+        data.tagline = entry.translation.tagline;
+    }
+}
+
 function collectUniqueIds(arr, mediaType) {
     const seen = {};
     const ids = [];
@@ -420,6 +436,25 @@ async function handleMixedMediaList(logLabel) {
     $done({ body: JSON.stringify(arr) });
 }
 
+function handleMediaDetail(mediaType) {
+    const data = JSON.parse(body);
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+        $done({ body: body });
+        return;
+    }
+
+    const traktId = data && data.ids ? data.ids.trakt : null;
+    if (traktId === undefined || traktId === null) {
+        $done({ body: body });
+        return;
+    }
+
+    const cache = loadCache();
+    const entry = cache[mediaType + ":" + String(traktId)];
+    applyTranslationToDetail(data, entry);
+    $done({ body: JSON.stringify(data) });
+}
+
 function handleTranslations() {
     const arr = JSON.parse(body);
     if (!Array.isArray(arr) || arr.length === 0) {
@@ -557,6 +592,16 @@ function handleUserSettings() {
 
         if (/\/users\/me\/watchlist\/movies(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("movie", "watchlist movie");
+            return;
+        }
+
+        if (/\/shows\/[^\/]+(?:\?.*)?$/.test(requestUrl)) {
+            handleMediaDetail("show");
+            return;
+        }
+
+        if (/\/movies\/[^\/]+(?:\?.*)?$/.test(requestUrl)) {
+            handleMediaDetail("movie");
             return;
         }
 
