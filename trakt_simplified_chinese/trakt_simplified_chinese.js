@@ -231,15 +231,13 @@ async function getTranslation(cache, mediaType, traktId) {
     const merged = extractNormalizedTranslation(translations);
     if (!merged.translation) {
         cache[cacheKey] = createCacheEntry(merged.status, null);
-        return cache[cacheKey];
-    }
-
-    if (merged.status === CACHE_STATUS.FOUND) {
+    } else if (merged.status === CACHE_STATUS.FOUND) {
         cache[cacheKey] = createPermanentCacheEntry(CACHE_STATUS.FOUND, merged.translation);
-        return cache[cacheKey];
+    } else {
+        cache[cacheKey] = createCacheEntry(CACHE_STATUS.NOT_FOUND, merged.translation);
     }
 
-    cache[cacheKey] = createCacheEntry(CACHE_STATUS.NOT_FOUND, merged.translation);
+    saveCache(cache);
     return cache[cacheKey];
 }
 
@@ -370,7 +368,6 @@ async function handleMediaList(logLabel) {
     });
 
     applyTranslationsToItems(arr, cache);
-    saveCache(cache);
     $done({ body: JSON.stringify(arr) });
 }
 
