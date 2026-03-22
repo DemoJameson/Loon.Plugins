@@ -6,6 +6,8 @@
 #!author=DemoJameson
 
 [Script]
+# 拦截 users/settings，修改 VIP 和广告展示状态
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/settings(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=10, tag=Trakt User Settings
 # 拦截 Trakt.tv 的 translations/zh 接口，按 zh-CN 优先级排序
 http-response ^https:\/\/apiz\.trakt\.tv\/.+\/translations\/zh(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=10, tag=Trakt Translations
 # 拦截 up_next_nitro，按 show.ids.trakt 获取并缓存简体中文信息

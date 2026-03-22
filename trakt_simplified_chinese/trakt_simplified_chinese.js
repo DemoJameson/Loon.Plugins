@@ -432,8 +432,34 @@ function handleTranslations() {
     $done({ body: JSON.stringify(merged) });
 }
 
+function handleUserSettings() {
+    const data = JSON.parse(body);
+
+    if (!data || typeof data !== "object") {
+        $done({ body: body });
+        return;
+    }
+
+    if (!data.user || typeof data.user !== "object") {
+        data.user = {};
+    }
+    data.user.vip = true;
+
+    if (!data.account || typeof data.account !== "object") {
+        data.account = {};
+    }
+    data.account.display_ads = false;
+
+    $done({ body: JSON.stringify(data) });
+}
+
 (async () => {
     try {
+        if (/\/users\/settings(?:\?|$)/.test(requestUrl)) {
+            handleUserSettings();
+            return;
+        }
+
         if (/\/sync\/progress\/up_next_nitro(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("show", "up_next");
             return;
