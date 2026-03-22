@@ -49,6 +49,7 @@
 - `users/me/history/movies`
 - `users/me/following/activities`
 - `users/{username}/lists/{list_id}/items`
+- `users/{username}/favorites`
 
 ### 工作方式
 

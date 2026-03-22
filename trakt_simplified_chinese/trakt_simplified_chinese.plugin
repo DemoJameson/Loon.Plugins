@@ -32,6 +32,8 @@ http-response ^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/collection\/media(\?.*
 http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/following\/activities(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Following Activities
 # 拦截 list/items，混合处理 show 和 movie 的中文信息
 http-response ^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/lists\/\d+\/items(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt List Items
+# 拦截 users/favorites，混合处理 show 和 movie 的中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/favorites\/?(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Favorites
 # 拦截 media/trending，混合处理 show 和 movie 的中文信息
 http-response ^https:\/\/apiz\.trakt\.tv\/media\/trending(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, tag=Trakt Media Trending
 # 拦截 media/recommendations，混合处理 show 和 movie 的中文信息

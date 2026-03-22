@@ -494,6 +494,11 @@ function handleTranslations() {
             return;
         }
 
+        if (/\/users\/[^\/]+?\/favorites\/?(?:\?.*)?$/.test(requestUrl)) {
+            await handleMixedMediaList("favorites");
+            return;
+        }
+
         if (/\/media\/trending(?:\?|$)/.test(requestUrl)) {
             await handleMixedMediaList("media trending");
             return;
