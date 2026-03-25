@@ -1,4 +1,4 @@
-const CACHE_KEY = "trakt_zh_cn_cache_v1";
+const CACHE_KEY = "trakt_zh_cn_cache_v2";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;
 const CACHE_STATUS = {
@@ -12,6 +12,11 @@ const MEDIA_TYPE = {
 const preferredLanguage = "zh-CN";
 const body = $response.body;
 const requestUrl = ($request && $request.url) ? $request.url : "";
+
+const pendingBackendWrites = {
+    shows: {},
+    movies: {}
+};
 
 function loadCache() {
     if (typeof $persistentStore === "undefined") {
@@ -105,6 +110,29 @@ function isEmptyTranslationValue(value) {
     return value === undefined || value === null || value === "";
 }
 
+function hasUsefulTranslation(translation) {
+    return !!(
+        translation &&
+        (!isEmptyTranslationValue(translation.title) ||
+            !isEmptyTranslationValue(translation.overview) ||
+            !isEmptyTranslationValue(translation.tagline))
+    );
+}
+
+function normalizeTranslationPayload(translation) {
+    if (!translation || typeof translation !== "object") {
+        return null;
+    }
+
+    const normalized = {
+        title: translation.title || null,
+        overview: translation.overview || null,
+        tagline: translation.tagline || null
+    };
+
+    return hasUsefulTranslation(normalized) ? normalized : null;
+}
+
 function findTranslationByRegion(items, region) {
     return items.find((item) => {
         return item &&
@@ -153,25 +181,36 @@ function normalizeTranslations(items) {
     return items;
 }
 
-function buildRequestHeaders() {
+function buildRequestHeaders(extraHeaders, useSourceHeaders) {
     const headers = {};
     const sourceHeaders = ($request && $request.headers) ? $request.headers : {};
 
-    Object.keys(sourceHeaders).forEach((key) => {
-        const lowerKey = key.toLowerCase();
-        if (lowerKey === "host" || lowerKey === "content-length" || lowerKey === ":authority") {
-            return;
-        }
-        headers[key] = sourceHeaders[key];
-    });
+    if (useSourceHeaders !== false) {
+        Object.keys(sourceHeaders).forEach((key) => {
+            const lowerKey = key.toLowerCase();
+            if (lowerKey === "host" || lowerKey === "content-length" || lowerKey === ":authority") {
+                return;
+            }
+            headers[key] = sourceHeaders[key];
+        });
+    }
 
     headers.Accept = "application/json";
+
+    if (extraHeaders && typeof extraHeaders === "object") {
+        Object.keys(extraHeaders).forEach((key) => {
+            if (extraHeaders[key] !== undefined && extraHeaders[key] !== null && extraHeaders[key] !== "") {
+                headers[key] = extraHeaders[key];
+            }
+        });
+    }
+
     return headers;
 }
 
-function fetchJson(url) {
+function fetchJson(url, extraHeaders, useSourceHeaders) {
     return new Promise((resolve, reject) => {
-        $httpClient.get({ url: url, headers: buildRequestHeaders() }, (error, response, data) => {
+        $httpClient.get({ url: url, headers: buildRequestHeaders(extraHeaders, useSourceHeaders) }, (error, response, data) => {
             if (error) {
                 reject(error);
                 return;
@@ -180,6 +219,38 @@ function fetchJson(url) {
             const statusCode = response ? response.status : 0;
             if (statusCode < 200 || statusCode >= 300) {
                 reject("HTTP " + statusCode + " for " + url);
+                return;
+            }
+
+            try {
+                resolve(JSON.parse(data));
+            } catch (e) {
+                reject("JSON parse failed for " + url + ": " + e);
+            }
+        });
+    });
+}
+
+function postJson(url, payload, extraHeaders, useSourceHeaders) {
+    return new Promise((resolve, reject) => {
+        $httpClient.post({
+            url: url,
+            headers: buildRequestHeaders(extraHeaders, useSourceHeaders),
+            body: JSON.stringify(payload)
+        }, (error, response, data) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            const statusCode = response ? response.status : 0;
+            if (statusCode < 200 || statusCode >= 300) {
+                reject("HTTP " + statusCode + " for " + url);
+                return;
+            }
+
+            if (!data) {
+                resolve({});
                 return;
             }
 
@@ -206,39 +277,164 @@ function pickCnTranslation(items) {
 
 function extractNormalizedTranslation(items) {
     const cnTranslation = pickCnTranslation(items);
-
-    const translation = {
-        title: cnTranslation.title || null,
-        overview: cnTranslation.overview || null,
-        tagline: cnTranslation.tagline || null
-    };
+    const translation = normalizeTranslationPayload(cnTranslation);
 
     return {
-        status: cnTranslation.status || CACHE_STATUS.NOT_FOUND,
+        status: cnTranslation && cnTranslation.status ? cnTranslation.status : CACHE_STATUS.NOT_FOUND,
         translation: translation
     };
 }
 
-async function getTranslation(cache, mediaType, traktId) {
-    const cacheKey = String(traktId);
-    if (isFresh(cache[cacheKey])) {
-        return cache[cacheKey];
+function getScriptOption(name) {
+    if (typeof $argument === "undefined" || $argument === null) {
+        return "";
     }
 
-    const path = mediaType === MEDIA_TYPE.MOVIE ? "movies" : "shows";
-    const url = "https://apiz.trakt.tv/" + path + "/" + encodeURIComponent(traktId) + "/translations/zh?extended=all";
-    const translations = normalizeTranslations(await fetchJson(url));
-    const merged = extractNormalizedTranslation(translations);
-    if (!merged.translation) {
-        cache[cacheKey] = createCacheEntry(merged.status, null);
-    } else if (merged.status === CACHE_STATUS.FOUND) {
-        cache[cacheKey] = createPermanentCacheEntry(CACHE_STATUS.FOUND, merged.translation);
+    if (typeof $argument === "object") {
+        return $argument[name] || "";
+    }
+
+    if (typeof $argument === "string") {
+        return name === "backend_base_url" ? $argument : "https://trakt-translations.demojameson.de5.net";
+    }
+
+    return "";
+}
+
+function getBatchBackendBaseUrl() {
+    let value = getScriptOption("backend_base_url") || getScriptOption("backendBaseUrl");
+
+    if (typeof value !== "string") {
+        return "";
+    }
+
+    value = value.trim();
+    if (!/^https?:\/\//i.test(value)) {
+        return "";
+    }
+
+    return value.replace(/\/+$/, "");
+}
+
+function buildMediaCacheKey(mediaType, traktId) {
+    const prefix = mediaType === MEDIA_TYPE.MOVIE ? "movie:" : "show:";
+    return prefix + String(traktId);
+}
+
+function storeTranslationEntry(cache, mediaType, traktId, entry) {
+    const cacheKey = buildMediaCacheKey(mediaType, traktId);
+    const translation = normalizeTranslationPayload(entry ? entry.translation : null);
+    const status = entry && entry.status === CACHE_STATUS.FOUND ? CACHE_STATUS.FOUND : CACHE_STATUS.NOT_FOUND;
+
+    if (status === CACHE_STATUS.FOUND && translation) {
+        cache[cacheKey] = createPermanentCacheEntry(CACHE_STATUS.FOUND, translation);
     } else {
-        cache[cacheKey] = createCacheEntry(CACHE_STATUS.NOT_FOUND, merged.translation);
+        cache[cacheKey] = createCacheEntry(CACHE_STATUS.NOT_FOUND, translation);
+    }
+
+    return cache[cacheKey];
+}
+
+function getCachedTranslation(cache, mediaType, traktId) {
+    return cache[buildMediaCacheKey(mediaType, traktId)];
+}
+
+function getMissingIds(cache, mediaType, ids) {
+    return ids.filter((traktId) => {
+        return !isFresh(getCachedTranslation(cache, mediaType, traktId));
+    });
+}
+
+async function fetchCachedTranslationsFromBackend(cache, showIds, movieIds) {
+    const baseUrl = getBatchBackendBaseUrl();
+    if (!baseUrl) {
+        return false;
+    }
+
+    const query = [];
+    if (showIds.length > 0) {
+        query.push("shows=" + showIds.map((id) => encodeURIComponent(String(id))).join(","));
+    }
+    if (movieIds.length > 0) {
+        query.push("movies=" + movieIds.map((id) => encodeURIComponent(String(id))).join(","));
+    }
+
+    if (query.length === 0) {
+        return true;
+    }
+
+    const url = baseUrl + "/api/trakt/translations?" + query.join("&");
+    const payload = await fetchJson(url, null, false);
+
+    if (payload && payload.shows && typeof payload.shows === "object") {
+        Object.keys(payload.shows).forEach((id) => {
+            storeTranslationEntry(cache, MEDIA_TYPE.SHOW, id, payload.shows[id]);
+        });
+    }
+
+    if (payload && payload.movies && typeof payload.movies === "object") {
+        Object.keys(payload.movies).forEach((id) => {
+            storeTranslationEntry(cache, MEDIA_TYPE.MOVIE, id, payload.movies[id]);
+        });
     }
 
     saveCache(cache);
-    return cache[cacheKey];
+    return true;
+}
+
+function queueBackendWrite(mediaType, traktId, entry) {
+    if (mediaType === MEDIA_TYPE.SHOW) {
+        pendingBackendWrites.shows[String(traktId)] = entry;
+    } else {
+        pendingBackendWrites.movies[String(traktId)] = entry;
+    }
+}
+
+function flushBackendWrites() {
+    const baseUrl = getBatchBackendBaseUrl();
+    if (!baseUrl) {
+        return;
+    }
+
+    if (Object.keys(pendingBackendWrites.shows).length === 0 && Object.keys(pendingBackendWrites.movies).length === 0) {
+        return;
+    }
+
+    const url = baseUrl + "/api/trakt/translations";
+    postJson(url, {
+        shows: pendingBackendWrites.shows,
+        movies: pendingBackendWrites.movies
+    }, {
+        "Content-Type": "application/json"
+    }, false).catch(e => {
+        console.log("Trakt backend cache write failed during flush: " + e);
+    });
+
+    // Clear the queues immediately so we don't accidentally write twice
+    pendingBackendWrites.shows = {};
+    pendingBackendWrites.movies = {};
+}
+
+async function fetchDirectTranslation(mediaType, traktId) {
+    const path = mediaType === MEDIA_TYPE.MOVIE ? "movies" : "shows";
+    const url = "https://apiz.trakt.tv/" + path + "/" + encodeURIComponent(traktId) + "/translations/zh?extended=all";
+    const translations = normalizeTranslations(await fetchJson(url));
+    return extractNormalizedTranslation(translations);
+}
+
+async function getTranslation(cache, mediaType, traktId) {
+    const cacheEntry = getCachedTranslation(cache, mediaType, traktId);
+    if (isFresh(cacheEntry)) {
+        return cacheEntry;
+    }
+
+    const merged = await fetchDirectTranslation(mediaType, traktId);
+    const stored = storeTranslationEntry(cache, mediaType, traktId, merged);
+    saveCache(cache);
+
+    queueBackendWrite(mediaType, traktId, merged);
+
+    return stored;
 }
 
 async function processInBatches(items, worker) {
@@ -297,7 +493,8 @@ function applyTranslationToDetail(data, entry) {
 }
 
 function collectMediaIds(arr) {
-    const seen = {};
+    const seenShows = {};
+    const seenMovies = {};
     const showIds = [];
     const movieIds = [];
 
@@ -305,8 +502,8 @@ function collectMediaIds(arr) {
         const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
         if (showId !== undefined && showId !== null) {
             const showKey = String(showId);
-            if (!seen[showKey]) {
-                seen[showKey] = true;
+            if (!seenShows[showKey]) {
+                seenShows[showKey] = true;
                 showIds.push(showId);
             }
         }
@@ -314,8 +511,8 @@ function collectMediaIds(arr) {
         const movieId = item && item.movie && item.movie.ids ? item.movie.ids.trakt : null;
         if (movieId !== undefined && movieId !== null) {
             const movieKey = String(movieId);
-            if (!seen[movieKey]) {
-                seen[movieKey] = true;
+            if (!seenMovies[movieKey]) {
+                seenMovies[movieKey] = true;
                 movieIds.push(movieId);
             }
         }
@@ -331,12 +528,36 @@ function applyTranslationsToItems(arr, cache) {
     arr.forEach((item) => {
         const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
         if (showId !== undefined && showId !== null) {
-            applyShowTranslation(item, cache[String(showId)]);
+            applyShowTranslation(item, getCachedTranslation(cache, MEDIA_TYPE.SHOW, showId));
         }
 
         const movieId = item && item.movie && item.movie.ids ? item.movie.ids.trakt : null;
         if (movieId !== undefined && movieId !== null) {
-            applyMovieTranslation(item, cache[String(movieId)]);
+            applyMovieTranslation(item, getCachedTranslation(cache, MEDIA_TYPE.MOVIE, movieId));
+        }
+    });
+}
+
+async function hydrateFromBackend(cache, ids) {
+    try {
+        await fetchCachedTranslationsFromBackend(
+            cache,
+            getMissingIds(cache, MEDIA_TYPE.SHOW, ids.showIds),
+            getMissingIds(cache, MEDIA_TYPE.MOVIE, ids.movieIds)
+        );
+    } catch (e) {
+        console.log("Trakt backend cache read failed: " + e);
+    }
+}
+
+async function fetchAndPersistMissing(cache, mediaType, ids, logLabel) {
+    await processInBatches(getMissingIds(cache, mediaType, ids), async (traktId) => {
+        try {
+            const merged = await fetchDirectTranslation(mediaType, traktId);
+            storeTranslationEntry(cache, mediaType, traktId, merged);
+            queueBackendWrite(mediaType, traktId, merged);
+        } catch (e) {
+            console.log("Trakt " + logLabel + " translation fetch failed for id=" + traktId + ": " + e);
         }
     });
 }
@@ -351,27 +572,19 @@ async function handleMediaList(logLabel) {
     const cache = loadCache();
     const ids = collectMediaIds(arr);
 
-    await processInBatches(ids.showIds, async (showId) => {
-        try {
-            await getTranslation(cache, MEDIA_TYPE.SHOW, showId);
-        } catch (e) {
-            console.log("Trakt " + logLabel + " translation fetch failed for show_id=" + showId + ": " + e);
-        }
-    });
+    await hydrateFromBackend(cache, ids);
 
-    await processInBatches(ids.movieIds, async (movieId) => {
-        try {
-            await getTranslation(cache, MEDIA_TYPE.MOVIE, movieId);
-        } catch (e) {
-            console.log("Trakt " + logLabel + " translation fetch failed for movie_id=" + movieId + ": " + e);
-        }
-    });
+    await fetchAndPersistMissing(cache, MEDIA_TYPE.SHOW, ids.showIds, logLabel + " show");
+    await fetchAndPersistMissing(cache, MEDIA_TYPE.MOVIE, ids.movieIds, logLabel + " movie");
+
+    saveCache(cache);
+    flushBackendWrites();
 
     applyTranslationsToItems(arr, cache);
     $done({ body: JSON.stringify(arr) });
 }
 
-function handleMediaDetail() {
+async function handleMediaDetail(mediaType) {
     const data = JSON.parse(body);
     if (!data || typeof data !== "object" || Array.isArray(data)) {
         $done({ body: body });
@@ -385,8 +598,28 @@ function handleMediaDetail() {
     }
 
     const cache = loadCache();
-    const entry = cache[String(traktId)];
-    applyTranslationToDetail(data, entry);
+
+    if (!isFresh(getCachedTranslation(cache, mediaType, traktId))) {
+        try {
+            await fetchCachedTranslationsFromBackend(
+                cache,
+                mediaType === MEDIA_TYPE.SHOW ? [traktId] : [],
+                mediaType === MEDIA_TYPE.MOVIE ? [traktId] : []
+            );
+        } catch (e) {
+            console.log("Trakt detail backend cache read failed for id=" + traktId + ": " + e);
+        }
+    }
+
+    try {
+        await getTranslation(cache, mediaType, traktId);
+    } catch (e) {
+        console.log("Trakt detail translation fetch failed for id=" + traktId + ": " + e);
+    }
+    
+    flushBackendWrites();
+
+    applyTranslationToDetail(data, getCachedTranslation(cache, mediaType, traktId));
     $done({ body: JSON.stringify(data) });
 }
 
@@ -436,7 +669,7 @@ function handleUserSettings() {
         }
 
         if (/\/sync\/playback\/movies(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("playback movie");
+            await handleMediaList("playback");
             return;
         }
 
@@ -531,12 +764,12 @@ function handleUserSettings() {
         }
 
         if (/\/shows\/[^\/]+(?:\?.*)?$/.test(requestUrl)) {
-            handleMediaDetail();
+            await handleMediaDetail(MEDIA_TYPE.SHOW);
             return;
         }
 
         if (/\/movies\/[^\/]+(?:\?.*)?$/.test(requestUrl)) {
-            handleMediaDetail();
+            await handleMediaDetail(MEDIA_TYPE.MOVIE);
             return;
         }
 

@@ -1,0 +1,245 @@
+const CACHE_STATUS = {
+  FOUND: 1,
+  NOT_FOUND: 2,
+};
+
+const CACHE_CONTROL = "public, max-age=0, s-maxage=300, stale-while-revalidate=86400";
+const FOUND_TTL_SECONDS = 90 * 24 * 60 * 60;
+const NOT_FOUND_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+function parseIds(value) {
+  if (!value) {
+    return [];
+  }
+
+  const parts = Array.isArray(value) ? value.join(",").split(",") : String(value).split(",");
+  const unique = new Set();
+
+  for (const part of parts) {
+    const normalized = String(part).trim();
+    if (!/^\d+$/.test(normalized)) {
+      continue;
+    }
+    unique.add(normalized);
+  }
+
+  return Array.from(unique).slice(0, 100);
+}
+
+function isEmptyTranslationValue(value) {
+  return value === undefined || value === null || value === "";
+}
+
+function hasUsefulTranslation(translation) {
+  return !!(
+    translation &&
+    (!isEmptyTranslationValue(translation.title) ||
+      !isEmptyTranslationValue(translation.overview) ||
+      !isEmptyTranslationValue(translation.tagline))
+  );
+}
+
+function normalizeEntry(entry) {
+  if (!entry || typeof entry !== "object") {
+    return {
+      status: CACHE_STATUS.NOT_FOUND,
+      translation: null,
+    };
+  }
+
+  const translation = hasUsefulTranslation(entry.translation)
+    ? {
+        title: entry.translation.title || null,
+        overview: entry.translation.overview || null,
+        tagline: entry.translation.tagline || null,
+      }
+    : null;
+
+  return {
+    status: entry.status === CACHE_STATUS.FOUND ? CACHE_STATUS.FOUND : CACHE_STATUS.NOT_FOUND,
+    translation,
+  };
+}
+
+function getKvConfig() {
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "";
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "";
+
+  if (!url || !token) {
+    return null;
+  }
+
+  return {
+    url: url.replace(/\/+$/, ""),
+    token,
+  };
+}
+
+async function kvRequest(config, path, init) {
+  const response = await fetch(`${config.url}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+      "Content-Type": "application/json",
+      ...(init && init.headers ? init.headers : {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`KV HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function buildCacheKey(mediaType, traktId) {
+  return `trakt:translation:${mediaType}:${traktId}`;
+}
+
+function parseCachedEntry(value) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return normalizeEntry(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
+
+async function readManyFromKv(config, mediaType, ids) {
+  if (!config || ids.length === 0) {
+    return {};
+  }
+
+  const keys = ids.map((id) => buildCacheKey(mediaType, id));
+  const payload = await kvRequest(
+    config,
+    `/mget/${keys.map((key) => encodeURIComponent(key)).join("/")}`
+  );
+  const results = Array.isArray(payload.result) ? payload.result : [];
+  const entries = {};
+
+  ids.forEach((id, index) => {
+    const entry = parseCachedEntry(results[index]);
+    if (entry) {
+      entries[id] = entry;
+    }
+  });
+
+  return entries;
+}
+
+async function writeManyToKv(config, mediaType, entriesById) {
+  if (!config) {
+    return;
+  }
+
+  const commands = Object.entries(entriesById).map(([id, rawEntry]) => {
+    const entry = normalizeEntry(rawEntry);
+    const ttl = entry.status === CACHE_STATUS.FOUND ? FOUND_TTL_SECONDS : NOT_FOUND_TTL_SECONDS;
+
+    return [
+      "SETEX",
+      buildCacheKey(mediaType, id),
+      ttl,
+      JSON.stringify(entry),
+    ];
+  });
+
+  if (commands.length === 0) {
+    return;
+  }
+
+  await kvRequest(config, "/pipeline", {
+    method: "POST",
+    body: JSON.stringify(commands),
+  });
+}
+
+async function handleGet(req, res, kvConfig) {
+  const showIds = parseIds(req.query.shows);
+  const movieIds = parseIds(req.query.movies);
+
+  if (showIds.length === 0 && movieIds.length === 0) {
+    res.status(400).json({ error: "Missing shows or movies query" });
+    return;
+  }
+
+  const [shows, movies] = await Promise.all([
+    readManyFromKv(kvConfig, "shows", showIds),
+    readManyFromKv(kvConfig, "movies", movieIds),
+  ]);
+
+  res.setHeader("Cache-Control", CACHE_CONTROL);
+  res.status(200).json({
+    shows,
+    movies,
+    cache: {
+      kvEnabled: !!kvConfig,
+      mode: "read-through-client",
+    },
+  });
+}
+
+async function readJsonBody(req) {
+  if (req.body && typeof req.body === "object") {
+    return req.body;
+  }
+
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(chunk);
+  }
+
+  const raw = Buffer.concat(chunks).toString("utf8");
+  return raw ? JSON.parse(raw) : {};
+}
+
+async function handlePost(req, res, kvConfig) {
+  if (!kvConfig) {
+    res.status(500).json({ error: "KV is not configured" });
+    return;
+  }
+
+  const payload = await readJsonBody(req);
+  const shows = payload && payload.shows && typeof payload.shows === "object" ? payload.shows : {};
+  const movies = payload && payload.movies && typeof payload.movies === "object" ? payload.movies : {};
+
+  await Promise.all([
+    writeManyToKv(kvConfig, "shows", shows),
+    writeManyToKv(kvConfig, "movies", movies),
+  ]);
+
+  res.status(200).json({
+    ok: true,
+    counts: {
+      shows: Object.keys(shows).length,
+      movies: Object.keys(movies).length,
+    },
+  });
+}
+
+module.exports = async (req, res) => {
+  const kvConfig = getKvConfig();
+
+  try {
+    if (req.method === "GET") {
+      await handleGet(req, res, kvConfig);
+      return;
+    }
+
+    if (req.method === "POST") {
+      await handlePost(req, res, kvConfig);
+      return;
+    }
+
+    res.setHeader("Allow", "GET, POST");
+    res.status(405).json({ error: "Method not allowed" });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
