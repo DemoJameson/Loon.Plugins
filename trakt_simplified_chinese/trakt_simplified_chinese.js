@@ -723,6 +723,11 @@ function handleUserSettings() {
             return;
         }
 
+        if (/\/lists\/\d+\/items(?:\?|$)/.test(requestUrl)) {
+            await handleMediaList("public list items");
+            return;
+        }
+
         if (/\/users\/[^\/]+?\/favorites\/?(?:\?.*)?$/.test(requestUrl)) {
             await handleMediaList("favorites");
             return;
