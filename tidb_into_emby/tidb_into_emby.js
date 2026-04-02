@@ -422,7 +422,7 @@ function injectChaptersFunc(chapters, tidbData) {
 
     for (let ch of _chapters) {
         let name = (ch.Name || "").toLowerCase();
-        let mType = ch.MarkerType || ch.Type || "";
+        let mType = ch.MarkerType || "";
         let isIntro = ["introstart", "introend"].includes(mType.toLowerCase()) || name === "intro" || name === "op" || name.includes("intro");
         let isCredits = ["creditsstart"].includes(mType.toLowerCase()) || name === "credits" || name === "ed" || name.includes("credit");
 
@@ -447,7 +447,7 @@ function injectChaptersFunc(chapters, tidbData) {
 
     for (let ch of _chapters) {
         let name = (ch.Name || "").toLowerCase();
-        let mType = ch.MarkerType || ch.Type || "";
+        let mType = ch.MarkerType || "";
         let isIntro = ["introstart", "introend"].includes(mType.toLowerCase()) || name === "intro" || name === "op" || name.includes("intro");
         let isCredits = ["creditsstart"].includes(mType.toLowerCase()) || name === "credits" || name === "ed" || name.includes("credit");
 
