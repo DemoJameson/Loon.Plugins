@@ -127,11 +127,10 @@ function kvKey(tmdb, s, e) {
 async function fetchEmbyItem(itemId, userId, origin) {
     if (!userId) {
         log(`Warning: No userId provided for itemId=${itemId}.`);
+        return null;
     }
-    let url = `${origin}/emby/Items/${itemId}?Fields=ProviderIds`;
-    if (userId) {
-        url = `${origin}/emby/Users/${userId}/Items/${itemId}?Fields=ProviderIds`;
-    }
+
+    url = `${origin}/emby/Users/${userId}/Items/${itemId}?Fields=ProviderIds`;
     try {
         let res = await httpRequest({
             url: url,
