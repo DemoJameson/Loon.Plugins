@@ -9,4 +9,4 @@ tidb_api_key=input, "", title="TheIntroDB API Key", desc="TheIntroDB API密钥"
 tidb_cache_api=input, "https://loon-plugins.demojameson.de5.net", title="Vercel KV代理地址", desc="填入部署好的Vercel域名，如不填将使用默认服务端"
 
 [Script]
-http-response ^https?:\/\/.+\/emby\/(Shows\/.+\/Episodes|Users\/.+\/Items\/.+|Items\/.+\/PlaybackInfo) script-path=tidb_into_emby.js, requires-body=true, timeout=60, argument="tidb_override_existing={tidb_override_existing}&tidb_max_episodes={tidb_max_episodes}&tidb_api_key={tidb_api_key}&tidb_cache_api={tidb_cache_api}"
+http-response ^https?:\/\/.+\/emby\/(Shows\/.+\/Episodes|Users\/.+\/Items\/.+|Items\/.+\/PlaybackInfo) script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/tidb_into_emby.js, requires-body=true, timeout=60, argument="tidb_override_existing={tidb_override_existing}&tidb_max_episodes={tidb_max_episodes}&tidb_api_key={tidb_api_key}&tidb_cache_api={tidb_cache_api}"
