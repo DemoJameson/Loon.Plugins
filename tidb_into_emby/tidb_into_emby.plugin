@@ -3,7 +3,7 @@
 #!author=Assistant
 
 [Argument]
-tidb_override_existing=switch, true, false, title=覆盖已有章节, desc=是否剔除原生带有片头片尾类型或与之重叠的泛用章节数据
+tidb_override_existing=switch, true, title=覆盖已有章节, desc=是否剔除原生带有片头片尾类型或与之重叠的泛用章节数据
 tidb_max_episodes=input, 5, title=每次最多请求集数, desc=向TheIntroDB请求数据的最多集数限制
 tidb_api_key=input, , title=TheIntroDB API Key, desc=TheIntroDB API密钥
 tidb_cache_api=input, https://loon-plugins.demojameson.de5.net, title=Vercel KV代理地址, desc=填入部署好的Vercel域名，如不填将使用默认服务端
