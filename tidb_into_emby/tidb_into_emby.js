@@ -4,6 +4,20 @@
  * Compatible with Loon and Surge.
  */
 
+const CACHE_STORE_KEY = "emby_tidb_chapters_cache_v1";
+const DEFAULT_TIDB_CACHE_API = "https://loon-plugins.demojameson.de5.net";
+const ms1Month = 30 * 24 * 60 * 60 * 1000;
+const ms30Min = 30 * 60 * 1000;
+
+let _memCache = null;
+let _cacheModified = false;
+let args = parseArgs(typeof $argument === 'undefined' ? '' : $argument);
+
+const TIDB_OVERRIDE_EXISTING = args.tidb_override_existing === 'true' || args.tidb_override_existing === '1';
+const TIDB_MAX_EPISODES = parseInt(args.tidb_max_episodes) || 5;
+const TIDB_API_KEY = args.tidb_api_key || '';
+const TIDB_CACHE_API = (args.tidb_cache_api || DEFAULT_TIDB_CACHE_API).replace(/\/+$/, '') + '/api/tidb/media';
+
 function normalizeArgValue(value) {
     if (value === null || value === undefined) return '';
     let text = String(value).trim();
@@ -52,8 +66,7 @@ function parseArgs(rawArgument) {
             tidb_override_existing: normalizeArgValue(rawArgument.tidb_override_existing),
             tidb_max_episodes: normalizeArgValue(rawArgument.tidb_max_episodes),
             tidb_api_key: normalizeArgValue(rawArgument.tidb_api_key),
-            tidb_cache_api: normalizeArgValue(rawArgument.tidb_cache_api),
-            tidb_enable_log: normalizeArgValue(rawArgument.tidb_enable_log)
+            tidb_cache_api: normalizeArgValue(rawArgument.tidb_cache_api)
         };
     }
 
@@ -62,28 +75,8 @@ function parseArgs(rawArgument) {
         tidb_override_existing: parts[0] || '',
         tidb_max_episodes: parts[1] || '',
         tidb_api_key: parts[2] || '',
-        tidb_cache_api: parts[3] || '',
-        tidb_enable_log: parts[4] || ''
+        tidb_cache_api: parts[3] || ''
     };
-}
-
-let args = parseArgs(typeof $argument === 'undefined' ? '' : $argument);
-
-const TIDB_OVERRIDE_EXISTING = args.tidb_override_existing === 'true' || args.tidb_override_existing === '1';
-const TIDB_MAX_EPISODES = parseInt(args.tidb_max_episodes) || 5;
-const TIDB_API_KEY = args.tidb_api_key || '';
-const TIDB_ENABLE_LOG = args.tidb_enable_log === 'true' || args.tidb_enable_log === '1';
-
-let cacheApiBase = args.tidb_cache_api || 'https://loon-plugins.demojameson.de5.net';
-if (cacheApiBase.endsWith('/')) cacheApiBase = cacheApiBase.slice(0, -1);
-const TIDB_CACHE_API = cacheApiBase + '/api/tidb/media';
-const ms1Month = 30 * 24 * 60 * 60 * 1000;
-const ms30Min = 30 * 60 * 1000;
-
-function log(msg) {
-    if (TIDB_ENABLE_LOG) {
-        console.info("[TIDB-Emby] " + msg);
-    }
 }
 
 function httpRequest(options) {
@@ -106,10 +99,6 @@ function httpRequest(options) {
         }
     });
 }
-
-const CACHE_STORE_KEY = "emby_tidb_chapters_cache_v1";
-let _memCache = null;
-let _cacheModified = false;
 
 function loadCache() {
     if (_memCache !== null) return _memCache;
@@ -175,7 +164,6 @@ function kvKey(tmdb, s, e) {
 
 async function fetchEmbyItem(itemId, userId, origin) {
     if (!userId) {
-        log(`Warning: No userId provided for itemId=${itemId}.`);
         return null;
     }
 
@@ -187,12 +175,8 @@ async function fetchEmbyItem(itemId, userId, origin) {
         });
         if (res.status === 200) {
             return JSON.parse(res.body);
-        } else {
-            log(`Emby Item Fetch Failed: HTTP ${res.status} for ${url}`);
         }
-    } catch (e) {
-        log(`Error fetching Emby item ${itemId}: ${e}`);
-    }
+    } catch (e) { }
     return null;
 }
 
@@ -218,17 +202,14 @@ async function getTmdbId(seriesId, userId, host, origin) {
     let key = `tmdb_id_${host}_${seriesId}`;
     let c = getCache(key);
     if (c) {
-        log(`Hit local cache for tmdbId: ${c}`);
         return c;
     }
 
-    log(`Fetching tmdbId for seriesId: ${seriesId} from ${origin} (UserId: ${userId})`);
     let data = await fetchEmbyItem(seriesId, userId, origin);
     if (data) {
         let tmdb = data.ProviderIds && data.ProviderIds.Tmdb;
         if (tmdb) {
             setCache(key, tmdb, ms1Month);
-            log(`Got tmdbId: ${tmdb}`);
             return tmdb;
         }
     }
@@ -237,7 +218,6 @@ async function getTmdbId(seriesId, userId, host, origin) {
 
 async function fetchTidbDirectAndCache(tmdbId, s, e) {
     let url = `https://api.theintrodb.org/v2/media?tmdb_id=${tmdbId}&season=${s}&episode=${e}`;
-    log(`Fetching intro data from TheIntroDB: ${url}`);
     let headers = {};
     if (TIDB_API_KEY) {
         headers['Authorization'] = `Bearer ${TIDB_API_KEY}`;
@@ -268,12 +248,9 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
 }
 
 async function postBatchToVercel(tmdbId, batchAccumulator) {
-    log(`[postBatchToVercel] Triggered. TIDB_CACHE_API=${TIDB_CACHE_API}, Batch keys: ${Object.keys(batchAccumulator).length}`);
     if (!TIDB_CACHE_API || Object.keys(batchAccumulator).length === 0) return;
-    log(`[postBatchToVercel] Posting batch data for tmdb_id=${tmdbId}, seasons=[${Object.keys(batchAccumulator).join(',')}]`);
     for (let [s, eps] of Object.entries(batchAccumulator)) {
         if (eps.length > 0) {
-            log(`[postBatchToVercel] POSTing season ${s} to ${TIDB_CACHE_API}`);
             await httpRequest({
                 method: 'POST',
                 url: TIDB_CACHE_API,
@@ -283,8 +260,7 @@ async function postBatchToVercel(tmdbId, batchAccumulator) {
                     season: s,
                     episodes: eps
                 })
-            }).then(r => log(`[postBatchToVercel] POST success: HTTP ${r.status}`))
-                .catch((e) => log(`[postBatchToVercel] POST error: ${e}`));
+            }).catch(() => { });
         }
     }
 }
@@ -381,7 +357,6 @@ function injectChaptersFunc(chapters, tidbData) {
 }
 
 async function handleSingleItem(url, body) {
-    log(`[Phase: SingleItem] Handling URL: ${url}`);
     let itemId = "";
     let isPlayback = false;
 
@@ -463,13 +438,11 @@ async function handleSingleItem(url, body) {
     } else {
         if (TIDB_CACHE_API) {
             let vUrl = `${TIDB_CACHE_API}?tmdb_id=${tmdbId}&season=${season}`;
-            log(`[Vercel GET] /api/tidb/media?tmdb_id=${tmdbId}&season=${season}`);
             try {
                 let v_res = await httpRequest({
                     method: 'GET',
                     url: vUrl
                 });
-                log(`[Vercel GET] HTTP ${v_res.status}`);
                 if (v_res.status === 200) {
                     let seasonData = JSON.parse(v_res.body);
                     for (let [epStr, epData] of Object.entries(seasonData)) {
@@ -478,9 +451,7 @@ async function handleSingleItem(url, body) {
                         setCache(k, { has_data: hasD, data: epData }, ms1Month);
                     }
                 }
-            } catch (e) {
-                log(`[Vercel GET] Error: ${e}`);
-            }
+            } catch (e) { }
         }
 
         let batch = {};
@@ -499,9 +470,7 @@ async function handleSingleItem(url, body) {
 }
 
 async function handleEpisodes(url, body) {
-    log(`[Phase: Episodes] Handling URL: ${url}`);
     if (!body.Items || body.Items.length === 0) {
-        log(`No items found in body, returning empty.`);
         return;
     }
 
@@ -549,13 +518,11 @@ async function handleEpisodes(url, body) {
     if (missingItems.length > 0 && TIDB_CACHE_API) {
         let s = missingItems[0].ParentIndexNumber;
         let vUrl = `${TIDB_CACHE_API}?tmdb_id=${tmdbId}&season=${s}`;
-        log(`[Vercel GET] missingItems=${missingItems.length}, querying tmdb_id=${tmdbId}&season=${s}`);
         try {
             let v_res = await httpRequest({
                 method: 'GET',
                 url: vUrl
             });
-            log(`[Vercel GET] HTTP ${v_res.status}`);
             if (v_res.status === 200) {
                 let seasonData = JSON.parse(v_res.body);
                 for (let [epStr, epData] of Object.entries(seasonData)) {
@@ -564,9 +531,7 @@ async function handleEpisodes(url, body) {
                     setCache(eKey, { has_data: hasD, data: epData }, ms1Month);
                 }
             }
-        } catch (e) {
-            log(`[Vercel GET] Error: ${e}`);
-        }
+        } catch (e) { }
     }
 
     // Phase 1.6: Re-evaluate missing items now that Vercel might have fulfilled them
@@ -643,7 +608,6 @@ async function handleEpisodes(url, body) {
 
 async function run() {
     let url = $request.url;
-    log(`[Init] Script invoked for URL: ${url}`);
     let body;
 
     try {
@@ -658,10 +622,7 @@ async function run() {
         } else if (url.match(/\/Users\/.+\/Items\/.+/) || url.match(/\/Items\/.+\/PlaybackInfo/)) {
             await handleSingleItem(url, body);
         }
-    } catch (e) {
-        console.log("Error processing TIDB Request: " + e);
-        // Fail silently
-    }
+    } catch (e) { }
 
     // Write all accumulated cache data into the single PersistentStore key
     saveCache();
@@ -671,7 +632,6 @@ async function run() {
 
 // Start execution
 run().catch(err => {
-    console.log("Fatal Error: " + err);
     saveCache();
     $done({});
 });
