@@ -17,6 +17,7 @@ const ms50 = 50;
 let _memCache = null;
 let _cacheModified = false;
 let _tidbRateLimited = false;
+let _allowTidbFetch = true;
 let args = parseArgs(typeof $argument === "undefined" ? "" : $argument);
 
 const TIDB_OVERRIDE_EXISTING = args.tidb_override_existing === "true" || args.tidb_override_existing === "1";
@@ -67,8 +68,33 @@ function getRequestLockKey(type) {
     return REQUEST_LOCK_KEY_PREFIX + type;
 }
 
-async function acquireRequestLock(type, host) {
+function tryAcquireRequestLock(type, host) {
     if (!type) return null;
+
+    let key = getRequestLockKey(type);
+    let current = null;
+    try {
+        current = JSON.parse($persistentStore.read(key) || "null");
+    } catch (e) { }
+
+    if (current) {
+        return null;
+    }
+
+    let owner = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    $persistentStore.write(JSON.stringify({ owner, host }), key);
+
+    try {
+        current = JSON.parse($persistentStore.read(key) || "null");
+    } catch (e) {
+        current = null;
+    }
+
+    return current && current.owner === owner ? owner : null;
+}
+
+async function waitForRequestUnlock(type) {
+    if (!type) return;
 
     let key = getRequestLockKey(type);
     while (true) {
@@ -78,19 +104,7 @@ async function acquireRequestLock(type, host) {
         } catch (e) { }
 
         if (!current) {
-            let owner = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
-            let next = JSON.stringify({ owner, host });
-            $persistentStore.write(next, key);
-
-            try {
-                current = JSON.parse($persistentStore.read(key) || "null");
-            } catch (e) {
-                current = null;
-            }
-
-            if (current && current.owner === owner) {
-                return owner;
-            }
+            return;
         }
 
         await sleep(ms50);
@@ -322,7 +336,7 @@ async function getTmdbId(seriesId, userId, host, origin) {
 }
 
 async function fetchTidbDirectAndCache(tmdbId, s, e) {
-    if (isTidbRateLimited()) {
+    if (!_allowTidbFetch || isTidbRateLimited()) {
         return null;
     }
 
@@ -740,7 +754,13 @@ async function run() {
     let body;
     let requestType = getRequestType(url);
     let requestHost = new URL(url).host;
-    let requestLockOwner = await acquireRequestLock(requestType, requestHost);
+    let requestLockOwner = tryAcquireRequestLock(requestType, requestHost);
+    let waitedForLock = false;
+
+    if (!requestLockOwner && requestType) {
+        waitedForLock = true;
+        await waitForRequestUnlock(requestType);
+    }
 
     try {
         body = JSON.parse($response.body);
@@ -750,6 +770,7 @@ async function run() {
     }
 
     try {
+        _allowTidbFetch = !waitedForLock;
         if (requestType === "episodes") {
             await handleEpisodes(url, body);
         } else if (requestType === "item" || requestType === "playback") {
