@@ -18,6 +18,12 @@ const TIDB_MAX_EPISODES = parseInt(args.tidb_max_episodes) || 5;
 const TIDB_API_KEY = args.tidb_api_key || '';
 const TIDB_CACHE_API = (args.tidb_cache_api || DEFAULT_TIDB_CACHE_API).replace(/\/+$/, '') + '/api/tidb/media';
 
+function notify(title, subtitle, message) {
+    if (typeof $notification !== 'undefined') {
+        $notification.post(title, subtitle, message);
+    }
+}
+
 function normalizeArgValue(value) {
     if (value === null || value === undefined) return '';
     let text = String(value).trim();
@@ -233,6 +239,18 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
         if (res.status === 200) {
             finalData = JSON.parse(res.body);
             hasData = true;
+        } else if (res.status === 429) {
+            let retryAfter = '';
+            try {
+                let errorBody = JSON.parse(res.body || '{}');
+                retryAfter = errorBody.retry_after || '';
+            } catch (e) { }
+            notify(
+                '接入TIDB片头片尾',
+                'TheIntroDB 请求过于频繁',
+                retryAfter ? `已触发速率限制，请在 ${retryAfter} 后重试。` : '已触发速率限制，请稍后再试。'
+            );
+            return null;
         } else if (res.status !== 404) {
             return null; // API Error
         }
