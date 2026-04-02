@@ -304,6 +304,24 @@ function kvKey(tmdb, s, e) {
     return `tidb_ep_${tmdb}_${s}_${e}`;
 }
 
+function hasValidTidbData(data) {
+    if (!data || typeof data !== "object") {
+        return false;
+    }
+
+    let intro = Array.isArray(data.intro) ? data.intro[0] : null;
+    if (intro && intro.end_ms > 0) {
+        return true;
+    }
+
+    let credits = Array.isArray(data.credits) ? data.credits[0] : null;
+    if (credits && credits.start_ms !== null && credits.start_ms !== undefined) {
+        return true;
+    }
+
+    return false;
+}
+
 async function fetchEmbyItem(itemId, userId, origin) {
     if (!userId) {
         return null;
@@ -447,9 +465,9 @@ async function getTidbDataForEpisode(tmdbId, s, e, fetchIfMissing, batchAccumula
     if (fetchIfMissing && !isTidbRateLimited()) {
         let fData = await fetchTidbDirectAndCache(tmdbId, s, e);
         if (fData) {
-            if (batchAccumulator) {
+            if (batchAccumulator && hasValidTidbData(fData.data)) {
                 if (!batchAccumulator[s]) batchAccumulator[s] = [];
-                batchAccumulator[s].push({ episode: e, data: fData.data, has_data: fData.has_data });
+                batchAccumulator[s].push({ episode: e, data: fData.data });
             }
             return fData.data;
         }
@@ -752,8 +770,10 @@ async function handleEpisodes(url, body) {
                 if (isTidbRateLimited()) break;
                 if (f) {
                     item._tidbData = f.data;
-                    if (!batch[item.ParentIndexNumber]) batch[item.ParentIndexNumber] = [];
-                    batch[item.ParentIndexNumber].push({ episode: item.IndexNumber, data: f.data, has_data: f.has_data });
+                    if (hasValidTidbData(f.data)) {
+                        if (!batch[item.ParentIndexNumber]) batch[item.ParentIndexNumber] = [];
+                        batch[item.ParentIndexNumber].push({ episode: item.IndexNumber, data: f.data });
+                    }
                 }
                 needFetchCount++;
             }
