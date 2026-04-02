@@ -176,6 +176,16 @@ function parseArgs(rawArgument) {
 
 function httpRequest(options) {
     return new Promise((resolve, reject) => {
+        let requestOptions = Object.assign({}, options);
+        let headers = Object.assign({}, requestOptions.headers || {});
+        if (typeof $request !== "undefined" && $request.headers) {
+            let originalUserAgentHeader = Object.keys($request.headers).find(key => key.toLowerCase() === "user-agent");
+            if (originalUserAgentHeader) {
+                headers["User-Agent"] = $request.headers[originalUserAgentHeader];
+            }
+        }
+        requestOptions.headers = headers;
+
         const cb = (error, response, body) => {
             if (error) {
                 reject(error);
@@ -187,10 +197,10 @@ function httpRequest(options) {
                 });
             }
         };
-        if (options.method && options.method.toUpperCase() === "POST") {
-            $httpClient.post(options, cb);
+        if (requestOptions.method && requestOptions.method.toUpperCase() === "POST") {
+            $httpClient.post(requestOptions, cb);
         } else {
-            $httpClient.get(options, cb);
+            $httpClient.get(requestOptions, cb);
         }
     });
 }
