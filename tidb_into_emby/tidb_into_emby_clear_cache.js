@@ -1,5 +1,5 @@
 const CACHE_STORE_KEY = "tidb_into_emby_cache_v1";
-const TITLE = "TIDB into Emby";
+const TITLE = "接入TIDB片头片尾";
 
 function notify(subtitle, message) {
     if (typeof $notification !== "undefined") {

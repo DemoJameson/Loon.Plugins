@@ -24,6 +24,7 @@ const TIDB_OVERRIDE_EXISTING = args.tidb_override_existing === "true" || args.ti
 const TIDB_NOTIFY_RATE_LIMIT = args.tidb_notify_rate_limit === "true" || args.tidb_notify_rate_limit === "1";
 const TIDB_MAX_EPISODES = parseInt(args.tidb_max_episodes, 10) || 5;
 const TIDB_API_KEY = args.tidb_api_key || "";
+const TIDB_IGNORE_PLAYERS = parseIgnorePlayers(args.tidb_ignore_players);
 const TIDB_CACHE_API = (args.tidb_cache_api || DEFAULT_TIDB_CACHE_API).replace(/\/+$/, "") + "/api/tidb/media";
 
 function notify(title, subtitle, message, url) {
@@ -174,7 +175,8 @@ function parseArgs(rawArgument) {
             tidb_notify_rate_limit: normalizeArgValue(rawArgument.tidb_notify_rate_limit),
             tidb_max_episodes: normalizeArgValue(rawArgument.tidb_max_episodes),
             tidb_api_key: normalizeArgValue(rawArgument.tidb_api_key),
-            tidb_cache_api: normalizeArgValue(rawArgument.tidb_cache_api)
+            tidb_cache_api: normalizeArgValue(rawArgument.tidb_cache_api),
+            tidb_ignore_players: normalizeArgValue(rawArgument.tidb_ignore_players)
         };
     }
 
@@ -184,8 +186,22 @@ function parseArgs(rawArgument) {
         tidb_notify_rate_limit: parts[1] || "",
         tidb_max_episodes: parts[2] || "",
         tidb_api_key: parts[3] || "",
-        tidb_cache_api: parts[4] || ""
+        tidb_cache_api: parts[4] || "",
+        tidb_ignore_players: parts[5] || ""
     };
+}
+
+function parseIgnorePlayers(rawValue) {
+    let value = rawValue || "Infuse, Vidora";
+    return value.split(",").map(item => item.trim()).filter(Boolean);
+}
+
+function shouldIgnoreCurrentPlayer() {
+    if (typeof $request === "undefined" || !$request.headers) return false;
+    let uaHeader = Object.keys($request.headers).find(key => key.toLowerCase() === "user-agent");
+    if (!uaHeader) return false;
+    let userAgent = String($request.headers[uaHeader] || "");
+    return TIDB_IGNORE_PLAYERS.some(prefix => userAgent.startsWith(prefix));
 }
 
 function httpRequest(options) {
@@ -750,6 +766,10 @@ async function handleEpisodes(url, body) {
 }
 
 async function run() {
+    if (shouldIgnoreCurrentPlayer()) {
+        return $done({});
+    }
+
     let url = $request.url;
     let body;
     let requestType = getRequestType(url);
