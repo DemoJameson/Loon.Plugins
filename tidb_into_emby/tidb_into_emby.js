@@ -310,11 +310,11 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
     }
 }
 
-async function postBatchToVercel(tmdbId, batchAccumulator) {
+function postBatchToVercel(tmdbId, batchAccumulator) {
     if (!TIDB_CACHE_API || Object.keys(batchAccumulator).length === 0) return;
     for (let [s, eps] of Object.entries(batchAccumulator)) {
         if (eps.length > 0) {
-            await httpRequest({
+            httpRequest({
                 method: "POST",
                 url: TIDB_CACHE_API,
                 headers: { "Content-Type": "application/json" },
@@ -517,7 +517,7 @@ async function handleSingleItem(url, body) {
 
         let batch = {};
         tidbData = await getTidbDataForEpisode(tmdbId, season, episode, true, batch);
-        await postBatchToVercel(tmdbId, batch);
+        postBatchToVercel(tmdbId, batch);
     }
 
     if (tidbData) {
