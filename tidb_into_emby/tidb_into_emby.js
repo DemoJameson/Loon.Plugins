@@ -124,31 +124,65 @@ function kvKey(tmdb, s, e) {
     return `tidb_ep_${tmdb}_${s}_${e}`;
 }
 
-async function getTmdbId(seriesId, host, origin) {
+async function fetchEmbyItem(itemId, userId, origin) {
+    if (!userId) {
+        log(`Warning: No userId provided for itemId=${itemId}.`);
+    }
+    let url = `${origin}/emby/Items/${itemId}?Fields=ProviderIds`;
+    if (userId) {
+        url = `${origin}/emby/Users/${userId}/Items/${itemId}?Fields=ProviderIds`;
+    }
+    try {
+        let res = await httpRequest({
+            url: url,
+            headers: getAuthHeaders()
+        });
+        if (res.status === 200) {
+            return JSON.parse(res.body);
+        } else {
+            log(`Emby Item Fetch Failed: HTTP ${res.status} for ${url}`);
+        }
+    } catch (e) {
+        log(`Error fetching Emby item ${itemId}: ${e}`);
+    }
+    return null;
+}
+
+function extractUserId(url) {
+    let parsedUrl = new URL(url);
+    let uid = parsedUrl.searchParams.get('UserId');
+    if (uid) return uid;
+
+    let m = url.match(/\/Users\/([^/]+?)\//i);
+    if (m) return m[1];
+
+    if (typeof $request !== 'undefined' && $request.body) {
+        try {
+            let reqBody = JSON.parse($request.body);
+            if (reqBody.UserId) return reqBody.UserId;
+        } catch (e) { }
+    }
+
+    return null;
+}
+
+async function getTmdbId(seriesId, userId, host, origin) {
     let key = `tmdb_id_${host}_${seriesId}`;
     let c = getCache(key);
     if (c) {
         log(`Hit local cache for tmdbId: ${c}`);
         return c;
     }
-    
-    log(`Fetching tmdbId for seriesId: ${seriesId} from ${origin}`);
-    try {
-        let res = await httpRequest({
-            url: `${origin}/emby/Items/${seriesId}?Fields=ProviderIds`,
-            headers: getAuthHeaders()
-        });
-        if (res.status === 200) {
-            let data = JSON.parse(res.body);
-            let tmdb = data.ProviderIds && data.ProviderIds.Tmdb;
-            if (tmdb) {
-                setCache(key, tmdb, ms1Month);
-                log(`Got tmdbId: ${tmdb}`);
-                return tmdb;
-            }
+
+    log(`Fetching tmdbId for seriesId: ${seriesId} from ${origin} (UserId: ${userId})`);
+    let data = await fetchEmbyItem(seriesId, userId, origin);
+    if (data) {
+        let tmdb = data.ProviderIds && data.ProviderIds.Tmdb;
+        if (tmdb) {
+            setCache(key, tmdb, ms1Month);
+            log(`Got tmdbId: ${tmdb}`);
+            return tmdb;
         }
-    } catch (e) {
-        log(`Error fetching tmdbId: ${e}`);
     }
     return null;
 }
@@ -240,7 +274,7 @@ function injectChaptersFunc(chapters, tidbData) {
         let mType = ch.MarkerType || ch.Type || '';
         let isIntro = ['introstart', 'introend'].includes(mType.toLowerCase()) || name === 'intro' || name === 'op' || name.includes('intro');
         let isCredits = ['creditsstart'].includes(mType.toLowerCase()) || name === 'credits' || name === 'ed' || name.includes('credit');
-        
+
         if (isIntro) embyHasIntro = true;
         if (isCredits) embyHasCredits = true;
     }
@@ -319,6 +353,7 @@ async function handleSingleItem(url, body) {
     let parsedUrl = new URL(url);
     let host = parsedUrl.host;
     let origin = parsedUrl.origin;
+    let userId = extractUserId(url);
 
     if (isPlayback) {
         let meta = getCache(`emby_item_${host}_${itemId}`);
@@ -328,12 +363,8 @@ async function handleSingleItem(url, body) {
             season = meta.ParentIndexNumber;
             episode = meta.IndexNumber;
         } else {
-            let itemRes = await httpRequest({
-                url: `${origin}/emby/Items/${itemId}?Fields=ProviderIds`,
-                headers: getAuthHeaders()
-            });
-            if (itemRes.status === 200) {
-                let itemData = JSON.parse(itemRes.body);
+            let itemData = await fetchEmbyItem(itemId, userId, origin);
+            if (itemData) {
                 seriesId = itemData.SeriesId;
                 season = itemData.ParentIndexNumber;
                 episode = itemData.IndexNumber;
@@ -369,7 +400,7 @@ async function handleSingleItem(url, body) {
 
     if (!seriesId || season === undefined || episode === undefined) return;
 
-    let tmdbId = await getTmdbId(seriesId, host, origin);
+    let tmdbId = await getTmdbId(seriesId, userId, host, origin);
     if (!tmdbId) return;
 
     let eKey = kvKey(tmdbId, season, episode);
@@ -428,8 +459,9 @@ async function handleEpisodes(url, body) {
     let parsedUrl = new URL(url);
     let host = parsedUrl.host;
     let origin = parsedUrl.origin;
+    let userId = extractUserId(url);
 
-    let tmdbId = await getTmdbId(seriesId, host, origin);
+    let tmdbId = await getTmdbId(seriesId, userId, host, origin);
     if (!tmdbId) return;
 
     let targetItems = body.Items.filter(i => i.Type === 'Episode');
@@ -492,8 +524,10 @@ async function handleEpisodes(url, body) {
 
     // Phase 2: Only Hit NextUp if Vercel failed to fill the gap
     if (missingItems.length > 0) {
+        let nextUpUrl = `${origin}/emby/Shows/NextUp?SeriesId=${seriesId}&Limit=1&EnableTotalRecordCount=false`;
+        if (userId) nextUpUrl += `&UserId=${userId}`;
         let nextUpRes = await httpRequest({
-            url: `${origin}/emby/Shows/NextUp?SeriesId=${seriesId}&Limit=1&EnableTotalRecordCount=false`,
+            url: nextUpUrl,
             headers: getAuthHeaders()
         });
         if (nextUpRes.status === 200) {
