@@ -11,5 +11,5 @@ tidb_api_key=input, "", tag=TheIntroDB API Key, desc=Optional API key for TheInt
 tidb_cache_api=input, "https://loon-plugins.demojameson.de5.net", tag=TIDB Cache API, desc=Custom cache service base URL, falls back to the default service when empty
 
 [Script]
-http-response ^https?:\/\/.+\/emby\/(Shows\/.+\/Episodes|Users\/.+\/Items\/.+|Items\/.+\/PlaybackInfo) script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/tidb_into_emby.js, requires-body=true, timeout=60, argument=[{tidb_override_existing},{tidb_max_episodes},{tidb_api_key},{tidb_cache_api}]
-cron "0 0 30 2 *" script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/clear_tidb_cache.js, tag=TIDB Clear Local Cache, enable=true
+http-response ^https?:\/\/.+\/emby\/(Shows\/.+\/Episodes|Users\/.+\/Items\/.+|Items\/.+\/PlaybackInfo) script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/tidb_into_emby.js, requires-body=true, timeout=60, argument=[{tidb_override_existing},{tidb_max_episodes},{tidb_api_key},{tidb_cache_api}], tag=Emby相关接口
+cron "0 0 30 2 *" script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/clear_tidb_cache.js, tag=TIDB本地缓存清除脚本, enable=true
