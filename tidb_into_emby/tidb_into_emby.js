@@ -22,6 +22,13 @@ if (typeof $argument !== 'undefined') {
 const TIDB_OVERRIDE_EXISTING = args.tidb_override_existing === 'true' || args.tidb_override_existing === '1';
 const TIDB_MAX_EPISODES = parseInt(args.tidb_max_episodes) || 5;
 const TIDB_API_KEY = args.tidb_api_key || '';
+const TIDB_ENABLE_LOG = args.tidb_enable_log === 'true' || args.tidb_enable_log === '1';
+
+function log(msg) {
+    if (TIDB_ENABLE_LOG) {
+        console.log("[TIDB-Emby] " + msg);
+    }
+}
 
 let cacheApiBase = args.tidb_cache_api || 'https://loon-plugins.demojameson.de5.net';
 if (cacheApiBase.endsWith('/')) cacheApiBase = cacheApiBase.slice(0, -1);
@@ -120,8 +127,12 @@ function kvKey(tmdb, s, e) {
 async function getTmdbId(seriesId, host, origin) {
     let key = `tmdb_id_${host}_${seriesId}`;
     let c = getCache(key);
-    if (c) return c;
-
+    if (c) {
+        log(`Hit local cache for tmdbId: ${c}`);
+        return c;
+    }
+    
+    log(`Fetching tmdbId for seriesId: ${seriesId} from ${origin}`);
     try {
         let res = await httpRequest({
             url: `${origin}/emby/Items/${seriesId}?Fields=ProviderIds`,
@@ -132,15 +143,19 @@ async function getTmdbId(seriesId, host, origin) {
             let tmdb = data.ProviderIds && data.ProviderIds.Tmdb;
             if (tmdb) {
                 setCache(key, tmdb, ms1Month);
+                log(`Got tmdbId: ${tmdb}`);
                 return tmdb;
             }
         }
-    } catch (e) { }
+    } catch (e) {
+        log(`Error fetching tmdbId: ${e}`);
+    }
     return null;
 }
 
 async function fetchTidbDirectAndCache(tmdbId, s, e) {
     let url = `https://api.theintrodb.org/v2/media?tmdb_id=${tmdbId}&season=${s}&episode=${e}`;
+    log(`Fetching intro data from TheIntroDB: ${url}`);
     let headers = {};
     if (TIDB_API_KEY) {
         headers['Authorization'] = `Bearer ${TIDB_API_KEY}`;
@@ -172,6 +187,7 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
 
 async function postBatchToVercel(tmdbId, batchAccumulator) {
     if (!TIDB_CACHE_API || Object.keys(batchAccumulator).length === 0) return;
+    log(`Posting up batch data to Vercel for tmdb_id=${tmdbId}, seasons=[${Object.keys(batchAccumulator).join(',')}]`);
     for (let [s, eps] of Object.entries(batchAccumulator)) {
         if (eps.length > 0) {
             await httpRequest({
@@ -280,6 +296,7 @@ function injectChaptersFunc(chapters, tidbData) {
 }
 
 async function handleSingleItem(url, body) {
+    log(`[Phase: SingleItem] Handling URL: ${url}`);
     let itemId = "";
     let isPlayback = false;
 
@@ -395,7 +412,11 @@ async function handleSingleItem(url, body) {
 }
 
 async function handleEpisodes(url, body) {
-    if (!body.Items || body.Items.length === 0) return;
+    log(`[Phase: Episodes] Handling URL: ${url}`);
+    if (!body.Items || body.Items.length === 0) {
+        log(`No items found in body, returning empty.`);
+        return;
+    }
 
     let seriesId = body.Items[0].SeriesId;
     if (!seriesId) {
@@ -526,6 +547,7 @@ async function handleEpisodes(url, body) {
 
 async function run() {
     let url = $request.url;
+    log(`[Init] Script invoked for URL: ${url}`);
     let body;
 
     try {
