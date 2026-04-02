@@ -15,16 +15,16 @@ function done(result) {
 
 try {
     if (typeof $persistentStore === "undefined") {
-        notify("清除失败", "当前环境不支持 PersistentStore。");
+        notify("清除失败", "当前环境不支持PersistentStore。");
         done({});
     } else {
         const previous = $persistentStore.read(CACHE_STORE_KEY);
         const removed = $persistentStore.write("", CACHE_STORE_KEY);
         if (removed) {
-            const detail = previous ? "本地 TIDB 缓存已清除。" : "本地 TIDB 缓存本来就是空的。";
+            const detail = previous ? "本地TIDB缓存已清除。" : "本地TIDB缓存本来就是空的。";
             notify("清除完成", detail);
         } else {
-            notify("清除失败", "PersistentStore.write 返回 false。");
+            notify("清除失败", "PersistentStore.write返回false。");
         }
         done({});
     }
