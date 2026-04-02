@@ -4,20 +4,70 @@
  * Compatible with Loon and Surge.
  */
 
-const isLoon = typeof $loon !== "undefined";
-const isSurge = typeof $httpClient !== "undefined" && !isLoon;
-
-let args = {};
-if (typeof $argument !== 'undefined') {
-    let parts = $argument.split('&');
-    if (parts.length === 1 && parts[0].includes(',')) parts = $argument.split(',');
-    for (let kv of parts) {
-        let [k, v] = kv.split('=');
-        if (k && v) {
-            args[k.trim()] = v.trim();
-        }
+function normalizeArgValue(value) {
+    if (value === null || value === undefined) return '';
+    let text = String(value).trim();
+    if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
+        text = text.slice(1, -1).trim();
     }
+    if (/^\{[^{}]+\}$/.test(text)) return '';
+    return text;
 }
+
+function splitArgumentList(raw) {
+    let text = String(raw || '').trim();
+    if (!text) return [];
+    if (text.startsWith('[') && text.endsWith(']')) {
+        text = text.slice(1, -1);
+    }
+
+    let parts = [];
+    let current = '';
+    let quote = '';
+    for (let i = 0; i < text.length; i++) {
+        let ch = text[i];
+        if (ch === '"' || ch === "'") {
+            if (!quote) {
+                quote = ch;
+            } else if (quote === ch) {
+                quote = '';
+            }
+            current += ch;
+            continue;
+        }
+        if (ch === ',' && !quote) {
+            parts.push(normalizeArgValue(current));
+            current = '';
+            continue;
+        }
+        current += ch;
+    }
+    parts.push(normalizeArgValue(current));
+    return parts;
+}
+
+function parseArgs(rawArgument) {
+    if (rawArgument && typeof rawArgument === 'object') {
+        return {
+            tidb_override_existing: normalizeArgValue(rawArgument.tidb_override_existing),
+            tidb_max_episodes: normalizeArgValue(rawArgument.tidb_max_episodes),
+            tidb_api_key: normalizeArgValue(rawArgument.tidb_api_key),
+            tidb_cache_api: normalizeArgValue(rawArgument.tidb_cache_api),
+            tidb_enable_log: normalizeArgValue(rawArgument.tidb_enable_log)
+        };
+    }
+
+    let parts = splitArgumentList(rawArgument);
+    return {
+        tidb_override_existing: parts[0] || '',
+        tidb_max_episodes: parts[1] || '',
+        tidb_api_key: parts[2] || '',
+        tidb_cache_api: parts[3] || '',
+        tidb_enable_log: parts[4] || ''
+    };
+}
+
+let args = parseArgs(typeof $argument === 'undefined' ? '' : $argument);
 
 const TIDB_OVERRIDE_EXISTING = args.tidb_override_existing === 'true' || args.tidb_override_existing === '1';
 const TIDB_MAX_EPISODES = parseInt(args.tidb_max_episodes) || 5;
@@ -27,7 +77,6 @@ const TIDB_ENABLE_LOG = args.tidb_enable_log === 'true' || args.tidb_enable_log 
 let cacheApiBase = args.tidb_cache_api || 'https://loon-plugins.demojameson.de5.net';
 if (cacheApiBase.endsWith('/')) cacheApiBase = cacheApiBase.slice(0, -1);
 const TIDB_CACHE_API = cacheApiBase + '/api/tidb/media';
-$notification.post("title","subtitle",TIDB_CACHE_API);
 const ms1Month = 30 * 24 * 60 * 60 * 1000;
 const ms30Min = 30 * 60 * 1000;
 

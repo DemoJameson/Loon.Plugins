@@ -12,4 +12,4 @@ tidb_cache_api=input, "https://loon-plugins.demojameson.de5.net", tag=TIDB缓存
 tidb_enable_log=switch, "false", tag=调试日志, desc=是否打印调试日志，方便排查匹配问题
 
 [Script]
-http-response ^https?:\/\/.+\/emby\/(Shows\/.+\/Episodes|Users\/.+\/Items\/.+|Items\/.+\/PlaybackInfo) script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/tidb_into_emby.js, requires-body=true, timeout=60, argument=tidb_override_existing={tidb_override_existing}&tidb_max_episodes={tidb_max_episodes}&tidb_api_key={tidb_api_key}&tidb_cache_api={tidb_cache_api}&tidb_enable_log={tidb_enable_log}
+http-response ^https?:\/\/.+\/emby\/(Shows\/.+\/Episodes|Users\/.+\/Items\/.+|Items\/.+\/PlaybackInfo) script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/tidb_into_emby.js, requires-body=true, timeout=60, argument=[{tidb_override_existing},{tidb_max_episodes},{tidb_api_key},{tidb_cache_api},{tidb_enable_log}]
