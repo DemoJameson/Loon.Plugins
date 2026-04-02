@@ -6,11 +6,13 @@
 
 const CACHE_STORE_KEY = "tidb_into_emby_cache_v1";
 const RATE_LIMIT_STORE_KEY = "tidb_into_emby_rate_limited_until";
+const REQUEST_LOCK_KEY_PREFIX = "tidb_into_emby_request_lock_";
 const DEFAULT_TIDB_CACHE_API = "https://loon-plugins.demojameson.de5.net";
 const TIDB_DOCS_URL = "https://theintrodb.org/docs";
 const ms1Month = 30 * 24 * 60 * 60 * 1000;
 const ms30Min = 30 * 60 * 1000;
 const ms5Sec = 5 * 1000;
+const ms50 = 50;
 
 let _memCache = null;
 let _cacheModified = false;
@@ -48,6 +50,65 @@ function isTidbRateLimited() {
 function setTidbRateLimited() {
     _tidbRateLimited = true;
     $persistentStore.write(String(Date.now() + ms5Sec), RATE_LIMIT_STORE_KEY);
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getRequestType(url) {
+    if (url.match(/\/Shows\/.+\/Episodes/)) return "episodes";
+    if (url.match(/\/Items\/.+\/PlaybackInfo/)) return "playback";
+    if (url.match(/\/Users\/.+\/Items\/.+/) || url.match(/\/Items\/.+/)) return "item";
+    return "";
+}
+
+function getRequestLockKey(type) {
+    return REQUEST_LOCK_KEY_PREFIX + type;
+}
+
+async function acquireRequestLock(type, host) {
+    if (!type) return null;
+
+    let key = getRequestLockKey(type);
+    while (true) {
+        let current = null;
+        try {
+            current = JSON.parse($persistentStore.read(key) || "null");
+        } catch (e) { }
+
+        if (!current) {
+            let owner = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+            let next = JSON.stringify({ owner, host });
+            $persistentStore.write(next, key);
+
+            try {
+                current = JSON.parse($persistentStore.read(key) || "null");
+            } catch (e) {
+                current = null;
+            }
+
+            if (current && current.owner === owner) {
+                return owner;
+            }
+        }
+
+        await sleep(ms50);
+    }
+}
+
+function releaseRequestLock(type, owner) {
+    if (!type || !owner) return;
+
+    let key = getRequestLockKey(type);
+    let current = null;
+    try {
+        current = JSON.parse($persistentStore.read(key) || "null");
+    } catch (e) { }
+
+    if (current && current.owner === owner) {
+        $persistentStore.write("", key);
+    }
 }
 
 function normalizeArgValue(value) {
@@ -667,20 +728,27 @@ async function handleEpisodes(url, body) {
 async function run() {
     let url = $request.url;
     let body;
+    let requestType = getRequestType(url);
+    let requestHost = new URL(url).host;
+    let requestLockOwner = await acquireRequestLock(requestType, requestHost);
 
     try {
         body = JSON.parse($response.body);
     } catch (e) {
+        releaseRequestLock(requestType, requestLockOwner);
         return $done({});
     }
 
     try {
-        if (url.match(/\/Shows\/.+\/Episodes/)) {
+        if (requestType === "episodes") {
             await handleEpisodes(url, body);
-        } else if (url.match(/\/Users\/.+\/Items\/.+/) || url.match(/\/Items\/.+\/PlaybackInfo/)) {
+        } else if (requestType === "item" || requestType === "playback") {
             await handleSingleItem(url, body);
         }
     } catch (e) { }
+    finally {
+        releaseRequestLock(requestType, requestLockOwner);
+    }
 
     saveCache();
     $done({ body: JSON.stringify(body) });
