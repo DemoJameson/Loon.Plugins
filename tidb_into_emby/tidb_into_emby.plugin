@@ -5,7 +5,7 @@
 #!author=DemoJameson
 
 [Argument]
-tidb_override_existing=switch, "true", tag=覆盖Emby原有的片头片尾, desc=是否覆盖Emby原有的片头片尾
+tidb_override_existing=switch, "false", tag=覆盖Emby原有的片头片尾, desc=是否覆盖Emby原有的片头片尾
 tidb_max_episodes=input, "5", tag=每次最多请求集数, desc=向TheIntroDB请求数据的最多集数限制
 tidb_api_key=input, "", tag=TheIntroDB API Key, desc=TheIntroDB API密钥
 tidb_cache_api=input, "https://loon-plugins.demojameson.de5.net", tag=TIDB缓存API, desc=填入部署好的Vercel域名，如不填将使用默认服务端
