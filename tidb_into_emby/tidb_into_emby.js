@@ -9,6 +9,7 @@ const RATE_LIMIT_STORE_KEY = "tidb_into_emby_rate_limited_until";
 const REQUEST_LOCK_KEY_PREFIX = "tidb_into_emby_request_lock_";
 const DEFAULT_TIDB_CACHE_API = "https://loon-plugins.demojameson.de5.net";
 const TIDB_DOCS_URL = "https://theintrodb.org/docs";
+const MAX_GET_CONCURRENCY = 10;
 const ms1Month = 30 * 24 * 60 * 60 * 1000;
 const ms30Min = 30 * 60 * 1000;
 const ms10Sec = 10 * 1000;
@@ -23,7 +24,7 @@ let args = parseArgs(typeof $argument === "undefined" ? "" : $argument);
 
 const TIDB_OVERRIDE_EXISTING = args.tidb_override_existing === "true" || args.tidb_override_existing === "1";
 const TIDB_NOTIFY_RATE_LIMIT = args.tidb_notify_rate_limit === "true" || args.tidb_notify_rate_limit === "1";
-const TIDB_MAX_EPISODES = parseInt(args.tidb_max_episodes, 10) || 5;
+const TIDB_MAX_EPISODES = Math.min(30, Math.max(1, parseInt(args.tidb_max_episodes, 10) || 5));
 const TIDB_API_KEY = args.tidb_api_key || "";
 const TIDB_IGNORE_PLAYERS = parseIgnorePlayers(args.tidb_ignore_players);
 const TIDB_CACHE_API = (args.tidb_cache_api || DEFAULT_TIDB_CACHE_API).replace(/\/+$/, "") + "/api/tidb/media";
@@ -57,6 +58,21 @@ function setTidbRateLimited() {
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function runWithConcurrency(items, limit, worker) {
+    let index = 0;
+    let runners = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+        while (true) {
+            let currentIndex = index;
+            index += 1;
+            if (currentIndex >= items.length) {
+                return;
+            }
+            await worker(items[currentIndex], currentIndex);
+        }
+    });
+    await Promise.all(runners);
 }
 
 function getRequestType(url) {
@@ -438,9 +454,11 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
 
 function postBatchToVercel(tmdbId, batchAccumulator) {
     if (!TIDB_CACHE_API || Object.keys(batchAccumulator).length === 0) return;
-    for (let [s, eps] of Object.entries(batchAccumulator)) {
-        if (eps.length > 0) {
-            httpRequest({
+    Promise.all(Object.entries(batchAccumulator).map(([s, eps]) => {
+        if (eps.length === 0) {
+            return Promise.resolve();
+        }
+        return httpRequest({
                 method: "POST",
                 url: TIDB_CACHE_API,
                 headers: { "Content-Type": "application/json" },
@@ -450,8 +468,7 @@ function postBatchToVercel(tmdbId, batchAccumulator) {
                     episodes: eps
                 })
             }).catch(() => { });
-        }
-    }
+    })).catch(() => { });
 }
 
 async function getTidbDataForEpisode(tmdbId, s, e, fetchIfMissing, batchAccumulator) {
@@ -704,22 +721,24 @@ async function handleEpisodes(url, body) {
     }
 
     if (missingItems.length > 0 && TIDB_CACHE_API) {
-        let s = missingItems[0].ParentIndexNumber;
-        let vUrl = `${TIDB_CACHE_API}?tmdb_id=${tmdbId}&season=${s}`;
-        try {
-            let v_res = await httpRequest({
-                method: "GET",
-                url: vUrl
-            });
-            if (v_res.status === 200) {
-                let seasonData = JSON.parse(v_res.body);
-                for (let [epStr, epData] of Object.entries(seasonData)) {
-                    let eKey = kvKey(tmdbId, s, epStr);
-                    let hasD = epData !== null && typeof epData === "object";
-                    setCache(eKey, { has_data: hasD, data: epData }, ms1Month);
+        let missingSeasons = [...new Set(missingItems.map(item => item.ParentIndexNumber))];
+        await Promise.all(missingSeasons.map(async s => {
+            let vUrl = `${TIDB_CACHE_API}?tmdb_id=${tmdbId}&season=${s}`;
+            try {
+                let v_res = await httpRequest({
+                    method: "GET",
+                    url: vUrl
+                });
+                if (v_res.status === 200) {
+                    let seasonData = JSON.parse(v_res.body);
+                    for (let [epStr, epData] of Object.entries(seasonData)) {
+                        let eKey = kvKey(tmdbId, s, epStr);
+                        let hasD = epData !== null && typeof epData === "object";
+                        setCache(eKey, { has_data: hasD, data: epData }, ms1Month);
+                    }
                 }
-            }
-        } catch (e) { }
+            } catch (e) { }
+        }));
     }
 
     missingItems = missingItems.filter(item => {
@@ -756,30 +775,24 @@ async function handleEpisodes(url, body) {
     let nextUpIndex = missingItems.length > 0 ? missingItems.findIndex(i => i.ParentIndexNumber === nextUpSeason && i.IndexNumber === nextUpEp) : 0;
     if (nextUpIndex === -1) nextUpIndex = 0;
 
-    let needFetchCount = 0;
+    let orderedMissingItems = [];
+    if (missingItems.length > 0) {
+        let firstSegment = missingItems.slice(nextUpIndex);
+        let secondSegment = nextUpIndex > 0 ? missingItems.slice(0, nextUpIndex) : [];
+        orderedMissingItems = firstSegment.concat(secondSegment);
+    }
 
-    for (let startIdx of [nextUpIndex, 0]) {
-        for (let i = startIdx; i < missingItems.length; i++) {
-            let item = missingItems[i];
-
-            if (item._checked) continue;
-            item._checked = true;
-
-            if (needFetchCount < TIDB_MAX_EPISODES) {
-                let f = await fetchTidbDirectAndCache(tmdbId, item.ParentIndexNumber, item.IndexNumber);
-                if (isTidbRateLimited()) break;
-                if (f) {
-                    item._tidbData = f.data;
-                    if (hasValidTidbData(f.data)) {
-                        if (!batch[item.ParentIndexNumber]) batch[item.ParentIndexNumber] = [];
-                        batch[item.ParentIndexNumber].push({ episode: item.IndexNumber, data: f.data });
-                    }
-                }
-                needFetchCount++;
+    let fetchTargets = orderedMissingItems.slice(0, TIDB_MAX_EPISODES);
+    await runWithConcurrency(fetchTargets, MAX_GET_CONCURRENCY, async item => {
+        let f = await fetchTidbDirectAndCache(tmdbId, item.ParentIndexNumber, item.IndexNumber);
+        if (f) {
+            item._tidbData = f.data;
+            if (hasValidTidbData(f.data)) {
+                if (!batch[item.ParentIndexNumber]) batch[item.ParentIndexNumber] = [];
+                batch[item.ParentIndexNumber].push({ episode: item.IndexNumber, data: f.data });
             }
         }
-        if (isTidbRateLimited() || needFetchCount >= TIDB_MAX_EPISODES) break;
-    }
+    });
 
     for (let item of targetItems) {
         if (item._tidbData) {
@@ -789,7 +802,7 @@ async function handleEpisodes(url, body) {
         delete item._checked;
     }
 
-    await postBatchToVercel(tmdbId, batch);
+    postBatchToVercel(tmdbId, batch);
 }
 
 async function run() {
