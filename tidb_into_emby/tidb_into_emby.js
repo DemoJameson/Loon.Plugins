@@ -260,7 +260,7 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
                 notify(
                     "接入TIDB片头片尾",
                     "TheIntroDB 请求次数已超限",
-                    "当前未填写 TheIntroDB API Key。请先申请并填写 API Key，点击此通知可打开文档。",
+                    "当前未填写 TIDB API Key。请先申请并填写 API Key，点击此通知可打开申请页面。",
                     TIDB_DOCS_URL
                 );
             } else {
