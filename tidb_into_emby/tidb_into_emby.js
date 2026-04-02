@@ -27,7 +27,7 @@ const TIDB_ENABLE_LOG = args.tidb_enable_log === 'true' || args.tidb_enable_log 
 let cacheApiBase = args.tidb_cache_api || 'https://loon-plugins.demojameson.de5.net';
 if (cacheApiBase.endsWith('/')) cacheApiBase = cacheApiBase.slice(0, -1);
 const TIDB_CACHE_API = cacheApiBase + '/api/tidb/media';
-
+$notification.post("title","subtitle",TIDB_CACHE_API);
 const ms1Month = 30 * 24 * 60 * 60 * 1000;
 const ms30Min = 30 * 60 * 1000;
 
