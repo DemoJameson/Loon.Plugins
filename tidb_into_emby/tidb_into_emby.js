@@ -11,6 +11,7 @@ const DEFAULT_TIDB_CACHE_API = "https://loon-plugins.demojameson.de5.net";
 const TIDB_DOCS_URL = "https://theintrodb.org/docs";
 const ms1Month = 30 * 24 * 60 * 60 * 1000;
 const ms30Min = 30 * 60 * 1000;
+const ms10Sec = 10 * 1000;
 const ms5Sec = 5 * 1000;
 const ms50 = 50;
 
@@ -69,21 +70,22 @@ function getRequestLockKey(type) {
     return REQUEST_LOCK_KEY_PREFIX + type;
 }
 
-function tryAcquireRequestLock(type, host) {
+function tryAcquireRequestLock(type) {
     if (!type) return null;
 
     let key = getRequestLockKey(type);
+    let now = Date.now();
     let current = null;
     try {
         current = JSON.parse($persistentStore.read(key) || "null");
     } catch (e) { }
 
-    if (current) {
+    if (current && current.expireAt > now) {
         return null;
     }
 
     let owner = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    $persistentStore.write(JSON.stringify({ owner, host }), key);
+    $persistentStore.write(JSON.stringify({ owner, expireAt: now + ms10Sec }), key);
 
     try {
         current = JSON.parse($persistentStore.read(key) || "null");
@@ -99,12 +101,17 @@ async function waitForRequestUnlock(type) {
 
     let key = getRequestLockKey(type);
     while (true) {
+        let now = Date.now();
         let current = null;
         try {
             current = JSON.parse($persistentStore.read(key) || "null");
         } catch (e) { }
 
         if (!current) {
+            return;
+        }
+        if (current.expireAt <= now) {
+            $persistentStore.write("", key);
             return;
         }
 
@@ -773,8 +780,7 @@ async function run() {
     let url = $request.url;
     let body;
     let requestType = getRequestType(url);
-    let requestHost = new URL(url).host;
-    let requestLockOwner = tryAcquireRequestLock(requestType, requestHost);
+    let requestLockOwner = tryAcquireRequestLock(requestType);
     let waitedForLock = false;
 
     if (!requestLockOwner && requestType) {
