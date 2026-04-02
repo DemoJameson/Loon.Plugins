@@ -457,8 +457,8 @@ function injectChaptersFunc(chapters, tidbData) {
         let conflict = false;
         let pos = ch.StartPositionTicks || 0;
 
-        if (finalIntroEnd !== -1 && pos > finalIntroStart && pos < finalIntroEnd) conflict = true;
-        if (finalCreditsStart !== -1 && pos > finalCreditsStart) conflict = true;
+        if (finalIntroEnd !== -1 && pos >= finalIntroStart && pos <= finalIntroEnd) conflict = true;
+        if (finalCreditsStart !== -1 && pos >= finalCreditsStart) conflict = true;
 
         if (!conflict) {
             newChapters.push(ch);
