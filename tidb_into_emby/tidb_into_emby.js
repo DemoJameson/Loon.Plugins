@@ -24,18 +24,18 @@ const TIDB_MAX_EPISODES = parseInt(args.tidb_max_episodes) || 5;
 const TIDB_API_KEY = args.tidb_api_key || '';
 const TIDB_ENABLE_LOG = args.tidb_enable_log === 'true' || args.tidb_enable_log === '1';
 
-function log(msg) {
-    if (TIDB_ENABLE_LOG) {
-        console.log("[TIDB-Emby] " + msg);
-    }
-}
-
 let cacheApiBase = args.tidb_cache_api || 'https://loon-plugins.demojameson.de5.net';
 if (cacheApiBase.endsWith('/')) cacheApiBase = cacheApiBase.slice(0, -1);
 const TIDB_CACHE_API = cacheApiBase + '/api/tidb/media';
 
 const ms1Month = 30 * 24 * 60 * 60 * 1000;
 const ms30Min = 30 * 60 * 1000;
+
+function log(msg) {
+    if (TIDB_ENABLE_LOG) {
+        console.info("[TIDB-Emby] " + msg);
+    }
+}
 
 function httpRequest(options) {
     return new Promise((resolve, reject) => {
@@ -219,10 +219,12 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
 }
 
 async function postBatchToVercel(tmdbId, batchAccumulator) {
+    log(`[postBatchToVercel] Triggered. TIDB_CACHE_API=${TIDB_CACHE_API}, Batch keys: ${Object.keys(batchAccumulator).length}`);
     if (!TIDB_CACHE_API || Object.keys(batchAccumulator).length === 0) return;
-    log(`Posting up batch data to Vercel for tmdb_id=${tmdbId}, seasons=[${Object.keys(batchAccumulator).join(',')}]`);
+    log(`[postBatchToVercel] Posting batch data for tmdb_id=${tmdbId}, seasons=[${Object.keys(batchAccumulator).join(',')}]`);
     for (let [s, eps] of Object.entries(batchAccumulator)) {
         if (eps.length > 0) {
+            log(`[postBatchToVercel] POSTing season ${s} to ${TIDB_CACHE_API}`);
             await httpRequest({
                 method: 'POST',
                 url: TIDB_CACHE_API,
@@ -232,7 +234,8 @@ async function postBatchToVercel(tmdbId, batchAccumulator) {
                     season: s,
                     episodes: eps
                 })
-            }).catch(() => { });
+            }).then(r => log(`[postBatchToVercel] POST success: HTTP ${r.status}`))
+                .catch((e) => log(`[postBatchToVercel] POST error: ${e}`));
         }
     }
 }
@@ -410,11 +413,14 @@ async function handleSingleItem(url, body) {
         tidbData = c.has_data ? c.data : null;
     } else {
         if (TIDB_CACHE_API) {
+            let vUrl = `${TIDB_CACHE_API}?tmdb_id=${tmdbId}&season=${season}`;
+            log(`[Vercel GET] /api/tidb/media?tmdb_id=${tmdbId}&season=${season}`);
             try {
                 let v_res = await httpRequest({
                     method: 'GET',
-                    url: `${TIDB_CACHE_API}?tmdb_id=${tmdbId}&season=${season}`
+                    url: vUrl
                 });
+                log(`[Vercel GET] HTTP ${v_res.status}`);
                 if (v_res.status === 200) {
                     let seasonData = JSON.parse(v_res.body);
                     for (let [epStr, epData] of Object.entries(seasonData)) {
@@ -423,7 +429,9 @@ async function handleSingleItem(url, body) {
                         setCache(k, { has_data: hasD, data: epData }, ms1Month);
                     }
                 }
-            } catch (e) { }
+            } catch (e) {
+                log(`[Vercel GET] Error: ${e}`);
+            }
         }
 
         let batch = {};
@@ -491,11 +499,14 @@ async function handleEpisodes(url, body) {
     // Phase 1.5: If still missing locally, query Vercel for those specific seasons
     if (missingItems.length > 0 && TIDB_CACHE_API) {
         let s = missingItems[0].ParentIndexNumber;
+        let vUrl = `${TIDB_CACHE_API}?tmdb_id=${tmdbId}&season=${s}`;
+        log(`[Vercel GET] missingItems=${missingItems.length}, querying tmdb_id=${tmdbId}&season=${s}`);
         try {
             let v_res = await httpRequest({
                 method: 'GET',
-                url: `${TIDB_CACHE_API}?tmdb_id=${tmdbId}&season=${s}`
+                url: vUrl
             });
+            log(`[Vercel GET] HTTP ${v_res.status}`);
             if (v_res.status === 200) {
                 let seasonData = JSON.parse(v_res.body);
                 for (let [epStr, epData] of Object.entries(seasonData)) {
@@ -504,7 +515,9 @@ async function handleEpisodes(url, body) {
                     setCache(eKey, { has_data: hasD, data: epData }, ms1Month);
                 }
             }
-        } catch (e) { }
+        } catch (e) {
+            log(`[Vercel GET] Error: ${e}`);
+        }
     }
 
     // Phase 1.6: Re-evaluate missing items now that Vercel might have fulfilled them
