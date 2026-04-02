@@ -1,6 +1,8 @@
 #!name=TIDB into Emby
 #!desc=拦截Emby接口并注入TIDB的片头片尾数据
-#!author=Assistant
+#!homepage=https://github.com/DemoJameson/Loon.Plugins
+#!openUrl=https://theintrodb.org/docs
+#!author=DemoJameson
 
 [Argument]
 tidb_override_existing=switch, true, tag=覆盖已有章节, desc=是否剔除原生带有片头片尾类型或与之重叠的泛用章节数据
