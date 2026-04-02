@@ -272,14 +272,13 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
             finalData = JSON.parse(res.body);
             hasData = true;
         } else if (res.status === 429) {
-            setTidbRateLimited();
             let retryAfter = "";
             try {
                 let errorBody = JSON.parse(res.body || "{}");
                 retryAfter = errorBody.retry_after || "";
             } catch (e) { }
 
-            if (TIDB_NOTIFY_RATE_LIMIT) {
+            if (TIDB_NOTIFY_RATE_LIMIT && !isTidbRateLimited()) {
                 if (!TIDB_API_KEY) {
                     notify(
                         "接入TIDB片头片尾",
@@ -295,6 +294,8 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
                     );
                 }
             }
+
+            setTidbRateLimited();
             return null;
         } else if (res.status !== 404) {
             return null;
