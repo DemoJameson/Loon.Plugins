@@ -1,5 +1,6 @@
 #!name=接入TIDB片头片尾
 #!desc=拦截Emby接口并注入TheIntroDB的片头片尾数据。需要自行添加Emby的域名到MitM。
+#!icon=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/icon.png
 #!homepage=https://github.com/DemoJameson/Loon.Plugins
 #!openUrl=https://theintrodb.org/docs
 #!author=DemoJameson
