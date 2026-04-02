@@ -405,15 +405,18 @@ function injectChaptersFunc(chapters, tidbData) {
     }
 
     if (finalIntroEnd !== -1) {
-        newChapters.push({ StartPositionTicks: finalIntroStart, Name: "IntroStart", Type: "IntroStart", MarkerType: "IntroStart" });
-        newChapters.push({ StartPositionTicks: finalIntroEnd, Name: "IntroEnd", Type: "IntroEnd", MarkerType: "IntroEnd" });
+        newChapters.push({ StartPositionTicks: finalIntroStart, Name: "IntroStart", MarkerType: "IntroStart" });
+        newChapters.push({ StartPositionTicks: finalIntroEnd, Name: "IntroEnd", MarkerType: "IntroEnd" });
     }
 
     if (finalCreditsStart !== -1) {
-        newChapters.push({ StartPositionTicks: finalCreditsStart, Name: "CreditsStart", Type: "CreditsStart", MarkerType: "CreditsStart" });
+        newChapters.push({ StartPositionTicks: finalCreditsStart, Name: "CreditsStart", MarkerType: "CreditsStart" });
     }
 
     newChapters.sort((a, b) => a.StartPositionTicks - b.StartPositionTicks);
+    newChapters.forEach((chapter, index) => {
+        chapter.ChapterIndex = index;
+    });
     return newChapters;
 }
 
