@@ -13,3 +13,4 @@ tidb_enable_log=switch, "false", tag=调试日志, desc=是否打印调试日志
 
 [Script]
 http-response ^https?:\/\/.+\/emby\/(Shows\/.+\/Episodes|Users\/.+\/Items\/.+|Items\/.+\/PlaybackInfo) script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/tidb_into_emby.js, requires-body=true, timeout=60, argument=[{tidb_override_existing},{tidb_max_episodes},{tidb_api_key},{tidb_cache_api},{tidb_enable_log}]
+cron "0 0 30 2 *" script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/clear_tidb_cache.js, tag=TIDB本地缓存清除脚本, enable=true
