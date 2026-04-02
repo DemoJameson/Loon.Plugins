@@ -12,6 +12,7 @@ const ms30Min = 30 * 60 * 1000;
 
 let _memCache = null;
 let _cacheModified = false;
+let _tidbRateLimited = false;
 let args = parseArgs(typeof $argument === "undefined" ? "" : $argument);
 
 const TIDB_OVERRIDE_EXISTING = args.tidb_override_existing === "true" || args.tidb_override_existing === "1";
@@ -227,6 +228,10 @@ async function getTmdbId(seriesId, userId, host, origin) {
 }
 
 async function fetchTidbDirectAndCache(tmdbId, s, e) {
+    if (_tidbRateLimited) {
+        return null;
+    }
+
     let url = `https://api.theintrodb.org/v2/media?tmdb_id=${tmdbId}&season=${s}&episode=${e}`;
     let headers = {};
     if (TIDB_API_KEY) {
@@ -244,6 +249,7 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
             finalData = JSON.parse(res.body);
             hasData = true;
         } else if (res.status === 429) {
+            _tidbRateLimited = true;
             let retryAfter = "";
             try {
                 let errorBody = JSON.parse(res.body || "{}");
@@ -304,7 +310,7 @@ async function getTidbDataForEpisode(tmdbId, s, e, fetchIfMissing, batchAccumula
         return c.has_data ? c.data : null;
     }
 
-    if (fetchIfMissing) {
+    if (fetchIfMissing && !_tidbRateLimited) {
         let fData = await fetchTidbDirectAndCache(tmdbId, s, e);
         if (fData) {
             if (batchAccumulator) {
@@ -606,6 +612,7 @@ async function handleEpisodes(url, body) {
 
             if (needFetchCount < TIDB_MAX_EPISODES) {
                 let f = await fetchTidbDirectAndCache(tmdbId, item.ParentIndexNumber, item.IndexNumber);
+                if (_tidbRateLimited) break;
                 if (f) {
                     item._tidbData = f.data;
                     if (!batch[item.ParentIndexNumber]) batch[item.ParentIndexNumber] = [];
@@ -614,7 +621,7 @@ async function handleEpisodes(url, body) {
                 needFetchCount++;
             }
         }
-        if (needFetchCount >= TIDB_MAX_EPISODES) break;
+        if (_tidbRateLimited || needFetchCount >= TIDB_MAX_EPISODES) break;
     }
 
     for (let item of targetItems) {
