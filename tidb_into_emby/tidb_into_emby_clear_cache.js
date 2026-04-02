@@ -1,4 +1,4 @@
-const CACHE_STORE_KEY = "emby_TIDB_chapters_cache_v1";
+const CACHE_STORE_KEY = "tidb_into_emby_cache_v1";
 const TITLE = "TIDB into Emby";
 
 function notify(subtitle, message) {

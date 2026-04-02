@@ -4,11 +4,13 @@
  * Compatible with Loon and Surge.
  */
 
-const CACHE_STORE_KEY = "emby_tidb_chapters_cache_v1";
+const CACHE_STORE_KEY = "tidb_into_emby_cache_v1";
+const RATE_LIMIT_STORE_KEY = "tidb_into_emby_rate_limited_until";
 const DEFAULT_TIDB_CACHE_API = "https://loon-plugins.demojameson.de5.net";
 const TIDB_DOCS_URL = "https://theintrodb.org/docs";
 const ms1Month = 30 * 24 * 60 * 60 * 1000;
 const ms30Min = 30 * 60 * 1000;
+const ms5Sec = 5 * 1000;
 
 let _memCache = null;
 let _cacheModified = false;
@@ -27,6 +29,24 @@ function notify(title, subtitle, message, url) {
     } else {
         $notification.post(title, subtitle, message);
     }
+}
+
+function isTidbRateLimited() {
+    if (_tidbRateLimited) return true;
+    let until = parseInt($persistentStore.read(RATE_LIMIT_STORE_KEY), 10) || 0;
+    if (until > Date.now()) {
+        _tidbRateLimited = true;
+        return true;
+    }
+    if (until) {
+        $persistentStore.write("", RATE_LIMIT_STORE_KEY);
+    }
+    return false;
+}
+
+function setTidbRateLimited() {
+    _tidbRateLimited = true;
+    $persistentStore.write(String(Date.now() + ms5Sec), RATE_LIMIT_STORE_KEY);
 }
 
 function normalizeArgValue(value) {
@@ -228,7 +248,7 @@ async function getTmdbId(seriesId, userId, host, origin) {
 }
 
 async function fetchTidbDirectAndCache(tmdbId, s, e) {
-    if (_tidbRateLimited) {
+    if (isTidbRateLimited()) {
         return null;
     }
 
@@ -249,7 +269,7 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
             finalData = JSON.parse(res.body);
             hasData = true;
         } else if (res.status === 429) {
-            _tidbRateLimited = true;
+            setTidbRateLimited();
             let retryAfter = "";
             try {
                 let errorBody = JSON.parse(res.body || "{}");
@@ -310,7 +330,7 @@ async function getTidbDataForEpisode(tmdbId, s, e, fetchIfMissing, batchAccumula
         return c.has_data ? c.data : null;
     }
 
-    if (fetchIfMissing && !_tidbRateLimited) {
+    if (fetchIfMissing && !isTidbRateLimited()) {
         let fData = await fetchTidbDirectAndCache(tmdbId, s, e);
         if (fData) {
             if (batchAccumulator) {
@@ -612,7 +632,7 @@ async function handleEpisodes(url, body) {
 
             if (needFetchCount < TIDB_MAX_EPISODES) {
                 let f = await fetchTidbDirectAndCache(tmdbId, item.ParentIndexNumber, item.IndexNumber);
-                if (_tidbRateLimited) break;
+                if (isTidbRateLimited()) break;
                 if (f) {
                     item._tidbData = f.data;
                     if (!batch[item.ParentIndexNumber]) batch[item.ParentIndexNumber] = [];
@@ -621,7 +641,7 @@ async function handleEpisodes(url, body) {
                 needFetchCount++;
             }
         }
-        if (_tidbRateLimited || needFetchCount >= TIDB_MAX_EPISODES) break;
+        if (isTidbRateLimited() || needFetchCount >= TIDB_MAX_EPISODES) break;
     }
 
     for (let item of targetItems) {
