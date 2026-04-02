@@ -18,7 +18,8 @@ let _tidbRateLimited = false;
 let args = parseArgs(typeof $argument === "undefined" ? "" : $argument);
 
 const TIDB_OVERRIDE_EXISTING = args.tidb_override_existing === "true" || args.tidb_override_existing === "1";
-const TIDB_MAX_EPISODES = parseInt(args.tidb_max_episodes) || 5;
+const TIDB_NOTIFY_RATE_LIMIT = args.tidb_notify_rate_limit === "true" || args.tidb_notify_rate_limit === "1";
+const TIDB_MAX_EPISODES = parseInt(args.tidb_max_episodes, 10) || 5;
 const TIDB_API_KEY = args.tidb_api_key || "";
 const TIDB_CACHE_API = (args.tidb_cache_api || DEFAULT_TIDB_CACHE_API).replace(/\/+$/, "") + "/api/tidb/media";
 
@@ -95,6 +96,7 @@ function parseArgs(rawArgument) {
     if (rawArgument && typeof rawArgument === "object") {
         return {
             tidb_override_existing: normalizeArgValue(rawArgument.tidb_override_existing),
+            tidb_notify_rate_limit: normalizeArgValue(rawArgument.tidb_notify_rate_limit),
             tidb_max_episodes: normalizeArgValue(rawArgument.tidb_max_episodes),
             tidb_api_key: normalizeArgValue(rawArgument.tidb_api_key),
             tidb_cache_api: normalizeArgValue(rawArgument.tidb_cache_api)
@@ -104,9 +106,10 @@ function parseArgs(rawArgument) {
     let parts = splitArgumentList(rawArgument);
     return {
         tidb_override_existing: parts[0] || "",
-        tidb_max_episodes: parts[1] || "",
-        tidb_api_key: parts[2] || "",
-        tidb_cache_api: parts[3] || ""
+        tidb_notify_rate_limit: parts[1] || "",
+        tidb_max_episodes: parts[2] || "",
+        tidb_api_key: parts[3] || "",
+        tidb_cache_api: parts[4] || ""
     };
 }
 
@@ -276,19 +279,21 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
                 retryAfter = errorBody.retry_after || "";
             } catch (e) { }
 
-            if (!TIDB_API_KEY) {
-                notify(
-                    "接入TIDB片头片尾",
-                    "TheIntroDB 请求次数已超限",
-                    "当前未填写 TIDB API Key。请先申请并填写 API Key，点击此通知可打开申请页面。",
-                    TIDB_DOCS_URL
-                );
-            } else {
-                notify(
-                    "接入TIDB片头片尾",
-                    "TheIntroDB 请求次数已超限",
-                    retryAfter ? `已触发速率限制，请在 ${retryAfter} 后重试。` : "已触发速率限制，请稍后再试。"
-                );
+            if (TIDB_NOTIFY_RATE_LIMIT) {
+                if (!TIDB_API_KEY) {
+                    notify(
+                        "接入TIDB片头片尾",
+                        "TheIntroDB 请求次数已超限",
+                        "当前未填写 TheIntroDB API Key。请先申请并填写 API Key，点击此通知可打开文档。",
+                        TIDB_DOCS_URL
+                    );
+                } else {
+                    notify(
+                        "接入TIDB片头片尾",
+                        "TheIntroDB 请求次数已超限",
+                        retryAfter ? `已触发速率限制，请在 ${retryAfter} 后重试。` : "已触发速率限制，请稍后再试。"
+                    );
+                }
             }
             return null;
         } else if (res.status !== 404) {
@@ -616,7 +621,7 @@ async function handleEpisodes(url, body) {
         }
     }
 
-    missingItems.sort((a, b) => (parseInt(a.ParentIndexNumber) || 0) - (parseInt(b.ParentIndexNumber) || 0) || (parseInt(a.IndexNumber) || 0) - (parseInt(b.IndexNumber) || 0));
+    missingItems.sort((a, b) => (parseInt(a.ParentIndexNumber, 10) || 0) - (parseInt(b.ParentIndexNumber, 10) || 0) || (parseInt(a.IndexNumber, 10) || 0) - (parseInt(b.IndexNumber, 10) || 0));
 
     let nextUpIndex = missingItems.length > 0 ? missingItems.findIndex(i => i.ParentIndexNumber === nextUpSeason && i.IndexNumber === nextUpEp) : 0;
     if (nextUpIndex === -1) nextUpIndex = 0;
@@ -674,7 +679,6 @@ async function run() {
     } catch (e) { }
 
     saveCache();
-
     $done({ body: JSON.stringify(body) });
 }
 
