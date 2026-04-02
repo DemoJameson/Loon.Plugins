@@ -7,8 +7,8 @@
 
 [Script]
 # 拦截 TMDB 电影详情 API，开启 requires-body 以修改响应
-http-response ^https:\/\/api\.themoviedb\.org\/3\/(tv|movie)\/\d+ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.js, requires-body=true, timeout=10, tag=themoviedb.org
-http-response ^https:\/\/api\.tmdb\.org\/3\/(tv|movie)\/\d+ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.js, requires-body=true, timeout=10, tag=tmdb.org
+http-response ^https:\/\/api\.themoviedb\.org\/3\/(tv|movie)\/\d+ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.js, requires-body=true, timeout=10, argument=[{preferredLanguage}], tag=themoviedb.org
+http-response ^https:\/\/api\.tmdb\.org\/3\/(tv|movie)\/\d+ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.js, requires-body=true, timeout=10, argument=[{preferredLanguage}], tag=tmdb.org
 
 [MITM]
 # 必须配置 MITM 才能解密 HTTPS 流量并执行脚本

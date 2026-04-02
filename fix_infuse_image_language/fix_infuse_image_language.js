@@ -2,9 +2,12 @@
 let body = $response.body;
 
 // 获取 Loon 插件面板传入的文本参数
-let preferredLanguage = "zh-CN"; 
-if (typeof $argument !== "undefined" && $argument.trim() !== "" && $argument !== "{preferredLanguage}") {
-    preferredLanguage = $argument.trim();
+let preferredLanguage = "zh-CN";
+
+if (typeof $argument === "object") {
+    preferredLanguage = $argument.preferredLanguage.trim();
+} else if (typeof $argument === "string") {
+    preferredLanguage = $argument.replace(/^\[|\]$/g, '').trim();
 }
 
 try {
@@ -12,7 +15,7 @@ try {
 
     // 确保响应体包含 images 字段
     if (obj && obj.images) {
-        
+
         let targetLang = null;
         let targetRegion = null;
 
@@ -35,7 +38,7 @@ try {
                         // 语言和地区双重精确匹配 (2分)
                         if (targetRegion && itemRegion === targetRegion) {
                             score = 2;
-                        } 
+                        }
                         // 仅语言匹配 (1分)
                         else {
                             score = 1;
@@ -54,16 +57,16 @@ try {
                     obj.images[type].sort(sortImages);
                 }
             });
-            
+
             // 将修改后的对象转回 JSON 字符串
             body = JSON.stringify(obj);
         }
     }
-    
+
     // 返回修改后的 body
-    $done({ body });
+    $done({body});
 
 } catch (e) {
     console.log("TMDB 图片自定义排序脚本错误: " + e);
-    $done({}); 
+    $done({});
 }

@@ -285,24 +285,14 @@ function extractNormalizedTranslation(items) {
     };
 }
 
-function getScriptOption(name) {
-    if (typeof $argument === "undefined" || $argument === null) {
-        return "";
-    }
-
-    if (typeof $argument === "object") {
-        return $argument[name] || "";
-    }
-
-    if (typeof $argument === "string") {
-        return name === "backend_base_url" ? $argument : "https://trakt-translations.demojameson.de5.net";
-    }
-
-    return "";
-}
-
 function getBatchBackendBaseUrl() {
-    let value = getScriptOption("backend_base_url") || getScriptOption("backendBaseUrl");
+    let value = "https://loon-plugins.demojameson.de5.net";
+
+    if (typeof $argument === "object" && $argument !== null) {
+        value = ($argument.backendBaseUrl || "").trim();
+    } else if (typeof $argument === "string") {
+        value = $argument.replace(/^\[|\]$/g, "").trim();
+    }
 
     if (typeof value !== "string") {
         return "";
