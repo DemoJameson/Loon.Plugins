@@ -117,7 +117,7 @@ function kvKey(tmdb, s, e) {
     return `tidb_ep_${tmdb}_${s}_${e}`;
 }
 
-async function getTmdbId(seriesId, host) {
+async function getTmdbId(seriesId, host, origin) {
     let key = `tmdb_id_${host}_${seriesId}`;
     let c = getCache(key);
     if (c) return c;
@@ -352,7 +352,7 @@ async function handleSingleItem(url, body) {
 
     if (!seriesId || season === undefined || episode === undefined) return;
 
-    let tmdbId = await getTmdbId(seriesId, host);
+    let tmdbId = await getTmdbId(seriesId, host, origin);
     if (!tmdbId) return;
 
     let eKey = kvKey(tmdbId, season, episode);
@@ -407,10 +407,13 @@ async function handleEpisodes(url, body) {
     let origin = url.split('/emby')[0];
     let host = origin.replace(/^https?:\/\//, '');
 
-    let tmdbId = await getTmdbId(seriesId, host);
+    let tmdbId = await getTmdbId(seriesId, host, origin);
+    if (!tmdbId) return;
+
     let targetItems = body.Items.filter(i => i.Type === 'Episode');
 
     let missingItems = [];
+    let batch = {};
 
     // Phase 1: Pure Local Cache Verification
     for (let item of targetItems) {
