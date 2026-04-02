@@ -316,8 +316,9 @@ async function handleSingleItem(url, body) {
     if (!itemId) return;
 
     let seriesId, season, episode;
-    let origin = url.split('/emby')[0];
-    let host = origin.replace(/^https?:\/\//, '');
+    let parsedUrl = new URL(url);
+    let host = parsedUrl.host;
+    let origin = parsedUrl.origin;
 
     if (isPlayback) {
         let meta = getCache(`emby_item_${host}_${itemId}`);
@@ -327,7 +328,6 @@ async function handleSingleItem(url, body) {
             season = meta.ParentIndexNumber;
             episode = meta.IndexNumber;
         } else {
-            let origin = url.split('/emby')[0];
             let itemRes = await httpRequest({
                 url: `${origin}/emby/Items/${itemId}?Fields=ProviderIds`,
                 headers: getAuthHeaders()
@@ -425,8 +425,9 @@ async function handleEpisodes(url, body) {
     }
     if (!seriesId) return;
 
-    let origin = url.split('/emby')[0];
-    let host = origin.replace(/^https?:\/\//, '');
+    let parsedUrl = new URL(url);
+    let host = parsedUrl.host;
+    let origin = parsedUrl.origin;
 
     let tmdbId = await getTmdbId(seriesId, host, origin);
     if (!tmdbId) return;
