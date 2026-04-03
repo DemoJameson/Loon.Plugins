@@ -423,15 +423,15 @@ async function fetchTidbDirectAndCache(tmdbId, s, e) {
                 if (!TIDB_API_KEY) {
                     notify(
                         "接入TIDB片头片尾",
-                        "TheIntroDB 请求次数已超限",
-                        "当前未填写 TheIntroDB API Key。请先申请并填写 API Key，点击此通知可打开文档。",
+                        "TheIntroDB请求次数已超限",
+                        "当前未填写TheIntroDB API Key。请先申请并填写API Key，点击此通知可打开文档。",
                         TIDB_DOCS_URL
                     );
                 } else {
                     notify(
                         "接入TIDB片头片尾",
                         "TheIntroDB 请求次数已超限",
-                        retryAfter ? `已触发速率限制，请在 ${retryAfter} 后重试。` : "已触发速率限制，请稍后再试。"
+                        retryAfter ? `已触发速率限制，请在${retryAfter}后重试。` : "已触发速率限制，请稍后再试。"
                     );
                 }
             }
