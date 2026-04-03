@@ -470,6 +470,31 @@ function postBatchToVercel(tmdbId, batchAccumulator) {
     })).catch(() => { });
 }
 
+async function fetchTidbSeasonFromVercelAndCache(tmdbId, season) {
+    if (!TIDB_CACHE_API) return false;
+
+    let url = `${TIDB_CACHE_API}?tmdb_id=${tmdbId}&season=${season}`;
+    try {
+        let res = await httpRequest({
+            method: "GET",
+            url
+        });
+        if (res.status !== 200) {
+            return false;
+        }
+
+        let seasonData = JSON.parse(res.body);
+        for (let [epStr, epData] of Object.entries(seasonData)) {
+            let key = kvKey(tmdbId, season, epStr);
+            let hasData = epData !== null && typeof epData === "object";
+            setCache(key, { has_data: hasData, data: epData }, ms1Month);
+        }
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 async function getTidbDataForEpisode(tmdbId, s, e, fetchIfMissing, batchAccumulator) {
     let key = kvKey(tmdbId, s, e);
 
@@ -642,23 +667,7 @@ async function handleSingleItem(url, body) {
     if (c !== null) {
         tidbData = c.has_data ? c.data : null;
     } else {
-        if (TIDB_CACHE_API) {
-            let vUrl = `${TIDB_CACHE_API}?tmdb_id=${tmdbId}&season=${season}`;
-            try {
-                let v_res = await httpRequest({
-                    method: "GET",
-                    url: vUrl
-                });
-                if (v_res.status === 200) {
-                    let seasonData = JSON.parse(v_res.body);
-                    for (let [epStr, epData] of Object.entries(seasonData)) {
-                        let k = kvKey(tmdbId, season, epStr);
-                        let hasD = epData !== null && typeof epData === "object";
-                        setCache(k, { has_data: hasD, data: epData }, ms1Month);
-                    }
-                }
-            } catch (e) { }
-        }
+        await fetchTidbSeasonFromVercelAndCache(tmdbId, season);
 
         let batch = {};
         tidbData = await getTidbDataForEpisode(tmdbId, season, episode, true, batch);
@@ -721,23 +730,7 @@ async function handleEpisodes(url, body, options = {}) {
 
     if (missingItems.length > 0 && TIDB_CACHE_API) {
         let missingSeasons = [...new Set(missingItems.map(item => item.ParentIndexNumber))];
-        await Promise.all(missingSeasons.map(async s => {
-            let vUrl = `${TIDB_CACHE_API}?tmdb_id=${tmdbId}&season=${s}`;
-            try {
-                let v_res = await httpRequest({
-                    method: "GET",
-                    url: vUrl
-                });
-                if (v_res.status === 200) {
-                    let seasonData = JSON.parse(v_res.body);
-                    for (let [epStr, epData] of Object.entries(seasonData)) {
-                        let eKey = kvKey(tmdbId, s, epStr);
-                        let hasD = epData !== null && typeof epData === "object";
-                        setCache(eKey, { has_data: hasD, data: epData }, ms1Month);
-                    }
-                }
-            } catch (e) { }
-        }));
+        await Promise.all(missingSeasons.map(s => fetchTidbSeasonFromVercelAndCache(tmdbId, s)));
     }
 
     missingItems = missingItems.filter(item => {
