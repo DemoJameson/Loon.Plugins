@@ -19,7 +19,6 @@ const ms50 = 50;
 let _memCache = null;
 let _cacheModified = false;
 let _tidbRateLimited = false;
-let _allowTidbFetch = true;
 let args = parseArgs(typeof $argument === "undefined" ? "" : $argument);
 
 const TIDB_OVERRIDE_EXISTING = args.tidb_override_existing === "true" || args.tidb_override_existing === "1";
@@ -393,7 +392,7 @@ async function getTmdbId(seriesId, userId, host, origin) {
 }
 
 async function fetchTidbDirectAndCache(tmdbId, s, e) {
-    if (!_allowTidbFetch || isTidbRateLimited()) {
+    if (isTidbRateLimited()) {
         return null;
     }
 
@@ -676,7 +675,7 @@ async function handleSingleItem(url, body) {
     }
 }
 
-async function handleEpisodes(url, body) {
+async function handleEpisodes(url, body, options = {}) {
     if (!body.Items || body.Items.length === 0) {
         return;
     }
@@ -772,17 +771,22 @@ async function handleEpisodes(url, body) {
 
     missingItems.sort((a, b) => (parseInt(a.ParentIndexNumber, 10) || 0) - (parseInt(b.ParentIndexNumber, 10) || 0) || (parseInt(a.IndexNumber, 10) || 0) - (parseInt(b.IndexNumber, 10) || 0));
 
-    let nextUpIndex = missingItems.length > 0 ? missingItems.findIndex(i => i.ParentIndexNumber === nextUpSeason && i.IndexNumber === nextUpEp) : 0;
-    if (nextUpIndex === -1) nextUpIndex = 0;
-
-    let orderedMissingItems = [];
+    let fetchTargets = [];
     if (missingItems.length > 0) {
-        let firstSegment = missingItems.slice(nextUpIndex);
-        let secondSegment = nextUpIndex > 0 ? missingItems.slice(0, nextUpIndex) : [];
-        orderedMissingItems = firstSegment.concat(secondSegment);
+        if (options.onlyNextUp) {
+            let nextUpItem = missingItems.find(i => i.ParentIndexNumber === nextUpSeason && i.IndexNumber === nextUpEp);
+            fetchTargets = nextUpItem ? [nextUpItem] : [];
+        } else {
+            let nextUpIndex = missingItems.findIndex(i => i.ParentIndexNumber === nextUpSeason && i.IndexNumber === nextUpEp);
+            if (nextUpIndex === -1) nextUpIndex = 0;
+
+            let firstSegment = missingItems.slice(nextUpIndex);
+            let secondSegment = nextUpIndex > 0 ? missingItems.slice(0, nextUpIndex) : [];
+            let orderedMissingItems = firstSegment.concat(secondSegment);
+            fetchTargets = orderedMissingItems.slice(0, TIDB_MAX_EPISODES);
+        }
     }
 
-    let fetchTargets = orderedMissingItems.slice(0, TIDB_MAX_EPISODES);
     await runWithConcurrency(fetchTargets, MAX_GET_CONCURRENCY, async item => {
         let f = await fetchTidbDirectAndCache(tmdbId, item.ParentIndexNumber, item.IndexNumber);
         if (f) {
@@ -829,9 +833,8 @@ async function run() {
     }
 
     try {
-        _allowTidbFetch = !waitedForLock;
         if (requestType === "episodes") {
-            await handleEpisodes(url, body);
+            await handleEpisodes(url, body, { onlyNextUp: waitedForLock });
         } else if (requestType === "item" || requestType === "playback") {
             await handleSingleItem(url, body);
         }
