@@ -15,4 +15,4 @@ tidb_ignore_players=input, "Infuse, Vidora", tag=忽略已集成TIDB的播放器
 
 [Script]
 http-response ^https?:\/\/.+\/emby\/(Shows\/.+\/Episodes|Users\/.+\/Items\/.+|Items\/.+\/PlaybackInfo) script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/tidb_into_emby.js, requires-body=true, timeout=10, argument=[{tidb_override_existing},{tidb_notify_rate_limit},{tidb_max_episodes},{tidb_api_key},{tidb_cache_api},{tidb_ignore_players}], tag=Emby相关接口
-cron "0 0 30 2 *" script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/tidb_into_emby_clear_cache.js, tag=TIDB本地缓存清除脚本, enable=true
+cron "0 0 * * *" script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/dev/tidb_into_emby/tidb_into_emby_clear_cache.js, tag=TIDB本地缓存清除脚本, enable=false
