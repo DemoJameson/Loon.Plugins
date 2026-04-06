@@ -9,6 +9,26 @@ const MEDIA_TYPE = {
     SHOW: 1,
     MOVIE: 2
 };
+const backendBaseUrl = (() => {
+    let value = "https://loon-plugins.demojameson.de5.net";
+
+    if (typeof $argument === "object" && $argument !== null) {
+        value = ($argument.backendBaseUrl || "").trim();
+    } else if (typeof $argument === "string") {
+        value = $argument.replace(/^\[|\]$/g, "").trim();
+    }
+
+    if (typeof value !== "string") {
+        return "";
+    }
+
+    value = value.trim();
+    if (!/^https?:\/\//i.test(value)) {
+        return "";
+    }
+
+    return value.replace(/\/+$/, "");
+})();
 const preferredLanguage = "zh-CN";
 const body = $response.body;
 const requestUrl = ($request && $request.url) ? $request.url : "";
@@ -30,7 +50,14 @@ function loadCache() {
 
     try {
         const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === "object" ? parsed : {};
+        const cache = parsed && typeof parsed === "object" ? parsed : {};
+        const prunedCache = pruneExpiredCacheEntries(cache);
+
+        if (prunedCache.modified) {
+            saveCache(prunedCache.cache);
+        }
+
+        return prunedCache.cache;
     } catch (e) {
         console.log("Trakt cache load failed: " + e);
         return {};
@@ -70,6 +97,25 @@ function isFresh(entry) {
         entry &&
         (entry.expiresAt === null || (entry.expiresAt && entry.expiresAt > Date.now()))
     );
+}
+
+function pruneExpiredCacheEntries(cache) {
+    const nextCache = {};
+    let modified = false;
+
+    Object.keys(cache).forEach((key) => {
+        const entry = cache[key];
+        if (isFresh(entry)) {
+            nextCache[key] = entry;
+        } else {
+            modified = true;
+        }
+    });
+
+    return {
+        cache: nextCache,
+        modified: modified
+    };
 }
 
 function getLanguagePreference() {
@@ -285,27 +331,6 @@ function extractNormalizedTranslation(items) {
     };
 }
 
-function getBatchBackendBaseUrl() {
-    let value = "https://loon-plugins.demojameson.de5.net";
-
-    if (typeof $argument === "object" && $argument !== null) {
-        value = ($argument.backendBaseUrl || "").trim();
-    } else if (typeof $argument === "string") {
-        value = $argument.replace(/^\[|\]$/g, "").trim();
-    }
-
-    if (typeof value !== "string") {
-        return "";
-    }
-
-    value = value.trim();
-    if (!/^https?:\/\//i.test(value)) {
-        return "";
-    }
-
-    return value.replace(/\/+$/, "");
-}
-
 function buildMediaCacheKey(mediaType, traktId) {
     const prefix = mediaType === MEDIA_TYPE.MOVIE ? "movie:" : "show:";
     return prefix + String(traktId);
@@ -331,13 +356,12 @@ function getCachedTranslation(cache, mediaType, traktId) {
 
 function getMissingIds(cache, mediaType, ids) {
     return ids.filter((traktId) => {
-        return !isFresh(getCachedTranslation(cache, mediaType, traktId));
+        return !getCachedTranslation(cache, mediaType, traktId);
     });
 }
 
 async function fetchCachedTranslationsFromBackend(cache, showIds, movieIds) {
-    const baseUrl = getBatchBackendBaseUrl();
-    if (!baseUrl) {
+    if (!backendBaseUrl) {
         return false;
     }
 
@@ -353,7 +377,7 @@ async function fetchCachedTranslationsFromBackend(cache, showIds, movieIds) {
         return true;
     }
 
-    const url = baseUrl + "/api/trakt/translations?" + query.join("&");
+    const url = backendBaseUrl + "/api/trakt/translations?" + query.join("&");
     const payload = await fetchJson(url, null, false);
 
     if (payload && payload.shows && typeof payload.shows === "object") {
@@ -381,8 +405,7 @@ function queueBackendWrite(mediaType, traktId, entry) {
 }
 
 function flushBackendWrites() {
-    const baseUrl = getBatchBackendBaseUrl();
-    if (!baseUrl) {
+    if (!backendBaseUrl) {
         return;
     }
 
@@ -390,7 +413,7 @@ function flushBackendWrites() {
         return;
     }
 
-    const url = baseUrl + "/api/trakt/translations";
+    const url = backendBaseUrl + "/api/trakt/translations";
     postJson(url, {
         shows: pendingBackendWrites.shows,
         movies: pendingBackendWrites.movies
@@ -414,7 +437,7 @@ async function fetchDirectTranslation(mediaType, traktId) {
 
 async function getTranslation(cache, mediaType, traktId) {
     const cacheEntry = getCachedTranslation(cache, mediaType, traktId);
-    if (isFresh(cacheEntry)) {
+    if (cacheEntry) {
         return cacheEntry;
     }
 
@@ -589,7 +612,7 @@ async function handleMediaDetail(mediaType) {
 
     const cache = loadCache();
 
-    if (!isFresh(getCachedTranslation(cache, mediaType, traktId))) {
+    if (!getCachedTranslation(cache, mediaType, traktId)) {
         try {
             await fetchCachedTranslationsFromBackend(
                 cache,
