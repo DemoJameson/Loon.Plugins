@@ -59,6 +59,8 @@ http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/movies(\?.*)?$ s
 http-response ^https:\/\/apiz\.trakt\.tv\/shows\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Show Detail
 # 拦截 movies 详情
 http-response ^https:\/\/apiz\.trakt\.tv\/movies\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Movie Detail
+# 拦截 episodes 详情
+http-response ^https:\/\/apiz\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Episode Detail
 
 [MITM]
 hostname = apiz.trakt.tv

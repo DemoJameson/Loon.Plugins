@@ -6,8 +6,35 @@ const CACHE_STATUS = {
     NOT_FOUND: 2
 };
 const MEDIA_TYPE = {
-    SHOW: 1,
-    MOVIE: 2
+    SHOW: "show",
+    MOVIE: "movie",
+    EPISODE: "episode"
+};
+const MEDIA_CONFIG = {
+    [MEDIA_TYPE.SHOW]: {
+        buildTranslationPath: function (ref) {
+            return isNonNullish(ref && ref.traktId)
+                ? "/shows/" + ref.traktId + "/translations/zh?extended=all"
+                : "";
+        }
+    },
+    [MEDIA_TYPE.MOVIE]: {
+        buildTranslationPath: function (ref) {
+            return isNonNullish(ref && ref.traktId)
+                ? "/movies/" + ref.traktId + "/translations/zh?extended=all"
+                : "";
+        }
+    },
+    [MEDIA_TYPE.EPISODE]: {
+        buildTranslationPath: function (ref) {
+            return ref &&
+                isNonNullish(ref.showId) &&
+                isNonNullish(ref.seasonNumber) &&
+                isNonNullish(ref.episodeNumber)
+                ? "/shows/" + ref.showId + "/seasons/" + ref.seasonNumber + "/episodes/" + ref.episodeNumber + "/translations/zh?extended=all"
+                : "";
+        }
+    }
 };
 const backendBaseUrl = (() => {
     let value = "https://loon-plugins.demojameson.de5.net";
@@ -33,10 +60,7 @@ const preferredLanguage = "zh-CN";
 const body = $response.body;
 const requestUrl = ($request && $request.url) ? $request.url : "";
 
-const pendingBackendWrites = {
-    shows: {},
-    movies: {}
-};
+const pendingBackendWrites = createMediaMap();
 
 function loadCache() {
     if (typeof $persistentStore === "undefined") {
@@ -156,6 +180,30 @@ function isEmptyTranslationValue(value) {
     return value === undefined || value === null || value === "";
 }
 
+function isNonNullish(value) {
+    return value !== undefined && value !== null;
+}
+
+function getMediaConfig(mediaType) {
+    return MEDIA_CONFIG[mediaType];
+}
+
+function getMediaBackendField(mediaType) {
+    return mediaType + "s";
+}
+
+function getMediaCachePrefix(mediaType) {
+    return mediaType + ":";
+}
+
+function createMediaMap() {
+    const map = {};
+    Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
+        map[mediaType] = {};
+    });
+    return map;
+}
+
 function hasUsefulTranslation(translation) {
     return !!(
         translation &&
@@ -245,7 +293,7 @@ function buildRequestHeaders(extraHeaders, useSourceHeaders) {
 
     if (extraHeaders && typeof extraHeaders === "object") {
         Object.keys(extraHeaders).forEach((key) => {
-            if (extraHeaders[key] !== undefined && extraHeaders[key] !== null && extraHeaders[key] !== "") {
+            if (isNonNullish(extraHeaders[key]) && extraHeaders[key] !== "") {
                 headers[key] = extraHeaders[key];
             }
         });
@@ -332,8 +380,7 @@ function extractNormalizedTranslation(items) {
 }
 
 function buildMediaCacheKey(mediaType, traktId) {
-    const prefix = mediaType === MEDIA_TYPE.MOVIE ? "movie:" : "show:";
-    return prefix + String(traktId);
+    return getMediaCachePrefix(mediaType) + String(traktId);
 }
 
 function storeTranslationEntry(cache, mediaType, traktId, entry) {
@@ -354,24 +401,29 @@ function getCachedTranslation(cache, mediaType, traktId) {
     return cache[buildMediaCacheKey(mediaType, traktId)];
 }
 
-function getMissingIds(cache, mediaType, ids) {
-    return ids.filter((traktId) => {
-        return !getCachedTranslation(cache, mediaType, traktId);
+function getMissingRefs(cache, mediaType, refs) {
+    return refs.filter((ref) => {
+        return ref && isNonNullish(ref.traktId) && !getCachedTranslation(cache, mediaType, ref.traktId);
     });
 }
 
-async function fetchCachedTranslationsFromBackend(cache, showIds, movieIds) {
+function getBackendFieldIds(refs) {
+    return refs.map((ref) => ref.traktId);
+}
+
+async function fetchTranslationsFromBackend(cache, refsByType) {
     if (!backendBaseUrl) {
         return false;
     }
 
     const query = [];
-    if (showIds.length > 0) {
-        query.push("shows=" + showIds.map((id) => encodeURIComponent(String(id))).join(","));
-    }
-    if (movieIds.length > 0) {
-        query.push("movies=" + movieIds.map((id) => encodeURIComponent(String(id))).join(","));
-    }
+    Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
+        const refs = refsByType && Array.isArray(refsByType[mediaType]) ? refsByType[mediaType] : [];
+        const ids = getBackendFieldIds(refs);
+        if (ids.length > 0) {
+            query.push(getMediaBackendField(mediaType) + "=" + ids.map((id) => String(id)).join(","));
+        }
+    });
 
     if (query.length === 0) {
         return true;
@@ -380,28 +432,34 @@ async function fetchCachedTranslationsFromBackend(cache, showIds, movieIds) {
     const url = backendBaseUrl + "/api/trakt/translations?" + query.join("&");
     const payload = await fetchJson(url, null, false);
 
-    if (payload && payload.shows && typeof payload.shows === "object") {
-        Object.keys(payload.shows).forEach((id) => {
-            storeTranslationEntry(cache, MEDIA_TYPE.SHOW, id, payload.shows[id]);
-        });
-    }
+    Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
+        const collectionField = getMediaBackendField(mediaType);
+        const entries = payload && payload[collectionField] && typeof payload[collectionField] === "object"
+            ? payload[collectionField]
+            : null;
+        if (!entries) {
+            return;
+        }
 
-    if (payload && payload.movies && typeof payload.movies === "object") {
-        Object.keys(payload.movies).forEach((id) => {
-            storeTranslationEntry(cache, MEDIA_TYPE.MOVIE, id, payload.movies[id]);
+        Object.keys(entries).forEach((id) => {
+            storeTranslationEntry(cache, mediaType, id, entries[id]);
         });
-    }
+    });
 
     saveCache(cache);
     return true;
 }
 
 function queueBackendWrite(mediaType, traktId, entry) {
-    if (mediaType === MEDIA_TYPE.SHOW) {
-        pendingBackendWrites.shows[String(traktId)] = entry;
-    } else {
-        pendingBackendWrites.movies[String(traktId)] = entry;
-    }
+    pendingBackendWrites[mediaType][String(traktId)] = entry;
+}
+
+function buildBackendWritePayload() {
+    const payload = {};
+    Object.keys(pendingBackendWrites).forEach((mediaType) => {
+        payload[getMediaBackendField(mediaType)] = pendingBackendWrites[mediaType];
+    });
+    return payload;
 }
 
 function flushBackendWrites() {
@@ -409,39 +467,47 @@ function flushBackendWrites() {
         return;
     }
 
-    if (Object.keys(pendingBackendWrites.shows).length === 0 && Object.keys(pendingBackendWrites.movies).length === 0) {
+    if (Object.values(pendingBackendWrites).every((entries) => Object.keys(entries).length === 0)) {
         return;
     }
 
     const url = backendBaseUrl + "/api/trakt/translations";
-    postJson(url, {
-        shows: pendingBackendWrites.shows,
-        movies: pendingBackendWrites.movies
-    }, {
+    postJson(url, buildBackendWritePayload(), {
         "Content-Type": "application/json"
     }, false).catch(e => {
         console.log("Trakt backend cache write failed during flush: " + e);
     });
 
-    // Clear the queues immediately so we don't accidentally write twice
-    pendingBackendWrites.shows = {};
-    pendingBackendWrites.movies = {};
+    Object.keys(pendingBackendWrites).forEach((field) => {
+        pendingBackendWrites[field] = {};
+    });
 }
 
-async function fetchDirectTranslation(mediaType, traktId) {
-    const path = mediaType === MEDIA_TYPE.MOVIE ? "movies" : "shows";
-    const url = "https://apiz.trakt.tv/" + path + "/" + encodeURIComponent(traktId) + "/translations/zh?extended=all";
+function buildTranslationUrl(mediaType, ref) {
+    const path = getMediaConfig(mediaType).buildTranslationPath(ref);
+    return path ? "https://apiz.trakt.tv" + path : "";
+}
+
+async function fetchDirectTranslation(mediaType, ref) {
+    const traktId = ref && isNonNullish(ref.traktId) ? ref.traktId : null;
+    const url = buildTranslationUrl(mediaType, ref);
+
+    if (!url) {
+        throw new Error("Missing translation lookup metadata for mediaType=" + mediaType + ", traktId=" + traktId);
+    }
+
     const translations = normalizeTranslations(await fetchJson(url));
     return extractNormalizedTranslation(translations);
 }
 
-async function getTranslation(cache, mediaType, traktId) {
+async function getTranslation(cache, mediaType, ref) {
+    const traktId = ref && isNonNullish(ref.traktId) ? ref.traktId : null;
     const cacheEntry = getCachedTranslation(cache, mediaType, traktId);
     if (cacheEntry) {
         return cacheEntry;
     }
 
-    const merged = await fetchDirectTranslation(mediaType, traktId);
+    const merged = await fetchDirectTranslation(mediaType, ref);
     const stored = storeTranslationEntry(cache, mediaType, traktId, merged);
     saveCache(cache);
 
@@ -457,120 +523,132 @@ async function processInBatches(items, worker) {
     }
 }
 
-function applyShowTranslation(item, entry) {
-    if (!item || !item.show || !entry || !entry.translation) {
+function applyTranslation(target, entry) {
+    if (!target || !entry || !entry.translation) {
         return;
     }
 
     if (entry.translation.title) {
-        item.show.title = entry.translation.title;
+        target.title = entry.translation.title;
     }
     if (entry.translation.overview) {
-        item.show.overview = entry.translation.overview;
+        target.overview = entry.translation.overview;
     }
     if (entry.translation.tagline) {
-        item.show.tagline = entry.translation.tagline;
+        target.tagline = entry.translation.tagline;
     }
 }
 
-function applyMovieTranslation(item, entry) {
-    if (!item || !item.movie || !entry || !entry.translation) {
+function createMediaCollection() {
+    const collection = {};
+    Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
+        collection[mediaType] = [];
+    });
+    return collection;
+}
+
+function collectUniqueRef(target, seen, ref) {
+    if (!ref || !isNonNullish(ref.traktId)) {
         return;
     }
 
-    if (entry.translation.title) {
-        item.movie.title = entry.translation.title;
-    }
-    if (entry.translation.overview) {
-        item.movie.overview = entry.translation.overview;
-    }
-    if (entry.translation.tagline) {
-        item.movie.tagline = entry.translation.tagline;
+    const key = String(ref.traktId);
+    if (!seen[key]) {
+        seen[key] = true;
+        target.push(ref);
     }
 }
 
-function applyTranslationToDetail(data, entry) {
-    if (!data || !entry || !entry.translation) {
-        return;
+function getItemEpisodeTarget(item) {
+    if (item && item.episode) {
+        return item.episode;
     }
 
-    if (entry.translation.title) {
-        data.title = entry.translation.title;
+    if (item && item.progress && item.progress.next_episode) {
+        return item.progress.next_episode;
     }
-    if (entry.translation.overview) {
-        data.overview = entry.translation.overview;
-    }
-    if (entry.translation.tagline) {
-        data.tagline = entry.translation.tagline;
-    }
+
+    return null;
 }
 
-function collectMediaIds(arr) {
-    const seenShows = {};
-    const seenMovies = {};
-    const showIds = [];
-    const movieIds = [];
+function getItemMediaTarget(item, mediaType) {
+    if (mediaType === MEDIA_TYPE.EPISODE) {
+        return getItemEpisodeTarget(item);
+    }
+
+    return item ? item[mediaType] : null;
+}
+
+function buildEpisodeRef(showId, episode) {
+    const episodeId = episode && episode.ids ? episode.ids.trakt : null;
+    const seasonNumber = episode ? episode.season : null;
+    const episodeNumber = episode ? episode.number : null;
+
+    if (!isNonNullish(showId) || !isNonNullish(episodeId) || !isNonNullish(seasonNumber) || !isNonNullish(episodeNumber)) {
+        return null;
+    }
+
+    return {
+        traktId: episodeId,
+        showId: showId,
+        seasonNumber: seasonNumber,
+        episodeNumber: episodeNumber
+    };
+}
+
+function collectMediaRefs(arr) {
+    const seenRefsByType = createMediaMap();
+    const refsByType = createMediaCollection();
 
     arr.forEach((item) => {
         const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
-        if (showId !== undefined && showId !== null) {
-            const showKey = String(showId);
-            if (!seenShows[showKey]) {
-                seenShows[showKey] = true;
-                showIds.push(showId);
-            }
-        }
+        collectUniqueRef(refsByType[MEDIA_TYPE.SHOW], seenRefsByType[MEDIA_TYPE.SHOW], isNonNullish(showId) ? { traktId: showId } : null);
 
         const movieId = item && item.movie && item.movie.ids ? item.movie.ids.trakt : null;
-        if (movieId !== undefined && movieId !== null) {
-            const movieKey = String(movieId);
-            if (!seenMovies[movieKey]) {
-                seenMovies[movieKey] = true;
-                movieIds.push(movieId);
-            }
-        }
+        collectUniqueRef(refsByType[MEDIA_TYPE.MOVIE], seenRefsByType[MEDIA_TYPE.MOVIE], isNonNullish(movieId) ? { traktId: movieId } : null);
+
+        collectUniqueRef(
+            refsByType[MEDIA_TYPE.EPISODE],
+            seenRefsByType[MEDIA_TYPE.EPISODE],
+            buildEpisodeRef(showId, getItemEpisodeTarget(item))
+        );
     });
 
-    return {
-        showIds: showIds,
-        movieIds: movieIds
-    };
+    return refsByType;
 }
 
 function applyTranslationsToItems(arr, cache) {
     arr.forEach((item) => {
-        const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
-        if (showId !== undefined && showId !== null) {
-            applyShowTranslation(item, getCachedTranslation(cache, MEDIA_TYPE.SHOW, showId));
-        }
-
-        const movieId = item && item.movie && item.movie.ids ? item.movie.ids.trakt : null;
-        if (movieId !== undefined && movieId !== null) {
-            applyMovieTranslation(item, getCachedTranslation(cache, MEDIA_TYPE.MOVIE, movieId));
-        }
+        Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
+            const target = getItemMediaTarget(item, mediaType);
+            const traktId = target && target.ids ? target.ids.trakt : null;
+            if (isNonNullish(traktId)) {
+                applyTranslation(target, getCachedTranslation(cache, mediaType, traktId));
+            }
+        });
     });
 }
 
-async function hydrateFromBackend(cache, ids) {
+async function hydrateFromBackend(cache, refsByType) {
     try {
-        await fetchCachedTranslationsFromBackend(
-            cache,
-            getMissingIds(cache, MEDIA_TYPE.SHOW, ids.showIds),
-            getMissingIds(cache, MEDIA_TYPE.MOVIE, ids.movieIds)
-        );
+        const missingRefsByType = createMediaCollection();
+        Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
+            missingRefsByType[mediaType] = getMissingRefs(cache, mediaType, refsByType[mediaType] || []);
+        });
+        await fetchTranslationsFromBackend(cache, missingRefsByType);
     } catch (e) {
         console.log("Trakt backend cache read failed: " + e);
     }
 }
 
-async function fetchAndPersistMissing(cache, mediaType, ids, logLabel) {
-    await processInBatches(getMissingIds(cache, mediaType, ids), async (traktId) => {
+async function fetchAndPersistMissing(cache, mediaType, refs, logLabel) {
+    await processInBatches(getMissingRefs(cache, mediaType, refs), async (ref) => {
         try {
-            const merged = await fetchDirectTranslation(mediaType, traktId);
-            storeTranslationEntry(cache, mediaType, traktId, merged);
-            queueBackendWrite(mediaType, traktId, merged);
+            const merged = await fetchDirectTranslation(mediaType, ref);
+            storeTranslationEntry(cache, mediaType, ref.traktId, merged);
+            queueBackendWrite(mediaType, ref.traktId, merged);
         } catch (e) {
-            console.log("Trakt " + logLabel + " translation fetch failed for id=" + traktId + ": " + e);
+            console.log("Trakt " + logLabel + " translation fetch failed for id=" + ref.traktId + ": " + e);
         }
     });
 }
@@ -583,12 +661,13 @@ async function handleMediaList(logLabel) {
     }
 
     const cache = loadCache();
-    const ids = collectMediaIds(arr);
+    const refsByType = collectMediaRefs(arr);
 
-    await hydrateFromBackend(cache, ids);
+    await hydrateFromBackend(cache, refsByType);
 
-    await fetchAndPersistMissing(cache, MEDIA_TYPE.SHOW, ids.showIds, logLabel + " show");
-    await fetchAndPersistMissing(cache, MEDIA_TYPE.MOVIE, ids.movieIds, logLabel + " movie");
+    for (const mediaType of Object.keys(MEDIA_CONFIG)) {
+        await fetchAndPersistMissing(cache, mediaType, refsByType[mediaType], logLabel + " " + mediaType);
+    }
 
     saveCache(cache);
     flushBackendWrites();
@@ -605,35 +684,54 @@ async function handleMediaDetail(mediaType) {
     }
 
     const traktId = data && data.ids ? data.ids.trakt : null;
-    if (traktId === undefined || traktId === null) {
+    if (!isNonNullish(traktId)) {
         $done({ body: body });
         return;
     }
 
     const cache = loadCache();
+    const ref = buildDetailRef(mediaType, data);
 
     if (!getCachedTranslation(cache, mediaType, traktId)) {
         try {
-            await fetchCachedTranslationsFromBackend(
-                cache,
-                mediaType === MEDIA_TYPE.SHOW ? [traktId] : [],
-                mediaType === MEDIA_TYPE.MOVIE ? [traktId] : []
-            );
+            const refsByType = createMediaCollection();
+            refsByType[mediaType] = [ref];
+            await fetchTranslationsFromBackend(cache, refsByType);
         } catch (e) {
             console.log("Trakt detail backend cache read failed for id=" + traktId + ": " + e);
         }
     }
 
     try {
-        await getTranslation(cache, mediaType, traktId);
+        await getTranslation(cache, mediaType, ref);
     } catch (e) {
         console.log("Trakt detail translation fetch failed for id=" + traktId + ": " + e);
     }
     
     flushBackendWrites();
 
-    applyTranslationToDetail(data, getCachedTranslation(cache, mediaType, traktId));
+    applyTranslation(data, getCachedTranslation(cache, mediaType, traktId));
     $done({ body: JSON.stringify(data) });
+}
+
+function buildDetailRef(mediaType, data) {
+    const ref = {
+        traktId: data && data.ids ? data.ids.trakt : null
+    };
+
+    if (mediaType !== MEDIA_TYPE.EPISODE) {
+        return ref;
+    }
+
+    const match = requestUrl.match(/\/shows\/([^\/]+)\/seasons\/(\d+)\/episodes\/(\d+)(?:\?|$)/);
+    if (!match) {
+        return ref;
+    }
+
+    ref.showId = match[1];
+    ref.seasonNumber = Number(match[2]);
+    ref.episodeNumber = Number(match[3]);
+    return ref;
 }
 
 function handleTranslations() {
@@ -788,6 +886,11 @@ function handleUserSettings() {
 
         if (/\/movies\/[^\/]+(?:\?.*)?$/.test(requestUrl)) {
             await handleMediaDetail(MEDIA_TYPE.MOVIE);
+            return;
+        }
+
+        if (/\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(?:\?.*)?$/.test(requestUrl)) {
+            await handleMediaDetail(MEDIA_TYPE.EPISODE);
             return;
         }
 

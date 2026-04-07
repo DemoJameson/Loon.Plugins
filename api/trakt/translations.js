@@ -75,6 +75,12 @@ function getKvConfig() {
   };
 }
 
+function sendKvNotConfigured(res) {
+  res.status(500).json({
+    error: "KV is not configured. Set KV_REST_API_URL and KV_REST_API_TOKEN, or UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
+  });
+}
+
 async function kvRequest(config, path, init) {
   const response = await fetch(`${config.url}${path}`, {
     ...init,
@@ -159,27 +165,31 @@ async function writeManyToKv(config, mediaType, entriesById) {
 }
 
 async function handleGet(req, res, kvConfig) {
-  const showIds = parseIds(req.query.shows);
-  const movieIds = parseIds(req.query.movies);
-
-  if (showIds.length === 0 && movieIds.length === 0) {
-    res.status(400).json({ error: "Missing shows or movies query" });
+  if (!kvConfig) {
+    sendKvNotConfigured(res);
     return;
   }
 
-  const [shows, movies] = await Promise.all([
+  const showIds = parseIds(req.query.shows);
+  const movieIds = parseIds(req.query.movies);
+  const episodeIds = parseIds(req.query.episodes);
+
+  if (showIds.length === 0 && movieIds.length === 0 && episodeIds.length === 0) {
+    res.status(400).json({ error: "Missing shows, movies, or episodes query" });
+    return;
+  }
+
+  const [shows, movies, episodes] = await Promise.all([
     readManyFromKv(kvConfig, "shows", showIds),
     readManyFromKv(kvConfig, "movies", movieIds),
+    readManyFromKv(kvConfig, "episodes", episodeIds),
   ]);
 
   res.setHeader("Cache-Control", CACHE_CONTROL);
   res.status(200).json({
     shows,
     movies,
-    cache: {
-      kvEnabled: !!kvConfig,
-      mode: "read-through-client",
-    },
+    episodes,
   });
 }
 
@@ -199,24 +209,26 @@ async function readJsonBody(req) {
 
 async function handlePost(req, res, kvConfig) {
   if (!kvConfig) {
-    res.status(500).json({ error: "KV is not configured" });
+    sendKvNotConfigured(res);
     return;
   }
 
   const payload = await readJsonBody(req);
   const shows = payload && payload.shows && typeof payload.shows === "object" ? payload.shows : {};
   const movies = payload && payload.movies && typeof payload.movies === "object" ? payload.movies : {};
+  const episodes = payload && payload.episodes && typeof payload.episodes === "object" ? payload.episodes : {};
 
   await Promise.all([
     writeManyToKv(kvConfig, "shows", shows),
     writeManyToKv(kvConfig, "movies", movies),
+    writeManyToKv(kvConfig, "episodes", episodes),
   ]);
 
   res.status(200).json({
-    ok: true,
     counts: {
       shows: Object.keys(shows).length,
       movies: Object.keys(movies).length,
+      episodes: Object.keys(episodes).length,
     },
   });
 }
