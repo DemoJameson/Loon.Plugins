@@ -401,9 +401,31 @@ function getCachedTranslation(cache, mediaType, traktId) {
     return cache[buildMediaCacheKey(mediaType, traktId)];
 }
 
+function hasZhAvailableTranslation(availableTranslations) {
+    return Array.isArray(availableTranslations) && availableTranslations.some((language) => {
+        return String(language || "").toLowerCase() === "zh";
+    });
+}
+
+function shouldSkipTranslationLookup(ref) {
+    const availableTranslations = ref && Array.isArray(ref.availableTranslations)
+        ? ref.availableTranslations
+        : null;
+
+    return !!(availableTranslations && availableTranslations.length > 0 && !hasZhAvailableTranslation(availableTranslations));
+}
+
 function getMissingRefs(cache, mediaType, refs) {
     return refs.filter((ref) => {
-        return ref && isNonNullish(ref.traktId) && !getCachedTranslation(cache, mediaType, ref.traktId);
+        if (!ref || !isNonNullish(ref.traktId)) {
+            return false;
+        }
+
+        if (shouldSkipTranslationLookup(ref)) {
+            return false;
+        }
+
+        return !getCachedTranslation(cache, mediaType, ref.traktId);
     });
 }
 
@@ -559,27 +581,41 @@ function collectUniqueRef(target, seen, ref) {
     }
 }
 
-function getItemEpisodeTarget(item) {
-    if (item && item.episode) {
-        return item.episode;
-    }
-
-    if (item && item.progress && item.progress.next_episode) {
-        return item.progress.next_episode;
-    }
-
-    return null;
-}
-
 function getItemMediaTarget(item, mediaType) {
     if (mediaType === MEDIA_TYPE.EPISODE) {
-        return getItemEpisodeTarget(item);
+        if (item && item.episode) {
+            return item.episode;
+        }
+
+        if (item && item.progress && item.progress.next_episode) {
+            return item.progress.next_episode;
+        }
+
+        return null;
     }
 
     return item ? item[mediaType] : null;
 }
 
-function buildEpisodeRef(showId, episode) {
+function buildMediaRef(item, mediaType) {
+    if (mediaType === MEDIA_TYPE.EPISODE) {
+        return buildEpisodeRef(item, getItemMediaTarget(item, mediaType));
+    }
+
+    const target = getItemMediaTarget(item, mediaType);
+    const traktId = target && target.ids ? target.ids.trakt : null;
+    if (!isNonNullish(traktId)) {
+        return null;
+    }
+
+    return {
+        traktId: traktId,
+        availableTranslations: Array.isArray(target.available_translations) ? target.available_translations : null
+    };
+}
+
+function buildEpisodeRef(item, episode) {
+    const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
     const episodeId = episode && episode.ids ? episode.ids.trakt : null;
     const seasonNumber = episode ? episode.season : null;
     const episodeNumber = episode ? episode.number : null;
@@ -592,7 +628,8 @@ function buildEpisodeRef(showId, episode) {
         traktId: episodeId,
         showId: showId,
         seasonNumber: seasonNumber,
-        episodeNumber: episodeNumber
+        episodeNumber: episodeNumber,
+        availableTranslations: Array.isArray(episode.available_translations) ? episode.available_translations : null
     };
 }
 
@@ -601,17 +638,9 @@ function collectMediaRefs(arr) {
     const refsByType = createMediaCollection();
 
     arr.forEach((item) => {
-        const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
-        collectUniqueRef(refsByType[MEDIA_TYPE.SHOW], seenRefsByType[MEDIA_TYPE.SHOW], isNonNullish(showId) ? { traktId: showId } : null);
-
-        const movieId = item && item.movie && item.movie.ids ? item.movie.ids.trakt : null;
-        collectUniqueRef(refsByType[MEDIA_TYPE.MOVIE], seenRefsByType[MEDIA_TYPE.MOVIE], isNonNullish(movieId) ? { traktId: movieId } : null);
-
-        collectUniqueRef(
-            refsByType[MEDIA_TYPE.EPISODE],
-            seenRefsByType[MEDIA_TYPE.EPISODE],
-            buildEpisodeRef(showId, getItemEpisodeTarget(item))
-        );
+        Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
+            collectUniqueRef(refsByType[mediaType], seenRefsByType[mediaType], buildMediaRef(item, mediaType));
+        });
     });
 
     return refsByType;
