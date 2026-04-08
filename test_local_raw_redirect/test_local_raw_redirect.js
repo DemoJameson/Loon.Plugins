@@ -22,6 +22,11 @@ function trimTrailingSlash(value) {
   return value.replace(/\/+$/, "");
 }
 
+function appendTimestamp(url) {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}t=${Date.now()}`;
+}
+
 const requestUrl = $request.url;
 const localBaseUrl = trimTrailingSlash(getArgumentValue("localBaseUrl") || DEFAULT_BASE_URL);
 const requestPrefix = "https://raw.githubusercontent.com/";
@@ -30,7 +35,7 @@ if (!requestUrl.startsWith(requestPrefix)) {
   $done({});
 } else {
   const suffix = requestUrl.slice(requestPrefix.length);
-  const redirectUrl = `${localBaseUrl}/${suffix}`;
+  const redirectUrl = appendTimestamp(`${localBaseUrl}/${suffix}`);
 
   $done({
     response: {
