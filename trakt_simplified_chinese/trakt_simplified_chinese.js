@@ -10,6 +10,7 @@ const MEDIA_TYPE = {
     MOVIE: "movie",
     EPISODE: "episode"
 };
+const HISTORY_EPISODES_LIMIT = 1000;
 const MEDIA_CONFIG = {
     [MEDIA_TYPE.SHOW]: {
         buildTranslationPath: function (ref) {
@@ -36,14 +37,68 @@ const MEDIA_CONFIG = {
         }
     }
 };
-const backendBaseUrl = (() => {
-    let value = "https://loon-plugins.demojameson.de5.net";
+
+function parseBooleanArgument(value, fallbackValue) {
+    if (typeof value === "boolean") {
+        return value;
+    }
+
+    if (typeof value === "number") {
+        return value !== 0;
+    }
+
+    if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        if (["true", "1", "yes", "on"].includes(normalized)) {
+            return true;
+        }
+        if (["false", "0", "no", "off"].includes(normalized)) {
+            return false;
+        }
+    }
+
+    return fallbackValue;
+}
+
+function parseArgumentConfig() {
+    const config = {
+        latestHistoryEpisodeOnly: true,
+        backendBaseUrl: "https://loon-plugins.demojameson.de5.net"
+    };
 
     if (typeof $argument === "object" && $argument !== null) {
-        value = ($argument.backendBaseUrl || "").trim();
-    } else if (typeof $argument === "string") {
-        value = $argument.replace(/^\[|\]$/g, "").trim();
+        config.latestHistoryEpisodeOnly = parseBooleanArgument(
+            $argument.latestHistoryEpisodeOnly,
+            config.latestHistoryEpisodeOnly
+        );
+        config.backendBaseUrl = ($argument.backendBaseUrl || "").trim() || config.backendBaseUrl;
+        return config;
     }
+
+    if (typeof $argument === "string") {
+        const raw = $argument.replace(/^\[|\]$/g, "").trim();
+        if (!raw) {
+            return config;
+        }
+
+        const parts = raw.split(",").map((item) => item.trim()).filter(Boolean);
+        if (parts.length > 0) {
+            config.latestHistoryEpisodeOnly = parseBooleanArgument(parts[0], config.latestHistoryEpisodeOnly);
+        }
+        if (parts.length > 1) {
+            config.backendBaseUrl = parts[1];
+        } else if (/^https?:\/\//i.test(parts[0])) {
+            config.backendBaseUrl = parts[0];
+        }
+    }
+
+    return config;
+}
+
+const argumentConfig = parseArgumentConfig();
+const latestHistoryEpisodeOnly = argumentConfig.latestHistoryEpisodeOnly;
+const backendBaseUrl = (() => {
+    let value = argumentConfig.backendBaseUrl;
 
     if (typeof value !== "string") {
         return "";
@@ -57,7 +112,9 @@ const backendBaseUrl = (() => {
     return value.replace(/\/+$/, "");
 })();
 const preferredLanguage = "zh-CN";
-const body = $response.body;
+const body = typeof $response !== "undefined" && typeof $response.body === "string"
+    ? $response.body
+    : "";
 const requestUrl = ($request && $request.url) ? $request.url : "";
 
 const pendingBackendWrites = createMediaMap();
@@ -682,10 +739,11 @@ async function fetchAndPersistMissing(cache, mediaType, refs, logLabel) {
     });
 }
 
-async function handleMediaList(logLabel) {
-    const arr = JSON.parse(body);
+async function handleMediaList(logLabel, bodyOverride) {
+    const sourceBody = isNonNullish(bodyOverride) ? bodyOverride : body;
+    const arr = JSON.parse(sourceBody);
     if (!Array.isArray(arr) || arr.length === 0) {
-        $done({ body: body });
+        $done({ body: sourceBody });
         return;
     }
 
@@ -756,8 +814,162 @@ function handleUserSettings() {
     $done({ body: JSON.stringify(data) });
 }
 
+function buildHistoryEpisodesRequestUrl(url) {
+    if (!shouldApplyLatestHistoryEpisodeOnly(url)) {
+        return url;
+    }
+
+    const match = String(url || "").match(/^([^?]+)(\?.*)?$/);
+    if (!match) {
+        return url;
+    }
+
+    const path = match[1];
+    const query = match[2] || "";
+    const params = {};
+    const queryWithoutPrefix = query.replace(/^\?/, "");
+
+    if (queryWithoutPrefix) {
+        queryWithoutPrefix.split("&").forEach((part) => {
+            if (!part) {
+                return;
+            }
+
+            const pieces = part.split("=");
+            const key = decodeURIComponent(pieces[0] || "");
+            if (!key) {
+                return;
+            }
+
+            const value = pieces.length > 1 ? decodeURIComponent(pieces.slice(1).join("=")) : "";
+            params[key] = value;
+        });
+    }
+
+    params.limit = String(HISTORY_EPISODES_LIMIT);
+
+    const nextQuery = Object.keys(params).map((key) => {
+        return encodeURIComponent(key) + "=" + encodeURIComponent(params[key]);
+    }).join("&");
+
+    return path + (nextQuery ? "?" + nextQuery : "");
+}
+
+function isHistoryEpisodesListUrl(url) {
+    return /\/users\/[^\/]+?\/history\/episodes\/?(?:\?|$)/.test(String(url || ""));
+}
+
+function shouldApplyLatestHistoryEpisodeOnly(url) {
+    return latestHistoryEpisodeOnly && isHistoryEpisodesListUrl(url);
+}
+
+function getHistoryEpisodeShowKey(item) {
+    const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
+    return isNonNullish(showId) ? String(showId) : "";
+}
+
+function getHistoryEpisodeSortKey(item) {
+    const episode = item && item.episode ? item.episode : null;
+    const season = episode && Number.isFinite(Number(episode.season)) ? Number(episode.season) : -1;
+    const number = episode && Number.isFinite(Number(episode.number)) ? Number(episode.number) : -1;
+    return {
+        season: season,
+        number: number
+    };
+}
+
+function keepLatestHistoryEpisodes(arr) {
+    if (!Array.isArray(arr) || arr.length === 0) {
+        return Array.isArray(arr) ? arr : [];
+    }
+
+    const latestByShow = {};
+
+    arr.forEach((item) => {
+        const key = getHistoryEpisodeShowKey(item);
+        if (!key) {
+            return;
+        }
+
+        const current = latestByShow[key];
+        if (!current) {
+            latestByShow[key] = item;
+            return;
+        }
+
+        const itemSortKey = getHistoryEpisodeSortKey(item);
+        const currentSortKey = getHistoryEpisodeSortKey(current);
+        if (itemSortKey.season > currentSortKey.season) {
+            latestByShow[key] = item;
+            return;
+        }
+
+        if (itemSortKey.season === currentSortKey.season && itemSortKey.number > currentSortKey.number) {
+            latestByShow[key] = item;
+            return;
+        }
+
+        if (itemSortKey.season === currentSortKey.season && itemSortKey.number === currentSortKey.number) {
+            const itemTimestamp = Date.parse((item && item.watched_at) || (item && item.listed_at) || "");
+            const currentTimestamp = Date.parse((current && current.watched_at) || (current && current.listed_at) || "");
+            if (Number.isFinite(itemTimestamp) && Number.isFinite(currentTimestamp) && itemTimestamp > currentTimestamp) {
+                latestByShow[key] = item;
+                return;
+            }
+
+            const itemHistoryId = item && item.id ? item.id : 0;
+            const currentHistoryId = current && current.id ? current.id : 0;
+            if (itemHistoryId > currentHistoryId) {
+                latestByShow[key] = item;
+            }
+        }
+    });
+
+    return arr.filter((item) => {
+        const key = getHistoryEpisodeShowKey(item);
+        return key ? latestByShow[key] === item : true;
+    });
+}
+
+async function getProcessedHistoryEpisodesBody() {
+    const url = buildHistoryEpisodesRequestUrl(requestUrl);
+    if (url === requestUrl) {
+        if (!shouldApplyLatestHistoryEpisodeOnly(requestUrl)) {
+            return body;
+        }
+
+        try {
+            return JSON.stringify(keepLatestHistoryEpisodes(JSON.parse(body)));
+        } catch (e) {
+            console.log("Trakt history episode local merge failed: " + e);
+            return body;
+        }
+    }
+
+    try {
+        const data = await fetchJson(url);
+        return JSON.stringify(keepLatestHistoryEpisodes(data));
+    } catch (e) {
+        console.log("Trakt history episode refetch failed: " + e);
+        return body;
+    }
+}
+
+async function handleHistoryEpisodeList() {
+    const historyBody = await getProcessedHistoryEpisodesBody();
+    await handleMediaList("history episode", historyBody);
+}
+
 (async () => {
     try {
+        if (
+            typeof $response === "undefined" &&
+            shouldApplyLatestHistoryEpisodeOnly(requestUrl)
+        ) {
+            $done({ url: buildHistoryEpisodesRequestUrl(requestUrl) });
+            return;
+        }
+
         if (/\/users\/settings(?:\?|$)/.test(requestUrl)) {
             handleUserSettings();
             return;
@@ -794,7 +1006,7 @@ function handleUserSettings() {
         }
 
         if (/\/users\/[^\/]+?\/history\/episodes(?:\/\d+)?\/?(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("history episode");
+            await handleHistoryEpisodeList();
             return;
         }
 
