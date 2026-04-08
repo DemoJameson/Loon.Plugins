@@ -1241,7 +1241,7 @@ async function handleHistoryEpisodeList() {
             return;
         }
 
-        if (/\/users\/[^\/]+?\/favorites\/?(?:\?.*)?$/.test(requestUrl)) {
+        if (/\/users\/[^\/]+?\/favorites(?:\/(?:shows|movies))?\/?(?:\?.*)?$/.test(requestUrl)) {
             await handleMediaList("favorites");
             return;
         }
