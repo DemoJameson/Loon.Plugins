@@ -1169,19 +1169,6 @@ async function handleSeasonEpisodesList() {
         }).filter((ref) => {
             return !!buildMediaCacheLookupKey(MEDIA_TYPE.EPISODE, ref);
         });
-        const episodes = Array.isArray(targetSeason.episodes) ? targetSeason.episodes : [];
-        episodes.map((episode) => {
-            return {
-                mediaType: MEDIA_TYPE.EPISODE,
-                showId: target.showId,
-                seasonNumber: currentSeasonNumber,
-                episodeNumber: episode ? episode.number : null,
-                backendLookupKey: buildEpisodeCompositeKey(target.showId, currentSeasonNumber, episode ? episode.number : null),
-                availableTranslations: episode && Array.isArray(episode.available_translations) ? episode.available_translations : null
-            };
-        }).filter((ref) => {
-            return !!buildMediaCacheLookupKey(MEDIA_TYPE.EPISODE, ref);
-        });
         await hydrateFromBackend(cache, {
             show: [],
             movie: [],
@@ -1238,14 +1225,17 @@ async function handleSeasonEpisodesList() {
         saveCache(cache);
         flushBackendWrites();
 
-        episodes.forEach((episode) => {
-            const ref = {
-                mediaType: MEDIA_TYPE.EPISODE,
-                showId: target.showId,
-                seasonNumber: currentSeasonNumber,
-                episodeNumber: episode ? episode.number : null
-            };
-            applyTranslation(episode, getCachedTranslation(cache, MEDIA_TYPE.EPISODE, ref));
+        seasons.forEach((season) => {
+            const seasonEpisodes = season && Array.isArray(season.episodes) ? season.episodes : [];
+            seasonEpisodes.forEach((episode) => {
+                const ref = {
+                    mediaType: MEDIA_TYPE.EPISODE,
+                    showId: target.showId,
+                    seasonNumber: episode ? episode.season : null,
+                    episodeNumber: episode ? episode.number : null
+                };
+                applyTranslation(episode, getCachedTranslation(cache, MEDIA_TYPE.EPISODE, ref));
+            });
         });
 
         $done({ body: JSON.stringify(seasons) });
