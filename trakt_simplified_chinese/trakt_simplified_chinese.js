@@ -308,9 +308,10 @@ function normalizeTranslations(items) {
 
     const fallbackRegions = ["sg", "hk", "tw"];
     const fields = ["title", "overview", "tagline"];
+    const requiredFoundFields = ["title", "overview"];
     let cnTranslation = findTranslationByRegion(items, "cn");
     const originalCnFound = !!cnTranslation;
-    const originalCnComplete = originalCnFound && fields.every((field) => {
+    const originalCnComplete = originalCnFound && requiredFoundFields.every((field) => {
         return !isEmptyTranslationValue(cnTranslation[field]);
     });
     const hasAnyChineseTitle = items.some((item) => {
