@@ -112,6 +112,8 @@ const backendBaseUrl = (() => {
     return value.replace(/\/+$/, "");
 })();
 const preferredLanguage = "zh-CN";
+const SCRIPT_TRANSLATION_REQUEST_HEADER = "X-Loon-Trakt-Translation-Request";
+const SCRIPT_TRANSLATION_REQUEST_VALUE = "script";
 const body = typeof $response !== "undefined" && typeof $response.body === "string"
     ? $response.body
     : "";
@@ -382,6 +384,22 @@ function fetchJson(url, extraHeaders, useSourceHeaders) {
     });
 }
 
+function getRequestHeaderValue(headerName) {
+    if (!$request || !$request.headers || !headerName) {
+        return null;
+    }
+
+    const targetName = String(headerName).toLowerCase();
+    const headers = $request.headers;
+    const matchedKey = Object.keys(headers).find((key) => String(key).toLowerCase() === targetName);
+    return matchedKey ? headers[matchedKey] : null;
+}
+
+function isScriptInitiatedTranslationRequest() {
+    return String(getRequestHeaderValue(SCRIPT_TRANSLATION_REQUEST_HEADER) || "").toLowerCase() ===
+        SCRIPT_TRANSLATION_REQUEST_VALUE;
+}
+
 function postJson(url, payload, extraHeaders, useSourceHeaders) {
     return new Promise((resolve, reject) => {
         $httpClient.post({
@@ -436,12 +454,69 @@ function extractNormalizedTranslation(items) {
     };
 }
 
-function buildMediaCacheKey(mediaType, traktId) {
-    return getMediaCachePrefix(mediaType) + String(traktId);
+function buildEpisodeCompositeKey(showId, seasonNumber, episodeNumber) {
+    if (!isNonNullish(showId) || !isNonNullish(seasonNumber) || !isNonNullish(episodeNumber)) {
+        return "";
+    }
+
+    return String(showId) + ":" + String(seasonNumber) + ":" + String(episodeNumber);
 }
 
-function storeTranslationEntry(cache, mediaType, traktId, entry) {
-    const cacheKey = buildMediaCacheKey(mediaType, traktId);
+function parseEpisodeLookupKey(value) {
+    const match = String(value || "").match(/^(\d+):(\d+):(\d+)$/);
+    if (!match) {
+        return null;
+    }
+
+    return {
+        mediaType: MEDIA_TYPE.EPISODE,
+        showId: match[1],
+        seasonNumber: match[2],
+        episodeNumber: match[3],
+        backendLookupKey: match[0]
+    };
+}
+
+function buildMediaCacheLookupKey(mediaType, ref) {
+    if (!ref || typeof ref !== "object") {
+        return "";
+    }
+
+    if (mediaType === MEDIA_TYPE.EPISODE) {
+        return buildEpisodeCompositeKey(ref.showId, ref.seasonNumber, ref.episodeNumber);
+    }
+
+    return isNonNullish(ref.traktId) ? String(ref.traktId) : "";
+}
+
+function buildMediaCacheKey(mediaType, ref) {
+    const lookupKey = buildMediaCacheLookupKey(mediaType, ref);
+    return lookupKey ? getMediaCachePrefix(mediaType) + lookupKey : "";
+}
+
+function areTranslationsEqual(left, right) {
+    const normalizedLeft = normalizeTranslationPayload(left);
+    const normalizedRight = normalizeTranslationPayload(right);
+
+    if (!normalizedLeft && !normalizedRight) {
+        return true;
+    }
+
+    if (!normalizedLeft || !normalizedRight) {
+        return false;
+    }
+
+    return normalizedLeft.title === normalizedRight.title &&
+        normalizedLeft.overview === normalizedRight.overview &&
+        normalizedLeft.tagline === normalizedRight.tagline;
+}
+
+function storeTranslationEntry(cache, mediaType, ref, entry) {
+    const cacheKey = buildMediaCacheKey(mediaType, ref);
+    if (!cacheKey) {
+        return null;
+    }
+
     const translation = normalizeTranslationPayload(entry ? entry.translation : null);
     const status = entry && entry.status === CACHE_STATUS.FOUND ? CACHE_STATUS.FOUND : CACHE_STATUS.NOT_FOUND;
 
@@ -454,8 +529,9 @@ function storeTranslationEntry(cache, mediaType, traktId, entry) {
     return cache[cacheKey];
 }
 
-function getCachedTranslation(cache, mediaType, traktId) {
-    return cache[buildMediaCacheKey(mediaType, traktId)];
+function getCachedTranslation(cache, mediaType, ref) {
+    const cacheKey = buildMediaCacheKey(mediaType, ref);
+    return cacheKey ? cache[cacheKey] : null;
 }
 
 function hasZhAvailableTranslation(availableTranslations) {
@@ -474,7 +550,7 @@ function shouldSkipTranslationLookup(ref) {
 
 function getMissingRefs(cache, mediaType, refs) {
     return refs.filter((ref) => {
-        if (!ref || !isNonNullish(ref.traktId)) {
+        if (!ref || !buildMediaCacheLookupKey(mediaType, ref)) {
             return false;
         }
 
@@ -482,12 +558,28 @@ function getMissingRefs(cache, mediaType, refs) {
             return false;
         }
 
-        return !getCachedTranslation(cache, mediaType, ref.traktId);
+        return !getCachedTranslation(cache, mediaType, ref);
     });
 }
 
 function getBackendFieldIds(refs) {
-    return refs.map((ref) => ref.traktId);
+    return refs
+        .map((ref) => {
+            if (!ref) {
+                return "";
+            }
+
+            if (isNonNullish(ref.backendLookupKey)) {
+                return String(ref.backendLookupKey);
+            }
+
+            if (isNonNullish(ref.traktId)) {
+                return String(ref.traktId);
+            }
+
+            return "";
+        })
+        .filter(Boolean);
 }
 
 async function fetchTranslationsFromBackend(cache, refsByType) {
@@ -521,7 +613,10 @@ async function fetchTranslationsFromBackend(cache, refsByType) {
         }
 
         Object.keys(entries).forEach((id) => {
-            storeTranslationEntry(cache, mediaType, id, entries[id]);
+            const ref = mediaType === MEDIA_TYPE.EPISODE
+                ? parseEpisodeLookupKey(id)
+                : { traktId: id };
+            storeTranslationEntry(cache, mediaType, ref, entries[id]);
         });
     });
 
@@ -529,8 +624,13 @@ async function fetchTranslationsFromBackend(cache, refsByType) {
     return true;
 }
 
-function queueBackendWrite(mediaType, traktId, entry) {
-    pendingBackendWrites[mediaType][String(traktId)] = entry;
+function queueBackendWrite(mediaType, ref, entry) {
+    const lookupKey = buildMediaCacheLookupKey(mediaType, ref);
+    if (!lookupKey) {
+        return;
+    }
+
+    pendingBackendWrites[mediaType][lookupKey] = entry;
 }
 
 function buildBackendWritePayload() {
@@ -567,6 +667,61 @@ function buildTranslationUrl(mediaType, ref) {
     return path ? "https://apiz.trakt.tv" + path : "";
 }
 
+function resolveTranslationRequestTarget(url) {
+    const normalizedUrl = String(url || "");
+    let match = normalizedUrl.match(/\/shows\/(\d+)\/translations\/zh(?:\?|$)/);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.SHOW,
+            traktId: match[1]
+        };
+    }
+
+    match = normalizedUrl.match(/\/movies\/(\d+)\/translations\/zh(?:\?|$)/);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.MOVIE,
+            traktId: match[1]
+        };
+    }
+
+    match = normalizedUrl.match(/\/shows\/(\d+)\/seasons\/(\d+)\/episodes\/(\d+)\/translations\/zh(?:\?|$)/);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.EPISODE,
+            showId: match[1],
+            seasonNumber: match[2],
+            episodeNumber: match[3]
+        };
+    }
+
+    return null;
+}
+
+function resolveMediaDetailTarget(url, data, mediaType) {
+    if (mediaType === MEDIA_TYPE.EPISODE) {
+        const match = String(url || "").match(/\/shows\/(\d+)\/seasons\/(\d+)\/episodes\/(\d+)(?:\?|$)/);
+        if (!match) {
+            return null;
+        }
+
+        return {
+            mediaType: MEDIA_TYPE.EPISODE,
+            showId: match[1],
+            seasonNumber: match[2],
+            episodeNumber: match[3]
+        };
+    }
+
+    const traktId = data && data.ids ? data.ids.trakt : null;
+    return isNonNullish(traktId)
+        ? {
+            mediaType: mediaType,
+            traktId: traktId
+        }
+        : null;
+}
+
 async function fetchDirectTranslation(mediaType, ref) {
     const traktId = ref && isNonNullish(ref.traktId) ? ref.traktId : null;
     const url = buildTranslationUrl(mediaType, ref);
@@ -575,22 +730,23 @@ async function fetchDirectTranslation(mediaType, ref) {
         throw new Error("Missing translation lookup metadata for mediaType=" + mediaType + ", traktId=" + traktId);
     }
 
-    const translations = normalizeTranslations(await fetchJson(url));
+    const translations = normalizeTranslations(await fetchJson(url, {
+        [SCRIPT_TRANSLATION_REQUEST_HEADER]: SCRIPT_TRANSLATION_REQUEST_VALUE
+    }));
     return extractNormalizedTranslation(translations);
 }
 
 async function getTranslation(cache, mediaType, ref) {
-    const traktId = ref && isNonNullish(ref.traktId) ? ref.traktId : null;
-    const cacheEntry = getCachedTranslation(cache, mediaType, traktId);
+    const cacheEntry = getCachedTranslation(cache, mediaType, ref);
     if (cacheEntry) {
         return cacheEntry;
     }
 
     const merged = await fetchDirectTranslation(mediaType, ref);
-    const stored = storeTranslationEntry(cache, mediaType, traktId, merged);
+    const stored = storeTranslationEntry(cache, mediaType, ref, merged);
     saveCache(cache);
 
-    queueBackendWrite(mediaType, traktId, merged);
+    queueBackendWrite(mediaType, ref, merged);
 
     return stored;
 }
@@ -627,11 +783,16 @@ function createMediaCollection() {
 }
 
 function collectUniqueRef(target, seen, ref) {
-    if (!ref || !isNonNullish(ref.traktId)) {
+    if (!ref) {
         return;
     }
 
-    const key = String(ref.traktId);
+    const mediaType = ref.mediaType || null;
+    const key = mediaType ? buildMediaCacheLookupKey(mediaType, ref) : "";
+    if (!key) {
+        return;
+    }
+
     if (!seen[key]) {
         seen[key] = true;
         target.push(ref);
@@ -666,26 +827,28 @@ function buildMediaRef(item, mediaType) {
     }
 
     return {
+        mediaType: mediaType,
         traktId: traktId,
+        backendLookupKey: String(traktId),
         availableTranslations: Array.isArray(target.available_translations) ? target.available_translations : null
     };
 }
 
 function buildEpisodeRef(item, episode) {
     const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
-    const episodeId = episode && episode.ids ? episode.ids.trakt : null;
     const seasonNumber = episode ? episode.season : null;
     const episodeNumber = episode ? episode.number : null;
 
-    if (!isNonNullish(showId) || !isNonNullish(episodeId) || !isNonNullish(seasonNumber) || !isNonNullish(episodeNumber)) {
+    if (!isNonNullish(showId) || !isNonNullish(seasonNumber) || !isNonNullish(episodeNumber)) {
         return null;
     }
 
     return {
-        traktId: episodeId,
+        mediaType: MEDIA_TYPE.EPISODE,
         showId: showId,
         seasonNumber: seasonNumber,
         episodeNumber: episodeNumber,
+        backendLookupKey: buildEpisodeCompositeKey(showId, seasonNumber, episodeNumber),
         availableTranslations: Array.isArray(episode.available_translations) ? episode.available_translations : null
     };
 }
@@ -707,9 +870,9 @@ function applyTranslationsToItems(arr, cache) {
     arr.forEach((item) => {
         Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
             const target = getItemMediaTarget(item, mediaType);
-            const traktId = target && target.ids ? target.ids.trakt : null;
-            if (isNonNullish(traktId)) {
-                applyTranslation(target, getCachedTranslation(cache, mediaType, traktId));
+            const ref = buildMediaRef(item, mediaType);
+            if (ref) {
+                applyTranslation(target, getCachedTranslation(cache, mediaType, ref));
             }
         });
     });
@@ -731,10 +894,10 @@ async function fetchAndPersistMissing(cache, mediaType, refs, logLabel) {
     await processInBatches(getMissingRefs(cache, mediaType, refs), async (ref) => {
         try {
             const merged = await fetchDirectTranslation(mediaType, ref);
-            storeTranslationEntry(cache, mediaType, ref.traktId, merged);
-            queueBackendWrite(mediaType, ref.traktId, merged);
+            storeTranslationEntry(cache, mediaType, ref, merged);
+            queueBackendWrite(mediaType, ref, merged);
         } catch (e) {
-            console.log("Trakt " + logLabel + " translation fetch failed for id=" + ref.traktId + ": " + e);
+            console.log("Trakt " + logLabel + " translation fetch failed for key=" + buildMediaCacheLookupKey(mediaType, ref) + ": " + e);
         }
     });
 }
@@ -770,14 +933,14 @@ async function handleMediaDetail(mediaType) {
         return;
     }
 
-    const traktId = data && data.ids ? data.ids.trakt : null;
-    if (!isNonNullish(traktId)) {
+    const ref = resolveMediaDetailTarget(requestUrl, data, mediaType);
+    if (!ref || !buildMediaCacheLookupKey(mediaType, ref)) {
         $done({ body: body });
         return;
     }
 
     const cache = loadCache();
-    applyTranslation(data, getCachedTranslation(cache, mediaType, traktId));
+    applyTranslation(data, getCachedTranslation(cache, mediaType, ref));
     $done({ body: JSON.stringify(data) });
 }
 
@@ -790,6 +953,24 @@ function handleTranslations() {
 
     const sorted = sortTranslations(arr);
     const merged = normalizeTranslations(sorted);
+    const target = resolveTranslationRequestTarget(requestUrl);
+
+    if (!isScriptInitiatedTranslationRequest() && target && buildMediaCacheLookupKey(target.mediaType, target)) {
+        const normalized = extractNormalizedTranslation(merged);
+        const cache = loadCache();
+        const cachedEntry = getCachedTranslation(cache, target.mediaType, target);
+        const shouldUpdateCache = !cachedEntry ||
+            cachedEntry.status !== normalized.status ||
+            !areTranslationsEqual(cachedEntry.translation, normalized.translation);
+
+        if (shouldUpdateCache) {
+            storeTranslationEntry(cache, target.mediaType, target, normalized);
+            saveCache(cache);
+            queueBackendWrite(target.mediaType, target, normalized);
+            flushBackendWrites();
+        }
+    }
+
     $done({ body: JSON.stringify(merged) });
 }
 

@@ -16,7 +16,7 @@
 
 - `shows=1,2,3`
 - `movies=11,12,13`
-- `episodes=21,22,23`
+- `episodes=198225:1:1,198225:1:2,198225:1:3`
 
 至少需要提供一类参数，否则会返回 `400`。
 
@@ -44,7 +44,7 @@
   },
   "movies": {},
   "episodes": {
-    "21": {
+    "198225:1:1": {
       "status": 2,
       "translation": null
     }
@@ -78,7 +78,7 @@
   },
   "movies": {},
   "episodes": {
-    "21": {
+    "198225:1:1": {
       "status": 2,
       "translation": null
     }
@@ -136,12 +136,12 @@ POST https://your-project.vercel.app/api/trakt/translations
 - 后端按单条记录写入 KV，key 格式为：
   - `trakt:translation:shows:{id}`
   - `trakt:translation:movies:{id}`
-  - `trakt:translation:episodes:{id}`
+  - `trakt:translation:episodes:{showId}:{seasonNumber}:{episodeNumber}`
 - 完整有效翻译缓存 90 天
 - 未命中或翻译存在无效字段 7 天
 
 ## 说明
 
 - 现在后端同时支持 `show`、`movie` 和 `episode`
-- `episode` 缓存按 episode 的 Trakt ID 存储
+- `episode` 缓存按 `showId:seasonNumber:episodeNumber` 存储
 - 详情页和列表页可以复用同一套后端缓存

@@ -23,7 +23,26 @@ function parseIds(value) {
     unique.add(normalized);
   }
 
-  return Array.from(unique).slice(0, 100);
+  return Array.from(unique);
+}
+
+function parseEpisodeKeys(value) {
+  if (!value) {
+    return [];
+  }
+
+  const parts = Array.isArray(value) ? value.join(",").split(",") : String(value).split(",");
+  const unique = new Set();
+
+  for (const part of parts) {
+    const normalized = String(part).trim();
+    if (!/^\d+:\d+:\d+$/.test(normalized)) {
+      continue;
+    }
+    unique.add(normalized);
+  }
+
+  return Array.from(unique);
 }
 
 function isEmptyTranslationValue(value) {
@@ -98,8 +117,8 @@ async function kvRequest(config, path, init) {
   return response.json();
 }
 
-function buildCacheKey(mediaType, traktId) {
-  return `trakt:translation:${mediaType}:${traktId}`;
+function buildCacheKey(mediaType, lookupKey) {
+  return `trakt:translation:${mediaType}:${lookupKey}`;
 }
 
 function parseCachedEntry(value) {
@@ -172,9 +191,9 @@ async function handleGet(req, res, kvConfig) {
 
   const showIds = parseIds(req.query.shows);
   const movieIds = parseIds(req.query.movies);
-  const episodeIds = parseIds(req.query.episodes);
+  const episodeKeys = parseEpisodeKeys(req.query.episodes);
 
-  if (showIds.length === 0 && movieIds.length === 0 && episodeIds.length === 0) {
+  if (showIds.length === 0 && movieIds.length === 0 && episodeKeys.length === 0) {
     res.status(400).json({ error: "Missing shows, movies, or episodes query" });
     return;
   }
@@ -182,7 +201,7 @@ async function handleGet(req, res, kvConfig) {
   const [shows, movies, episodes] = await Promise.all([
     readManyFromKv(kvConfig, "shows", showIds),
     readManyFromKv(kvConfig, "movies", movieIds),
-    readManyFromKv(kvConfig, "episodes", episodeIds),
+    readManyFromKv(kvConfig, "episodes", episodeKeys),
   ]);
 
   res.setHeader("Cache-Control", CACHE_CONTROL);
