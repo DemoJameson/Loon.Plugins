@@ -1,5 +1,6 @@
 const CACHE_KEY = "trakt_zh_cn_cache_v2";
 const CURRENT_SEASON_CACHE_KEY = "trakt_current_season_v1";
+const HISTORY_EPISODE_CACHE_KEY = "trakt_history_episode_cache_v1";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTIAL_FOUND_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;
@@ -160,6 +161,37 @@ function saveCache(cache) {
         $persistentStore.write(JSON.stringify(cache), CACHE_KEY);
     } catch (e) {
         console.log("Trakt cache save failed: " + e);
+    }
+}
+
+function loadHistoryEpisodeCache() {
+    if (typeof $persistentStore === "undefined") {
+        return {};
+    }
+
+    const raw = $persistentStore.read(HISTORY_EPISODE_CACHE_KEY);
+    if (!raw) {
+        return {};
+    }
+
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+        console.log("Trakt history episode cache load failed: " + e);
+        return {};
+    }
+}
+
+function saveHistoryEpisodeCache(cache) {
+    if (typeof $persistentStore === "undefined") {
+        return;
+    }
+
+    try {
+        $persistentStore.write(JSON.stringify(cache), HISTORY_EPISODE_CACHE_KEY);
+    } catch (e) {
+        console.log("Trakt history episode cache save failed: " + e);
     }
 }
 
@@ -1271,6 +1303,53 @@ function shouldApplyLatestHistoryEpisodeOnly(url) {
     return latestHistoryEpisodeOnly && isHistoryEpisodesListUrl(url);
 }
 
+function parseUrlParts(url) {
+    const match = String(url || "").match(/^([^?]+)(?:\?(.*))?$/);
+    return {
+        path: match && match[1] ? match[1] : "",
+        query: match && match[2] ? match[2] : ""
+    };
+}
+
+function parseQueryParams(query) {
+    const params = {};
+
+    String(query || "").split("&").forEach((part) => {
+        if (!part) {
+            return;
+        }
+
+        const pieces = part.split("=");
+        const key = decodeURIComponent(pieces[0] || "");
+        if (!key) {
+            return;
+        }
+
+        params[key] = pieces.length > 1 ? decodeURIComponent(pieces.slice(1).join("=")) : "";
+    });
+
+    return params;
+}
+
+function getHistoryEpisodesCacheBucketKey(url) {
+    const parts = parseUrlParts(url);
+    const params = parseQueryParams(parts.query);
+    delete params.page;
+    delete params.limit;
+
+    const query = Object.keys(params).sort().map((key) => {
+        return encodeURIComponent(key) + "=" + encodeURIComponent(params[key]);
+    }).join("&");
+
+    return parts.path + (query ? "?" + query : "");
+}
+
+function getHistoryEpisodesPageNumber(url) {
+    const params = parseQueryParams(parseUrlParts(url).query);
+    const page = Number(params.page);
+    return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+}
+
 function getHistoryEpisodeShowKey(item) {
     const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
     return isNonNullish(showId) ? String(showId) : "";
@@ -1284,6 +1363,75 @@ function getHistoryEpisodeSortKey(item) {
         season: season,
         number: number
     };
+}
+
+function createHistoryEpisodeCacheSnapshot(item) {
+    const showId = getHistoryEpisodeShowKey(item);
+    const sortKey = getHistoryEpisodeSortKey(item);
+
+    return {
+        id: item && item.id ? Number(item.id) : 0,
+        watched_at: item && item.watched_at ? item.watched_at : null,
+        listed_at: item && item.listed_at ? item.listed_at : null,
+        show: {
+            ids: {
+                trakt: showId || null
+            }
+        },
+        episode: {
+            season: sortKey.season,
+            number: sortKey.number
+        }
+    };
+}
+
+function filterHistoryEpisodesAcrossPages(arr, url) {
+    if (!Array.isArray(arr) || arr.length === 0 || !isHistoryEpisodesListUrl(url)) {
+        return arr;
+    }
+
+    const cache = loadHistoryEpisodeCache();
+    const bucketKey = getHistoryEpisodesCacheBucketKey(url);
+    const pageNumber = getHistoryEpisodesPageNumber(url);
+    if (pageNumber === 1) {
+        delete cache[bucketKey];
+    }
+
+    const bucket = cache[bucketKey] && typeof cache[bucketKey] === "object"
+        ? cache[bucketKey]
+        : { shows: {} };
+    const cachedShows = bucket.shows && typeof bucket.shows === "object" ? bucket.shows : {};
+
+    const filtered = arr.filter((item) => {
+        const showKey = getHistoryEpisodeShowKey(item);
+        if (!showKey) {
+            return true;
+        }
+
+        if (pageNumber > 1) {
+            return !cachedShows[showKey];
+        }
+
+        return true;
+    });
+
+    filtered.forEach((item) => {
+        const showKey = getHistoryEpisodeShowKey(item);
+        if (!showKey) {
+            return;
+        }
+
+        const snapshot = createHistoryEpisodeCacheSnapshot(item);
+        if (!cachedShows[showKey]) {
+            cachedShows[showKey] = snapshot;
+        }
+    });
+
+    bucket.shows = cachedShows;
+    cache[bucketKey] = bucket;
+    saveHistoryEpisodeCache(cache);
+
+    return filtered;
 }
 
 function keepLatestHistoryEpisodes(arr) {
@@ -1340,25 +1488,15 @@ function keepLatestHistoryEpisodes(arr) {
 }
 
 async function getProcessedHistoryEpisodesBody() {
-    const url = buildHistoryEpisodesRequestUrl(requestUrl);
-    if (url === requestUrl) {
-        if (!shouldApplyLatestHistoryEpisodeOnly(requestUrl)) {
-            return body;
-        }
-
-        try {
-            return JSON.stringify(keepLatestHistoryEpisodes(JSON.parse(body)));
-        } catch (e) {
-            console.log("Trakt history episode local merge failed: " + e);
-            return body;
-        }
+    if (!shouldApplyLatestHistoryEpisodeOnly(requestUrl)) {
+        return body;
     }
 
     try {
-        const data = await fetchJson(url);
-        return JSON.stringify(keepLatestHistoryEpisodes(data));
+        const data = keepLatestHistoryEpisodes(JSON.parse(body));
+        return JSON.stringify(filterHistoryEpisodesAcrossPages(data, requestUrl));
     } catch (e) {
-        console.log("Trakt history episode refetch failed: " + e);
+        console.log("Trakt history episode local merge failed: " + e);
         return body;
     }
 }
