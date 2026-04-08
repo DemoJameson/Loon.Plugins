@@ -58,6 +58,10 @@ http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist(\?.*)?$ script-pa
 http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/shows(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Watchlist Shows Flat
 # 拦截 watchlist/movies，批量获取简体中文信息
 http-response ^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/movies(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Watchlist Movies Flat
+# 拦截带季号的请求，记录当前浏览季
+http-request ^https:\/\/apiz\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+(?:\/.*|\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, timeout=10, argument=[{backendBaseUrl}], tag=Trakt Current Season Request
+# 拦截季列表，批量获取简体中文信息
+http-response ^https:\/\/apiz\.trakt\.tv\/shows\/[^\/]+\/seasons(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Seasons List
 # 拦截 shows 详情
 http-response ^https:\/\/apiz\.trakt\.tv\/shows\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Show Detail
 # 拦截 movies 详情

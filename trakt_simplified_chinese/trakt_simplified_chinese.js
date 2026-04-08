@@ -1,7 +1,9 @@
 const CACHE_KEY = "trakt_zh_cn_cache_v2";
+const CURRENT_SEASON_CACHE_KEY = "trakt_current_season_v1";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTIAL_FOUND_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;
+const SEASON_EPISODE_TRANSLATION_LIMIT = 50;
 const CACHE_STATUS = {
     FOUND: 1,
     PARTIAL_FOUND: 2,
@@ -158,6 +160,66 @@ function saveCache(cache) {
         $persistentStore.write(JSON.stringify(cache), CACHE_KEY);
     } catch (e) {
         console.log("Trakt cache save failed: " + e);
+    }
+}
+
+function setCurrentSeason(showId, seasonNumber) {
+    if (
+        typeof $persistentStore === "undefined" ||
+        !isNonNullish(showId) ||
+        !isNonNullish(seasonNumber)
+    ) {
+        return;
+    }
+
+    try {
+        $persistentStore.write(JSON.stringify({
+            showId: String(showId),
+            seasonNumber: Number(seasonNumber)
+        }), CURRENT_SEASON_CACHE_KEY);
+    } catch (e) {
+        console.log("Trakt current season cache save failed: " + e);
+    }
+}
+
+function clearCurrentSeason() {
+    if (typeof $persistentStore === "undefined") {
+        return;
+    }
+
+    try {
+        $persistentStore.write("", CURRENT_SEASON_CACHE_KEY);
+    } catch (e) {
+        console.log("Trakt current season cache save failed: " + e);
+    }
+}
+
+function getCurrentSeason(showId) {
+    if (typeof $persistentStore === "undefined" || !isNonNullish(showId)) {
+        return 1;
+    }
+
+    const raw = $persistentStore.read(CURRENT_SEASON_CACHE_KEY);
+    if (!raw) {
+        return 1;
+    }
+
+    try {
+        const cache = JSON.parse(raw);
+        if (
+            !cache ||
+            typeof cache !== "object" ||
+            !isNonNullish(cache.showId) ||
+            !isNonNullish(cache.seasonNumber) ||
+            String(cache.showId) !== String(showId)
+        ) {
+            return 1;
+        }
+
+        return Number.isFinite(Number(cache.seasonNumber)) ? Number(cache.seasonNumber) : 1;
+    } catch (e) {
+        console.log("Trakt current season cache load failed: " + e);
+        return 1;
     }
 }
 
@@ -743,6 +805,29 @@ function resolveMediaDetailTarget(url, data, mediaType) {
         : null;
 }
 
+function resolveCurrentSeasonTarget(url) {
+    const match = String(url || "").match(/\/shows\/(\d+)\/seasons\/(\d+)(?:\/|\?|$)/);
+    if (!match) {
+        return null;
+    }
+
+    return {
+        showId: match[1],
+        seasonNumber: Number(match[2])
+    };
+}
+
+function resolveSeasonListTarget(url) {
+    const match = String(url || "").match(/\/shows\/(\d+)\/seasons(?:\?|$)/);
+    if (!match) {
+        return null;
+    }
+
+    return {
+        showId: match[1]
+    };
+}
+
 async function fetchDirectTranslation(mediaType, ref) {
     const traktId = ref && isNonNullish(ref.traktId) ? ref.traktId : null;
     const url = buildTranslationUrl(mediaType, ref);
@@ -755,21 +840,6 @@ async function fetchDirectTranslation(mediaType, ref) {
         [SCRIPT_TRANSLATION_REQUEST_HEADER]: SCRIPT_TRANSLATION_REQUEST_VALUE
     }));
     return extractNormalizedTranslation(translations);
-}
-
-async function getTranslation(cache, mediaType, ref) {
-    const cacheEntry = getCachedTranslation(cache, mediaType, ref);
-    if (cacheEntry) {
-        return cacheEntry;
-    }
-
-    const merged = await fetchDirectTranslation(mediaType, ref);
-    const stored = storeTranslationEntry(cache, mediaType, ref, merged);
-    saveCache(cache);
-
-    queueBackendWrite(mediaType, ref, merged);
-
-    return stored;
 }
 
 async function processInBatches(items, worker) {
@@ -1016,6 +1086,142 @@ function handleUserSettings() {
     $done({ body: JSON.stringify(data) });
 }
 
+function handleCurrentSeasonRequest() {
+    const target = resolveCurrentSeasonTarget(requestUrl);
+    if (!target) {
+        $done({});
+        return;
+    }
+
+    setCurrentSeason(target.showId, target.seasonNumber);
+    $done({});
+}
+
+async function handleSeasonEpisodesList() {
+    try {
+        const target = resolveSeasonListTarget(requestUrl);
+        const seasons = JSON.parse(body);
+        if (!target || !Array.isArray(seasons) || seasons.length === 0) {
+            $done({ body: body });
+            return;
+        }
+
+        const currentSeasonNumber = getCurrentSeason(target.showId);
+        const targetSeason = seasons.find((item) => {
+            const episodes = item && Array.isArray(item.episodes) ? item.episodes : [];
+            return episodes.some((episode) => {
+                return Number(episode && episode.season) === currentSeasonNumber;
+            });
+        });
+
+        if (!targetSeason) {
+            $done({ body: body });
+            return;
+        }
+
+        const cache = loadCache();
+        const allEpisodeRefs = seasons.flatMap((item) => {
+            const seasonEpisodes = item && Array.isArray(item.episodes) ? item.episodes : [];
+            return seasonEpisodes.map((episode) => {
+                return {
+                    mediaType: MEDIA_TYPE.EPISODE,
+                    showId: target.showId,
+                    seasonNumber: episode ? episode.season : null,
+                    episodeNumber: episode ? episode.number : null,
+                    backendLookupKey: buildEpisodeCompositeKey(target.showId, episode ? episode.season : null, episode ? episode.number : null),
+                    availableTranslations: episode && Array.isArray(episode.available_translations) ? episode.available_translations : null,
+                    seasonFirstAired: item ? item.first_aired : null,
+                    episodeFirstAired: episode ? episode.first_aired : null
+                };
+            });
+        }).filter((ref) => {
+            return !!buildMediaCacheLookupKey(MEDIA_TYPE.EPISODE, ref);
+        });
+        const episodes = Array.isArray(targetSeason.episodes) ? targetSeason.episodes : [];
+        episodes.map((episode) => {
+            return {
+                mediaType: MEDIA_TYPE.EPISODE,
+                showId: target.showId,
+                seasonNumber: currentSeasonNumber,
+                episodeNumber: episode ? episode.number : null,
+                backendLookupKey: buildEpisodeCompositeKey(target.showId, currentSeasonNumber, episode ? episode.number : null),
+                availableTranslations: episode && Array.isArray(episode.available_translations) ? episode.available_translations : null
+            };
+        }).filter((ref) => {
+            return !!buildMediaCacheLookupKey(MEDIA_TYPE.EPISODE, ref);
+        });
+        await hydrateFromBackend(cache, {
+            show: [],
+            movie: [],
+            episode: allEpisodeRefs
+        });
+        const missingEpisodeRefs = getMissingRefs(cache, MEDIA_TYPE.EPISODE, allEpisodeRefs).filter((ref) => {
+            return isNonNullish(ref && ref.seasonFirstAired) && isNonNullish(ref && ref.episodeFirstAired);
+        });
+        const prioritizedEpisodeRefs = missingEpisodeRefs
+            .map((ref, index) => {
+                return {
+                    ref: ref,
+                    index: index
+                };
+            })
+            .sort((left, right) => {
+                const leftSeason = Number(left.ref && left.ref.seasonNumber);
+                const rightSeason = Number(right.ref && right.ref.seasonNumber);
+                const getBucket = (seasonNumber) => {
+                    if (seasonNumber === currentSeasonNumber) {
+                        return 0;
+                    }
+                    if (seasonNumber > currentSeasonNumber) {
+                        return 1;
+                    }
+                    return 2;
+                };
+
+                const leftBucket = getBucket(leftSeason);
+                const rightBucket = getBucket(rightSeason);
+                if (leftBucket !== rightBucket) {
+                    return leftBucket - rightBucket;
+                }
+
+                if (leftBucket === 2 && leftSeason !== rightSeason) {
+                    return rightSeason - leftSeason;
+                }
+
+                if (leftSeason !== rightSeason) {
+                    return leftSeason - rightSeason;
+                }
+
+                return left.index - right.index;
+            })
+            .map((item) => item.ref)
+            .slice(0, SEASON_EPISODE_TRANSLATION_LIMIT);
+        await fetchAndPersistMissing(
+            cache,
+            MEDIA_TYPE.EPISODE,
+            prioritizedEpisodeRefs,
+            "season episode"
+        );
+
+        saveCache(cache);
+        flushBackendWrites();
+
+        episodes.forEach((episode) => {
+            const ref = {
+                mediaType: MEDIA_TYPE.EPISODE,
+                showId: target.showId,
+                seasonNumber: currentSeasonNumber,
+                episodeNumber: episode ? episode.number : null
+            };
+            applyTranslation(episode, getCachedTranslation(cache, MEDIA_TYPE.EPISODE, ref));
+        });
+
+        $done({ body: JSON.stringify(seasons) });
+    } finally {
+        clearCurrentSeason();
+    }
+}
+
 function buildHistoryEpisodesRequestUrl(url) {
     if (!shouldApplyLatestHistoryEpisodeOnly(url)) {
         return url;
@@ -1166,6 +1372,14 @@ async function handleHistoryEpisodeList() {
     try {
         if (
             typeof $response === "undefined" &&
+            /\/shows\/[^\/]+\/seasons\/\d+(?:\/|\?|$)/.test(requestUrl)
+        ) {
+            handleCurrentSeasonRequest();
+            return;
+        }
+
+        if (
+            typeof $response === "undefined" &&
             shouldApplyLatestHistoryEpisodeOnly(requestUrl)
         ) {
             $done({ url: buildHistoryEpisodesRequestUrl(requestUrl) });
@@ -1279,6 +1493,11 @@ async function handleHistoryEpisodeList() {
 
         if (/\/users\/me\/watchlist\/movies(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("watchlist movie");
+            return;
+        }
+
+        if (/\/shows\/[^\/]+\/seasons(?:\?.*)?$/.test(requestUrl)) {
+            await handleSeasonEpisodesList();
             return;
         }
 
