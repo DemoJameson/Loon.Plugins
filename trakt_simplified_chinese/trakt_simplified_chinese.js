@@ -793,7 +793,7 @@ function handleUserSettings() {
             return;
         }
 
-        if (/\/users\/[^\/]+?\/history\/episodes\/?(?:\?|$)/.test(requestUrl)) {
+        if (/\/users\/[^\/]+?\/history\/episodes(?:\/\d+)?\/?(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("history episode");
             return;
         }
