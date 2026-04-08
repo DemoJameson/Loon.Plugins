@@ -690,48 +690,8 @@ async function handleMediaDetail(mediaType) {
     }
 
     const cache = loadCache();
-    const ref = buildDetailRef(mediaType, data);
-
-    if (!getCachedTranslation(cache, mediaType, traktId)) {
-        try {
-            const refsByType = createMediaCollection();
-            refsByType[mediaType] = [ref];
-            await fetchTranslationsFromBackend(cache, refsByType);
-        } catch (e) {
-            console.log("Trakt detail backend cache read failed for id=" + traktId + ": " + e);
-        }
-    }
-
-    try {
-        await getTranslation(cache, mediaType, ref);
-    } catch (e) {
-        console.log("Trakt detail translation fetch failed for id=" + traktId + ": " + e);
-    }
-    
-    flushBackendWrites();
-
     applyTranslation(data, getCachedTranslation(cache, mediaType, traktId));
     $done({ body: JSON.stringify(data) });
-}
-
-function buildDetailRef(mediaType, data) {
-    const ref = {
-        traktId: data && data.ids ? data.ids.trakt : null
-    };
-
-    if (mediaType !== MEDIA_TYPE.EPISODE) {
-        return ref;
-    }
-
-    const match = requestUrl.match(/\/shows\/([^\/]+)\/seasons\/(\d+)\/episodes\/(\d+)(?:\?|$)/);
-    if (!match) {
-        return ref;
-    }
-
-    ref.showId = match[1];
-    ref.seasonNumber = Number(match[2]);
-    ref.episodeNumber = Number(match[3]);
-    return ref;
 }
 
 function handleTranslations() {
