@@ -1,9 +1,11 @@
 const CACHE_KEY = "trakt_zh_cn_cache_v2";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const PARTIAL_FOUND_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;
 const CACHE_STATUS = {
     FOUND: 1,
-    NOT_FOUND: 2
+    PARTIAL_FOUND: 2,
+    NOT_FOUND: 3
 };
 const MEDIA_TYPE = {
     SHOW: "show",
@@ -160,17 +162,18 @@ function saveCache(cache) {
 }
 
 function createCacheEntry(status, translation) {
+    const ttl = status === CACHE_STATUS.PARTIAL_FOUND ? PARTIAL_FOUND_CACHE_TTL_MS : CACHE_TTL_MS;
     return {
         status: status,
-        translation: translation || null,
-        expiresAt: Date.now() + CACHE_TTL_MS
+        translation: translation,
+        expiresAt: Date.now() + ttl
     };
 }
 
 function createPermanentCacheEntry(status, translation) {
     return {
         status: status,
-        translation: translation || null,
+        translation: translation,
         expiresAt: null
     };
 }
@@ -294,6 +297,10 @@ function findTranslationByRegion(items, region) {
     }) || null;
 }
 
+function isChineseTranslation(item) {
+    return !!(item && String(item.language || "").toLowerCase() === "zh");
+}
+
 function normalizeTranslations(items) {
     if (!Array.isArray(items)) {
         items = [];
@@ -305,6 +312,9 @@ function normalizeTranslations(items) {
     const originalCnFound = !!cnTranslation;
     const originalCnComplete = originalCnFound && fields.every((field) => {
         return !isEmptyTranslationValue(cnTranslation[field]);
+    });
+    const hasAnyChineseTitle = items.some((item) => {
+        return isChineseTranslation(item) && !isEmptyTranslationValue(item.title);
     });
 
     if (!cnTranslation) {
@@ -329,7 +339,11 @@ function normalizeTranslations(items) {
         }
     });
 
-    cnTranslation.status = originalCnComplete ? CACHE_STATUS.FOUND : CACHE_STATUS.NOT_FOUND;
+    cnTranslation.status = originalCnComplete
+        ? CACHE_STATUS.FOUND
+        : hasAnyChineseTitle
+            ? CACHE_STATUS.PARTIAL_FOUND
+            : CACHE_STATUS.NOT_FOUND;
 
     return items;
 }
@@ -518,10 +532,16 @@ function storeTranslationEntry(cache, mediaType, ref, entry) {
     }
 
     const translation = normalizeTranslationPayload(entry ? entry.translation : null);
-    const status = entry && entry.status === CACHE_STATUS.FOUND ? CACHE_STATUS.FOUND : CACHE_STATUS.NOT_FOUND;
+    const status = entry && entry.status === CACHE_STATUS.FOUND
+        ? CACHE_STATUS.FOUND
+        : entry && entry.status === CACHE_STATUS.PARTIAL_FOUND
+            ? CACHE_STATUS.PARTIAL_FOUND
+            : CACHE_STATUS.NOT_FOUND;
 
     if (status === CACHE_STATUS.FOUND && translation) {
         cache[cacheKey] = createPermanentCacheEntry(CACHE_STATUS.FOUND, translation);
+    } else if (status === CACHE_STATUS.PARTIAL_FOUND && translation) {
+        cache[cacheKey] = createCacheEntry(CACHE_STATUS.PARTIAL_FOUND, translation);
     } else {
         cache[cacheKey] = createCacheEntry(CACHE_STATUS.NOT_FOUND, translation);
     }

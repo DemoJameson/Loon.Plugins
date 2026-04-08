@@ -1,10 +1,12 @@
 const CACHE_STATUS = {
   FOUND: 1,
-  NOT_FOUND: 2,
+  PARTIAL_FOUND: 2,
+  NOT_FOUND: 3,
 };
 
 const CACHE_CONTROL = "public, max-age=0, s-maxage=300, stale-while-revalidate=86400";
-const FOUND_TTL_SECONDS = 90 * 24 * 60 * 60;
+const FOUND_TTL_SECONDS = 365 * 24 * 60 * 60;
+const PARTIAL_FOUND_TTL_SECONDS = 30 * 24 * 60 * 60;
 const NOT_FOUND_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 function parseIds(value) {
@@ -75,7 +77,11 @@ function normalizeEntry(entry) {
     : null;
 
   return {
-    status: entry.status === CACHE_STATUS.FOUND ? CACHE_STATUS.FOUND : CACHE_STATUS.NOT_FOUND,
+    status: entry.status === CACHE_STATUS.FOUND
+      ? CACHE_STATUS.FOUND
+      : entry.status === CACHE_STATUS.PARTIAL_FOUND
+        ? CACHE_STATUS.PARTIAL_FOUND
+        : CACHE_STATUS.NOT_FOUND,
     translation,
   };
 }
@@ -163,7 +169,11 @@ async function writeManyToKv(config, mediaType, entriesById) {
 
   const commands = Object.entries(entriesById).map(([id, rawEntry]) => {
     const entry = normalizeEntry(rawEntry);
-    const ttl = entry.status === CACHE_STATUS.FOUND ? FOUND_TTL_SECONDS : NOT_FOUND_TTL_SECONDS;
+    const ttl = entry.status === CACHE_STATUS.FOUND
+      ? FOUND_TTL_SECONDS
+      : entry.status === CACHE_STATUS.PARTIAL_FOUND
+        ? PARTIAL_FOUND_TTL_SECONDS
+        : NOT_FOUND_TTL_SECONDS;
 
     return [
       "SETEX",

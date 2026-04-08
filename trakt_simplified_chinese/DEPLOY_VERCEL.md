@@ -13,7 +13,6 @@
 ### GET `/api/trakt/translations`
 
 查询参数支持：
-
 - `shows=1,2,3`
 - `movies=11,12,13`
 - `episodes=198225:1:1,198225:1:2,198225:1:3`
@@ -46,16 +45,21 @@
   "episodes": {
     "198225:1:1": {
       "status": 2,
-      "translation": null
+      "translation": {
+        "title": "示例标题",
+        "overview": null,
+        "tagline": null
+      }
     }
   }
 }
 ```
 
 说明：
-
-- `status = 1` 表示命中有效翻译
-- `status = 2` 表示缓存中记录为未命中或翻译存在无效字段
+- `status = 1` 表示 `FOUND`
+- `status = 2` 表示 `PARTIAL_FOUND`
+  - 条件是任意中文地区语言的 `title` 字段有值，但未达到完整命中
+- `status = 3` 表示 `NOT_FOUND`
 - 后端只返回缓存内容，不会主动请求 Trakt
 
 ### POST `/api/trakt/translations`
@@ -80,7 +84,11 @@
   "episodes": {
     "198225:1:1": {
       "status": 2,
-      "translation": null
+      "translation": {
+        "title": "示例标题",
+        "overview": null,
+        "tagline": null
+      }
     }
   }
 }
@@ -137,8 +145,9 @@ POST https://your-project.vercel.app/api/trakt/translations
   - `trakt:translation:shows:{id}`
   - `trakt:translation:movies:{id}`
   - `trakt:translation:episodes:{showId}:{seasonNumber}:{episodeNumber}`
-- 完整有效翻译缓存 90 天
-- 未命中或翻译存在无效字段 7 天
+- `FOUND` 缓存 365 天
+- `PARTIAL_FOUND` 缓存 30 天
+- `NOT_FOUND` 缓存 7 天
 
 ## 说明
 
