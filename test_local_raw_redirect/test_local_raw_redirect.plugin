@@ -1,0 +1,15 @@
+#!name=本地测试GitHub Raw重定向
+#!desc=将raw.githubusercontent.com请求重定向到本地测试服务
+#!icon=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/GitHub.png
+#!homepage=https://github.com/DemoJameson/Loon.Plugins
+#!author=DemoJameson
+
+[Argument]
+localBaseUrl = input, "http://192.168.50.2", tag=本地目标地址, desc=填写本地测试服务根地址，不要带结尾斜杠
+
+[Script]
+# 使用脚本重定向，这样本地地址可以通过参数配置
+http-request ^https:\/\/raw\.githubusercontent\.com\/.*$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/test_local_raw_redirect/test_local_raw_redirect.js, timeout=10, argument=[{localBaseUrl}], tag=Local Raw Redirect
+
+[MITM]
+hostname = raw.githubusercontent.com
