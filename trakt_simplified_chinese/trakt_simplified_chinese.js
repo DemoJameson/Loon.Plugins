@@ -1025,12 +1025,10 @@ async function fetchAndPersistMissing(cache, mediaType, refs, logLabel) {
     });
 }
 
-async function handleMediaList(logLabel, bodyOverride) {
-    const sourceBody = isNonNullish(bodyOverride) ? bodyOverride : body;
+async function processMediaList(logLabel, sourceBody) {
     const arr = JSON.parse(sourceBody);
     if (!Array.isArray(arr) || arr.length === 0) {
-        $done({ body: sourceBody });
-        return;
+        return sourceBody;
     }
 
     const cache = loadCache();
@@ -1046,7 +1044,46 @@ async function handleMediaList(logLabel, bodyOverride) {
     flushBackendWrites();
 
     applyTranslationsToItems(arr, cache);
-    $done({ body: JSON.stringify(arr) });
+    return JSON.stringify(arr);
+}
+
+async function handleMediaList(logLabel, bodyOverride) {
+    const sourceBody = isNonNullish(bodyOverride) ? bodyOverride : body;
+    $done({ body: await processMediaList(logLabel, sourceBody) });
+}
+
+async function handleMir() {
+    const data = JSON.parse(body);
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+        $done({ body: body });
+        return;
+    }
+
+    const firstWatched = data.first_watched;
+    if (!firstWatched || typeof firstWatched !== "object") {
+        $done({ body: body });
+        return;
+    }
+
+    if (!firstWatched.show && !firstWatched.movie && !firstWatched.episode) {
+        $done({ body: body });
+        return;
+    }
+
+    const translated = JSON.parse(await processMediaList("mir", JSON.stringify([firstWatched])));
+    const translatedItem = Array.isArray(translated) ? translated[0] : null;
+    if (!translatedItem || typeof translatedItem !== "object") {
+        $done({ body: body });
+        return;
+    }
+
+    Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
+        if (firstWatched[mediaType] && translatedItem[mediaType]) {
+            firstWatched[mediaType] = translatedItem[mediaType];
+        }
+    });
+
+    $done({ body: JSON.stringify(data) });
 }
 
 async function handleMediaDetail(mediaType) {
@@ -1566,6 +1603,11 @@ async function handleHistoryEpisodeList() {
 
         if (/\/users\/[^\/]+?\/collection\/media(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("collection media");
+            return;
+        }
+
+        if (/\/users\/[^\/]+?\/mir(?:\?|$)/.test(requestUrl)) {
+            await handleMir();
             return;
         }
 
