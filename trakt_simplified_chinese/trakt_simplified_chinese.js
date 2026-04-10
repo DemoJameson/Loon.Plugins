@@ -1203,7 +1203,7 @@ function buildForwardDeeplink(target, context) {
     }
 
     if ((target.mediaType === MEDIA_TYPE.SHOW || target.mediaType === MEDIA_TYPE.EPISODE) && isNonNullish(context.showTmdbId || context.tmdbId)) {
-        return "forward://tmdb?id=" + (context.showTmdbId || context.tmdbId) + "&type=show";
+        return "forward://tmdb?id=" + (context.showTmdbId || context.tmdbId) + "&type=tv";
     }
 
     return "";
