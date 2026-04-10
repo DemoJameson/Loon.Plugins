@@ -22,6 +22,7 @@ const WATCHNOW_DEFAULT_REGION = "hk";
 const WATCHNOW_DEFAULT_CURRENCY = "hkd";
 const WATCHNOW_SOURCE_INFUSE = "infuse";
 const WATCHNOW_SOURCE_FORWARD = "forward";
+const WATCHNOW_SOURCE_EPLAYERX = "eplayerx";
 const MEDIA_CONFIG = {
     [MEDIA_TYPE.SHOW]: {
         buildTranslationPath: function (ref) {
@@ -1209,6 +1210,22 @@ function buildForwardDeeplink(target, context) {
     return "";
 }
 
+function buildEplayerXDeeplink(target, context) {
+    if (!target || !context) {
+        return "";
+    }
+
+    if (target.mediaType === MEDIA_TYPE.MOVIE && isNonNullish(context.tmdbId)) {
+        return "eplayerx://tmdb-info/detail?id=" + context.tmdbId + "&type=movie";
+    }
+
+    if ((target.mediaType === MEDIA_TYPE.SHOW || target.mediaType === MEDIA_TYPE.EPISODE) && isNonNullish(context.showTmdbId || context.tmdbId)) {
+        return "eplayerx://tmdb-info/detail?id=" + (context.showTmdbId || context.tmdbId) + "&type=tv";
+    }
+
+    return "";
+}
+
 function createWatchnowLinkEntry(source, link) {
     return {
         source: source,
@@ -1223,63 +1240,56 @@ function createWatchnowLinkEntry(source, link) {
     };
 }
 
-function createInfuseSourceDefinition() {
+function createSourceDefinition(source, name, color) {
     return {
-        source: WATCHNOW_SOURCE_INFUSE,
-        name: "Infuse",
+        source: source,
+        name: name,
         free: true,
         cinema: false,
         amazon: false,
         link_count: 99999,
-        color: "#e74c3c",
+        color: color,
         images: {
-            logo: backendBaseUrl + "/trakt_simplified_chinese/images/infuse.webp",
+            logo: "raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/" + source + ".webp",
             logo_colorized: null,
             channel: null
         }
     };
 }
 
-function createForwardSourceDefinition() {
-    return {
-        source: WATCHNOW_SOURCE_FORWARD,
-        name: "Forward",
-        free: true,
-        cinema: false,
-        amazon: false,
-        link_count: 99999,
-        color: "#000000",
-        images: {
-            logo: backendBaseUrl + "/trakt_simplified_chinese/images/forward.webp",
-            logo_colorized: null,
-            channel: null
-        }
-    };
+function buildWatchnowFavoriteSource(source) {
+    return WATCHNOW_DEFAULT_REGION + "-" + source;
 }
 
 function injectWatchnowFavoriteSources(items) {
     const favorites = ensureArray(items).slice();
     const filtered = favorites.filter((item) => {
         const normalized = String(item || "").toLowerCase();
-        return normalized !== "hk-infuse" && normalized !== "hk-forward";
+        return normalized !== buildWatchnowFavoriteSource(WATCHNOW_SOURCE_INFUSE) &&
+            normalized !== buildWatchnowFavoriteSource(WATCHNOW_SOURCE_FORWARD) &&
+            normalized !== buildWatchnowFavoriteSource(WATCHNOW_SOURCE_EPLAYERX);
     });
 
-    filtered.unshift("hk-forward");
-    filtered.unshift("hk-infuse");
+    filtered.unshift(buildWatchnowFavoriteSource(WATCHNOW_SOURCE_EPLAYERX));
+    filtered.unshift(buildWatchnowFavoriteSource(WATCHNOW_SOURCE_FORWARD));
+    filtered.unshift(buildWatchnowFavoriteSource(WATCHNOW_SOURCE_INFUSE));
     return filtered;
 }
 
 function filterOutCustomSources(items) {
     return ensureArray(items).filter((item) => {
         const source = item && item.source ? String(item.source).toLowerCase() : "";
-        return source !== WATCHNOW_SOURCE_INFUSE && source !== WATCHNOW_SOURCE_FORWARD;
+        return source !== WATCHNOW_SOURCE_INFUSE &&
+            source !== WATCHNOW_SOURCE_FORWARD &&
+            source !== WATCHNOW_SOURCE_EPLAYERX;
     });
 }
 
 function injectCustomSourcesIntoList(items) {
     return [
-        createInfuseSourceDefinition(),
-        createForwardSourceDefinition()
+        createSourceDefinition(WATCHNOW_SOURCE_INFUSE, "Infuse", "#ff8000"),
+        createSourceDefinition(WATCHNOW_SOURCE_FORWARD, "Forward", "#000000"),
+        createSourceDefinition(WATCHNOW_SOURCE_EPLAYERX, "EplayerX", "#33c1c0")
     ].concat(filterOutCustomSources(items));
 }
 
@@ -1418,6 +1428,7 @@ function buildCustomWatchnowEntries(target, context) {
     const entries = [];
     const infuseDeeplink = buildInfuseDeeplink(target, context);
     const forwardDeeplink = buildForwardDeeplink(target, context);
+    const eplayerXDeeplink = buildEplayerXDeeplink(target, context);
 
     if (infuseDeeplink) {
         entries.push(createWatchnowLinkEntry(WATCHNOW_SOURCE_INFUSE, buildWatchnowRedirectLink(infuseDeeplink)));
@@ -1425,6 +1436,10 @@ function buildCustomWatchnowEntries(target, context) {
 
     if (forwardDeeplink) {
         entries.push(createWatchnowLinkEntry(WATCHNOW_SOURCE_FORWARD, buildWatchnowRedirectLink(forwardDeeplink)));
+    }
+
+    if (eplayerXDeeplink) {
+        entries.push(createWatchnowLinkEntry(WATCHNOW_SOURCE_EPLAYERX, buildWatchnowRedirectLink(eplayerXDeeplink)));
     }
 
     return entries;
