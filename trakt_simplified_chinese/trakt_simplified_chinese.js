@@ -1,6 +1,7 @@
 const CACHE_KEY = "trakt_zh_cn_cache_v2";
 const CURRENT_SEASON_CACHE_KEY = "trakt_current_season";
 const HISTORY_EPISODE_CACHE_KEY = "trakt_history_episode_cache";
+const LINK_IDS_CACHE_KEY = "trakt_watchnow_ids_cache";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTIAL_FOUND_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;
@@ -17,6 +18,10 @@ const MEDIA_TYPE = {
     EPISODE: "episode"
 };
 const HISTORY_EPISODES_LIMIT = 1000;
+const WATCHNOW_DEFAULT_REGION = "hk";
+const WATCHNOW_DEFAULT_CURRENCY = "hkd";
+const WATCHNOW_SOURCE_INFUSE = "infuse";
+const WATCHNOW_SOURCE_FORWARD = "forward";
 const MEDIA_CONFIG = {
     [MEDIA_TYPE.SHOW]: {
         buildTranslationPath: function (ref) {
@@ -139,7 +144,7 @@ function loadCache() {
 
     try {
         const parsed = JSON.parse(raw);
-        const cache = parsed && typeof parsed === "object" ? parsed : {};
+        const cache = ensureObject(parsed);
         const prunedCache = pruneExpiredCacheEntries(cache);
 
         if (prunedCache.modified) {
@@ -177,7 +182,7 @@ function loadHistoryEpisodeCache() {
 
     try {
         const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === "object" ? parsed : {};
+        return ensureObject(parsed);
     } catch (e) {
         console.log("Trakt history episode cache load failed: " + e);
         return {};
@@ -196,11 +201,42 @@ function saveHistoryEpisodeCache(cache) {
     }
 }
 
+function loadLinkIdsCache() {
+    if (typeof $persistentStore === "undefined") {
+        return {};
+    }
+
+    const raw = $persistentStore.read(LINK_IDS_CACHE_KEY);
+    if (!raw) {
+        return {};
+    }
+
+    try {
+        const parsed = JSON.parse(raw);
+        return ensureObject(parsed);
+    } catch (e) {
+        console.log("Trakt watchnow ids cache load failed: " + e);
+        return {};
+    }
+}
+
+function saveLinkIdsCache(cache) {
+    if (typeof $persistentStore === "undefined") {
+        return;
+    }
+
+    try {
+        $persistentStore.write(JSON.stringify(cache), LINK_IDS_CACHE_KEY);
+    } catch (e) {
+        console.log("Trakt watchnow ids cache save failed: " + e);
+    }
+}
+
 function setCurrentSeason(showId, seasonNumber) {
     if (
         typeof $persistentStore === "undefined" ||
-        !isNonNullish(showId) ||
-        !isNonNullish(seasonNumber)
+        isNullish(showId) ||
+        isNullish(seasonNumber)
     ) {
         return;
     }
@@ -228,7 +264,7 @@ function clearCurrentSeason() {
 }
 
 function getCurrentSeason(showId) {
-    if (typeof $persistentStore === "undefined" || !isNonNullish(showId)) {
+    if (typeof $persistentStore === "undefined" || isNullish(showId)) {
         return 1;
     }
 
@@ -242,8 +278,8 @@ function getCurrentSeason(showId) {
         if (
             !cache ||
             typeof cache !== "object" ||
-            !isNonNullish(cache.showId) ||
-            !isNonNullish(cache.seasonNumber) ||
+            isNullish(cache.showId) ||
+            isNullish(cache.seasonNumber) ||
             String(cache.showId) !== String(showId)
         ) {
             return 1;
@@ -337,8 +373,24 @@ function isEmptyTranslationValue(value) {
     return value === undefined || value === null || value === "";
 }
 
+function isNullish(value) {
+    return value === undefined || value === null;
+}
+
 function isNonNullish(value) {
-    return value !== undefined && value !== null;
+    return !isNullish(value);
+}
+
+function isPlainObject(value) {
+    return !!(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function ensureObject(value, fallbackValue) {
+    return isPlainObject(value) ? value : (isPlainObject(fallbackValue) ? fallbackValue : {});
+}
+
+function ensureArray(value) {
+    return Array.isArray(value) ? value : [];
 }
 
 function getMediaConfig(mediaType) {
@@ -460,7 +512,7 @@ function buildRequestHeaders(extraHeaders, useSourceHeaders) {
 
     headers.Accept = "application/json";
 
-    if (extraHeaders && typeof extraHeaders === "object") {
+    if (isPlainObject(extraHeaders)) {
         Object.keys(extraHeaders).forEach((key) => {
             if (isNonNullish(extraHeaders[key]) && extraHeaders[key] !== "") {
                 headers[key] = extraHeaders[key];
@@ -565,7 +617,7 @@ function extractNormalizedTranslation(items) {
 }
 
 function buildEpisodeCompositeKey(showId, seasonNumber, episodeNumber) {
-    if (!isNonNullish(showId) || !isNonNullish(seasonNumber) || !isNonNullish(episodeNumber)) {
+    if (isNullish(showId) || isNullish(seasonNumber) || isNullish(episodeNumber)) {
         return "";
     }
 
@@ -729,13 +781,7 @@ async function fetchTranslationsFromBackend(cache, refsByType) {
 
     Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
         const collectionField = getMediaBackendField(mediaType);
-        const entries = payload && payload[collectionField] && typeof payload[collectionField] === "object"
-            ? payload[collectionField]
-            : null;
-        if (!entries) {
-            return;
-        }
-
+        const entries = ensureObject(payload && payload[collectionField]);
         Object.keys(entries).forEach((id) => {
             const ref = mediaType === MEDIA_TYPE.EPISODE
                 ? parseEpisodeLookupKey(id)
@@ -906,6 +952,541 @@ function applyTranslation(target, entry) {
     }
 }
 
+function cloneObject(value) {
+    return isPlainObject(value) ? Object.assign({}, value) : null;
+}
+
+function getLinkIdsCacheEntry(cache, traktId) {
+    if (!cache || isNullish(traktId)) {
+        return null;
+    }
+
+    const entry = cache[String(traktId)];
+    return isPlainObject(entry) ? entry : null;
+}
+
+function mergeLinkIdsCacheEntry(currentEntry, nextEntry) {
+    const current = ensureObject(currentEntry);
+    const incoming = ensureObject(nextEntry);
+    const merged = {};
+    const mergedIds = Object.assign({}, ensureObject(current.ids), ensureObject(incoming.ids));
+    const mergedShowIds = Object.assign({}, ensureObject(current.showIds), ensureObject(incoming.showIds));
+
+    if (Object.keys(mergedIds).length > 0) {
+        merged.ids = mergedIds;
+    }
+
+    if (Object.keys(mergedShowIds).length > 0) {
+        merged.showIds = mergedShowIds;
+    }
+
+    if (isNonNullish(incoming.seasonNumber)) {
+        merged.seasonNumber = Number(incoming.seasonNumber);
+    } else if (isNonNullish(current.seasonNumber)) {
+        merged.seasonNumber = Number(current.seasonNumber);
+    }
+
+    if (isNonNullish(incoming.episodeNumber)) {
+        merged.episodeNumber = Number(incoming.episodeNumber);
+    } else if (isNonNullish(current.episodeNumber)) {
+        merged.episodeNumber = Number(current.episodeNumber);
+    }
+
+    return merged;
+}
+
+function setLinkIdsCacheEntry(cache, traktId, entry) {
+    if (!cache || isNullish(traktId) || !isPlainObject(entry)) {
+        return false;
+    }
+
+    const key = String(traktId);
+    const current = getLinkIdsCacheEntry(cache, key);
+    const next = mergeLinkIdsCacheEntry(current, entry);
+    const previousJson = current ? JSON.stringify(current) : "";
+    const nextJson = JSON.stringify(next);
+
+    if (previousJson === nextJson) {
+        return false;
+    }
+
+    cache[key] = next;
+    return true;
+}
+
+function buildFallbackShowIds(showTraktId, linkCache) {
+    if (isNullish(showTraktId)) {
+        return null;
+    }
+
+    const showEntry = getLinkIdsCacheEntry(linkCache, showTraktId);
+    if (showEntry && isPlainObject(showEntry.ids)) {
+        return cloneObject(showEntry.ids);
+    }
+
+    return {
+        trakt: showTraktId
+    };
+}
+
+function cacheMediaIdsFromDetailResponse(linkCache, mediaType, ref, data) {
+    if (!linkCache || !data || typeof data !== "object") {
+        return false;
+    }
+
+    if (mediaType === MEDIA_TYPE.MOVIE || mediaType === MEDIA_TYPE.SHOW) {
+        const traktId = data && data.ids ? data.ids.trakt : null;
+        return setLinkIdsCacheEntry(linkCache, traktId, {
+            ids: cloneObject(data.ids)
+        });
+    }
+
+    if (mediaType === MEDIA_TYPE.EPISODE) {
+        const episodeTraktId = data && data.ids ? data.ids.trakt : null;
+        if (isNullish(episodeTraktId)) {
+            return false;
+        }
+
+        return setLinkIdsCacheEntry(linkCache, episodeTraktId, {
+            ids: cloneObject(data.ids),
+            showIds: buildFallbackShowIds(ref && ref.showId, linkCache),
+            seasonNumber: isNonNullish(data.season) ? data.season : ref && ref.seasonNumber,
+            episodeNumber: isNonNullish(data.number) ? data.number : ref && ref.episodeNumber
+        });
+    }
+
+    return false;
+}
+
+function cacheEpisodeIdsFromSeasonList(linkCache, showId, seasons) {
+    if (!linkCache || !Array.isArray(seasons)) {
+        return false;
+    }
+
+    let changed = false;
+    const showIds = buildFallbackShowIds(showId, linkCache);
+
+    seasons.forEach((season) => {
+        const episodes = season && Array.isArray(season.episodes) ? season.episodes : [];
+        episodes.forEach((episode) => {
+            const episodeTraktId = episode && episode.ids ? episode.ids.trakt : null;
+            if (isNullish(episodeTraktId)) {
+                return;
+            }
+
+            if (setLinkIdsCacheEntry(linkCache, episodeTraktId, {
+                ids: cloneObject(episode.ids),
+                showIds: cloneObject(showIds),
+                seasonNumber: episode ? episode.season : null,
+                episodeNumber: episode ? episode.number : null
+            })) {
+                changed = true;
+            }
+        });
+    });
+
+    return changed;
+}
+
+function buildDetailLookupUrl(mediaType, traktId) {
+    if (isNullish(traktId)) {
+        return "";
+    }
+
+    if (mediaType === MEDIA_TYPE.MOVIE) {
+        return "https://apiz.trakt.tv/movies/" + traktId + "?extended=cloud9,full,watchnow";
+    }
+
+    if (mediaType === MEDIA_TYPE.SHOW) {
+        return "https://apiz.trakt.tv/shows/" + traktId + "?extended=cloud9,full,watchnow";
+    }
+
+    return "";
+}
+
+async function ensureMediaIdsCacheEntry(linkCache, mediaType, traktId) {
+    if (!linkCache || isNullish(traktId)) {
+        return null;
+    }
+
+    let entry = getLinkIdsCacheEntry(linkCache, traktId);
+    if (entry && entry.ids && isNonNullish(entry.ids.tmdb)) {
+        return entry;
+    }
+
+    const lookupUrl = buildDetailLookupUrl(mediaType, traktId);
+    if (!lookupUrl) {
+        return entry;
+    }
+
+    const payload = await fetchJson(lookupUrl);
+    if (isPlainObject(payload)) {
+        setLinkIdsCacheEntry(linkCache, traktId, {
+            ids: cloneObject(payload.ids)
+        });
+        saveLinkIdsCache(linkCache);
+        entry = getLinkIdsCacheEntry(linkCache, traktId);
+    }
+
+    return entry;
+}
+
+async function ensureEpisodeShowIds(linkCache, episodeTraktId, episodeEntry) {
+    if (!linkCache || isNullish(episodeTraktId) || !episodeEntry || !isPlainObject(episodeEntry.showIds)) {
+        return episodeEntry && isPlainObject(episodeEntry.showIds) ? episodeEntry.showIds : null;
+    }
+
+    if (isNonNullish(episodeEntry.showIds.tmdb)) {
+        return episodeEntry.showIds;
+    }
+
+    if (isNullish(episodeEntry.showIds.trakt)) {
+        return episodeEntry.showIds;
+    }
+
+    const showEntry = await ensureMediaIdsCacheEntry(linkCache, MEDIA_TYPE.SHOW, episodeEntry.showIds.trakt);
+    if (!showEntry || !isPlainObject(showEntry.ids)) {
+        return episodeEntry.showIds;
+    }
+
+    setLinkIdsCacheEntry(linkCache, episodeTraktId, {
+        showIds: cloneObject(showEntry.ids)
+    });
+    saveLinkIdsCache(linkCache);
+    return showEntry.ids;
+}
+
+function buildWatchnowRedirectLink(deeplink) {
+    if (!deeplink) {
+        return "";
+    }
+
+    if (!backendBaseUrl) {
+        return deeplink;
+    }
+
+    return backendBaseUrl + "/api/redirect?deeplink=" + encodeURIComponent(deeplink);
+}
+
+function buildInfuseDeeplink(target, context) {
+    if (!target || !context) {
+        return "";
+    }
+
+    if (target.mediaType === MEDIA_TYPE.MOVIE && isNonNullish(context.tmdbId)) {
+        return "infuse://movie/" + context.tmdbId;
+    }
+
+    if (target.mediaType === MEDIA_TYPE.SHOW && isNonNullish(context.tmdbId)) {
+        return "infuse://series/" + context.tmdbId;
+    }
+
+    if (
+        target.mediaType === MEDIA_TYPE.EPISODE &&
+        isNonNullish(context.showTmdbId) &&
+        isNonNullish(context.seasonNumber) &&
+        isNonNullish(context.episodeNumber)
+    ) {
+        return "infuse://series/" + context.showTmdbId + "-" + context.seasonNumber + "-" + context.episodeNumber;
+    }
+
+    return "";
+}
+
+function buildForwardDeeplink(target, context) {
+    if (!target || !context) {
+        return "";
+    }
+
+    if (target.mediaType === MEDIA_TYPE.MOVIE && isNonNullish(context.tmdbId)) {
+        return "forward://tmdb?id=" + context.tmdbId + "&type=movie";
+    }
+
+    if ((target.mediaType === MEDIA_TYPE.SHOW || target.mediaType === MEDIA_TYPE.EPISODE) && isNonNullish(context.showTmdbId || context.tmdbId)) {
+        return "forward://tmdb?id=" + (context.showTmdbId || context.tmdbId) + "&type=show";
+    }
+
+    return "";
+}
+
+function createWatchnowLinkEntry(source, link) {
+    return {
+        source: source,
+        link: link,
+        uhd: false,
+        curreny: WATCHNOW_DEFAULT_CURRENCY,
+        currency: WATCHNOW_DEFAULT_CURRENCY,
+        prices: {
+            rent: null,
+            purchase: null
+        }
+    };
+}
+
+function createInfuseSourceDefinition() {
+    return {
+        source: WATCHNOW_SOURCE_INFUSE,
+        name: "Infuse",
+        free: true,
+        cinema: false,
+        amazon: false,
+        link_count: 99999,
+        color: "#e74c3c",
+        images: {
+            logo: backendBaseUrl + "/trakt_simplified_chinese/images/infuse.webp",
+            logo_colorized: null,
+            channel: null
+        }
+    };
+}
+
+function createForwardSourceDefinition() {
+    return {
+        source: WATCHNOW_SOURCE_FORWARD,
+        name: "Forward",
+        free: true,
+        cinema: false,
+        amazon: false,
+        link_count: 99999,
+        color: "#000000",
+        images: {
+            logo: backendBaseUrl + "/trakt_simplified_chinese/images/forward.webp",
+            logo_colorized: null,
+            channel: null
+        }
+    };
+}
+
+function injectWatchnowFavoriteSources(items) {
+    const favorites = ensureArray(items).slice();
+    const filtered = favorites.filter((item) => {
+        const normalized = String(item || "").toLowerCase();
+        return normalized !== "hk-infuse" && normalized !== "hk-forward";
+    });
+
+    filtered.unshift("hk-forward");
+    filtered.unshift("hk-infuse");
+    return filtered;
+}
+
+function filterOutCustomSources(items) {
+    return ensureArray(items).filter((item) => {
+        const source = item && item.source ? String(item.source).toLowerCase() : "";
+        return source !== WATCHNOW_SOURCE_INFUSE && source !== WATCHNOW_SOURCE_FORWARD;
+    });
+}
+
+function injectCustomSourcesIntoList(items) {
+    return [
+        createInfuseSourceDefinition(),
+        createForwardSourceDefinition()
+    ].concat(filterOutCustomSources(items));
+}
+
+function ensureWatchnowSourcesDefaultRegion(payload) {
+    if (!Array.isArray(payload)) {
+        return payload;
+    }
+
+    const hasDefaultRegion = payload.some((item) => {
+        return isPlainObject(item) && Array.isArray(item[WATCHNOW_DEFAULT_REGION]);
+    });
+
+    if (!hasDefaultRegion) {
+        payload.push({
+            [WATCHNOW_DEFAULT_REGION]: []
+        });
+    }
+
+    return payload;
+}
+
+function injectCustomSourcesIntoPayload(payload) {
+    payload = ensureWatchnowSourcesDefaultRegion(payload);
+
+    if (Array.isArray(payload)) {
+        payload.forEach((item) => {
+            if (!isPlainObject(item)) {
+                return;
+            }
+
+            Object.keys(item).forEach((regionCode) => {
+                if (!Array.isArray(item[regionCode])) {
+                    return;
+                }
+
+                item[regionCode] = injectCustomSourcesIntoList(item[regionCode]);
+            });
+        });
+
+        return payload;
+    }
+
+    if (!isPlainObject(payload)) {
+        return payload;
+    }
+
+    Object.keys(payload).forEach((regionCode) => {
+        if (!Array.isArray(payload[regionCode])) {
+            return;
+        }
+
+        payload[regionCode] = injectCustomSourcesIntoList(payload[regionCode]);
+    });
+
+    return payload;
+}
+
+function resolveWatchnowTarget(url) {
+    const normalizedUrl = String(url || "");
+    let match = normalizedUrl.match(/\/movies\/(\d+)\/watchnow(?:\?|$)/);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.MOVIE,
+            traktId: match[1]
+        };
+    }
+
+    match = normalizedUrl.match(/\/shows\/(\d+)\/watchnow(?:\?|$)/);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.SHOW,
+            traktId: match[1]
+        };
+    }
+
+    match = normalizedUrl.match(/\/episodes\/(\d+)\/watchnow(?:\?|$)/);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.EPISODE,
+            traktId: match[1]
+        };
+    }
+
+    return null;
+}
+
+async function resolveWatchnowContext(target, linkCache) {
+    if (!target || !linkCache) {
+        return null;
+    }
+
+    if (target.mediaType === MEDIA_TYPE.MOVIE) {
+        const movieEntry = await ensureMediaIdsCacheEntry(linkCache, MEDIA_TYPE.MOVIE, target.traktId);
+        return movieEntry && movieEntry.ids && isNonNullish(movieEntry.ids.tmdb)
+            ? {
+                tmdbId: movieEntry.ids.tmdb
+            }
+            : null;
+    }
+
+    if (target.mediaType === MEDIA_TYPE.SHOW) {
+        const showEntry = await ensureMediaIdsCacheEntry(linkCache, MEDIA_TYPE.SHOW, target.traktId);
+        return showEntry && showEntry.ids && isNonNullish(showEntry.ids.tmdb)
+            ? {
+                tmdbId: showEntry.ids.tmdb,
+                showTmdbId: showEntry.ids.tmdb
+            }
+            : null;
+    }
+
+    if (target.mediaType === MEDIA_TYPE.EPISODE) {
+        const episodeEntry = getLinkIdsCacheEntry(linkCache, target.traktId);
+        if (!episodeEntry) {
+            return null;
+        }
+
+        const showIds = await ensureEpisodeShowIds(linkCache, target.traktId, episodeEntry);
+        return isPlainObject(showIds) && isNonNullish(showIds.tmdb)
+            ? {
+                tmdbId: episodeEntry.ids && episodeEntry.ids.tmdb,
+                showTmdbId: showIds.tmdb,
+                seasonNumber: episodeEntry.seasonNumber,
+                episodeNumber: episodeEntry.episodeNumber
+            }
+            : null;
+    }
+
+    return null;
+}
+
+function buildCustomWatchnowEntries(target, context) {
+    if (!target || !context) {
+        return [];
+    }
+
+    const entries = [];
+    const infuseDeeplink = buildInfuseDeeplink(target, context);
+    const forwardDeeplink = buildForwardDeeplink(target, context);
+
+    if (infuseDeeplink) {
+        entries.push(createWatchnowLinkEntry(WATCHNOW_SOURCE_INFUSE, buildWatchnowRedirectLink(infuseDeeplink)));
+    }
+
+    if (forwardDeeplink) {
+        entries.push(createWatchnowLinkEntry(WATCHNOW_SOURCE_FORWARD, buildWatchnowRedirectLink(forwardDeeplink)));
+    }
+
+    return entries;
+}
+
+function injectCustomWatchnowEntriesIntoRegion(regionData, customEntries) {
+    const nextRegion = ensureObject(regionData);
+    const currentFree = ensureArray(nextRegion.free);
+    nextRegion.free = customEntries.concat(filterOutCustomSources(currentFree));
+    return nextRegion;
+}
+
+function ensureWatchnowDefaultRegion(payload) {
+    if (!isPlainObject(payload)) {
+        return payload;
+    }
+
+    if (!isPlainObject(payload[WATCHNOW_DEFAULT_REGION])) {
+        payload[WATCHNOW_DEFAULT_REGION] = {};
+    }
+
+    return payload;
+}
+
+function injectCustomWatchnowEntriesIntoPayload(payload, customEntries) {
+    if (!Array.isArray(customEntries) || customEntries.length === 0) {
+        return payload;
+    }
+
+    payload = ensureWatchnowDefaultRegion(payload);
+
+    if (!isPlainObject(payload)) {
+        return payload;
+    }
+
+    Object.keys(payload).forEach((regionCode) => {
+        payload[regionCode] = injectCustomWatchnowEntriesIntoRegion(payload[regionCode], customEntries);
+    });
+
+    return payload;
+}
+
+function handleWatchnowSources() {
+    const payload = JSON.parse(body);
+    $done({ body: JSON.stringify(injectCustomSourcesIntoPayload(payload)) });
+}
+
+async function handleWatchnow() {
+    const payload = JSON.parse(body);
+    const target = resolveWatchnowTarget(requestUrl);
+
+    if (!target) {
+        $done({ body: body });
+        return;
+    }
+
+    const linkCache = loadLinkIdsCache();
+    const context = await resolveWatchnowContext(target, linkCache);
+    const customEntries = buildCustomWatchnowEntries(target, context);
+    $done({ body: JSON.stringify(injectCustomWatchnowEntriesIntoPayload(payload, customEntries)) });
+}
+
 function createMediaCollection() {
     const collection = {};
     Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
@@ -954,7 +1535,7 @@ function buildMediaRef(item, mediaType) {
 
     const target = getItemMediaTarget(item, mediaType);
     const traktId = target && target.ids ? target.ids.trakt : null;
-    if (!isNonNullish(traktId)) {
+    if (isNullish(traktId)) {
         return null;
     }
 
@@ -971,7 +1552,7 @@ function buildEpisodeRef(item, episode) {
     const seasonNumber = episode ? episode.season : null;
     const episodeNumber = episode ? episode.number : null;
 
-    if (!isNonNullish(showId) || !isNonNullish(seasonNumber) || !isNonNullish(episodeNumber)) {
+    if (isNullish(showId) || isNullish(seasonNumber) || isNullish(episodeNumber)) {
         return null;
     }
 
@@ -1108,6 +1689,11 @@ async function handleMediaDetail(mediaType) {
         return;
     }
 
+    const linkCache = loadLinkIdsCache();
+    if (cacheMediaIdsFromDetailResponse(linkCache, mediaType, ref, data)) {
+        saveLinkIdsCache(linkCache);
+    }
+
     const cache = loadCache();
     applyTranslation(data, getCachedTranslation(cache, mediaType, ref));
     $done({ body: JSON.stringify(data) });
@@ -1151,15 +1737,17 @@ function handleUserSettings() {
         return;
     }
 
-    if (!data.user || typeof data.user !== "object") {
-        data.user = {};
-    }
+    data.user = ensureObject(data.user);
     data.user.vip = true;
 
-    if (!data.account || typeof data.account !== "object") {
-        data.account = {};
-    }
+    data.account = ensureObject(data.account);
     data.account.display_ads = false;
+
+    data.browsing = ensureObject(data.browsing);
+
+    data.browsing.watchnow = ensureObject(data.browsing.watchnow);
+
+    data.browsing.watchnow.favorites = injectWatchnowFavoriteSources(data.browsing.watchnow.favorites);
 
     $done({ body: JSON.stringify(data) });
 }
@@ -1182,6 +1770,11 @@ async function handleSeasonEpisodesList() {
         if (!target || !Array.isArray(seasons) || seasons.length === 0) {
             $done({ body: body });
             return;
+        }
+
+        const linkCache = loadLinkIdsCache();
+        if (cacheEpisodeIdsFromSeasonList(linkCache, target.showId, seasons)) {
+            saveLinkIdsCache(linkCache);
         }
 
         const currentSeasonNumber = getCurrentSeason(target.showId);
@@ -1433,10 +2026,8 @@ function filterHistoryEpisodesAcrossPages(arr, url) {
         delete cache[bucketKey];
     }
 
-    const bucket = cache[bucketKey] && typeof cache[bucketKey] === "object"
-        ? cache[bucketKey]
-        : { shows: {} };
-    const cachedShows = bucket.shows && typeof bucket.shows === "object" ? bucket.shows : {};
+    const bucket = ensureObject(cache[bucketKey], { shows: {} });
+    const cachedShows = ensureObject(bucket.shows);
 
     const filtered = arr.filter((item) => {
         const showKey = getHistoryEpisodeShowKey(item);
@@ -1672,6 +2263,16 @@ async function handleHistoryEpisodeList() {
 
         if (/\/users\/me\/watchlist\/movies(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("watchlist movie");
+            return;
+        }
+
+        if (/\/watchnow\/sources(?:\?|$)/.test(requestUrl)) {
+            handleWatchnowSources();
+            return;
+        }
+
+        if (/\/(?:movies|shows|episodes)\/\d+\/watchnow(?:\?.*)?$/.test(requestUrl)) {
+            await handleWatchnow();
             return;
         }
 

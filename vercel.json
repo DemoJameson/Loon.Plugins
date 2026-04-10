@@ -1,5 +1,8 @@
 {
   "functions": {
+    "api/redirect.js": {
+      "maxDuration": 10
+    },
     "api/trakt/translations.js": {
       "maxDuration": 30
     }
