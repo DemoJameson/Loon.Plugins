@@ -5,7 +5,6 @@ const CACHE_STATUS = {
 };
 
 const CACHE_CONTROL = "public, max-age=0, s-maxage=300, stale-while-revalidate=86400";
-const FOUND_TTL_SECONDS = 365 * 24 * 60 * 60;
 const PARTIAL_FOUND_TTL_SECONDS = 30 * 24 * 60 * 60;
 const NOT_FOUND_TTL_SECONDS = 7 * 24 * 60 * 60;
 
@@ -169,11 +168,17 @@ async function writeManyToKv(config, mediaType, entriesById) {
 
   const commands = Object.entries(entriesById).map(([id, rawEntry]) => {
     const entry = normalizeEntry(rawEntry);
-    const ttl = entry.status === CACHE_STATUS.FOUND
-      ? FOUND_TTL_SECONDS
-      : entry.status === CACHE_STATUS.PARTIAL_FOUND
-        ? PARTIAL_FOUND_TTL_SECONDS
-        : NOT_FOUND_TTL_SECONDS;
+    if (entry.status === CACHE_STATUS.FOUND) {
+      return [
+        "SET",
+        buildCacheKey(mediaType, id),
+        JSON.stringify(entry),
+      ];
+    }
+
+    const ttl = entry.status === CACHE_STATUS.PARTIAL_FOUND
+      ? PARTIAL_FOUND_TTL_SECONDS
+      : NOT_FOUND_TTL_SECONDS;
 
     return [
       "SETEX",

@@ -145,7 +145,7 @@ POST https://your-project.vercel.app/api/trakt/translations
   - `trakt:translation:shows:{id}`
   - `trakt:translation:movies:{id}`
   - `trakt:translation:episodes:{showId}:{seasonNumber}:{episodeNumber}`
-- `FOUND` 缓存 365 天
+- `FOUND` 永不过期
 - `PARTIAL_FOUND` 缓存 30 天
 - `NOT_FOUND` 缓存 7 天
 
