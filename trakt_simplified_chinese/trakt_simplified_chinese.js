@@ -1,6 +1,6 @@
 const CACHE_KEY = "trakt_zh_cn_cache_v2";
-const CURRENT_SEASON_CACHE_KEY = "trakt_current_season_v1";
-const HISTORY_EPISODE_CACHE_KEY = "trakt_history_episode_cache_v1";
+const CURRENT_SEASON_CACHE_KEY = "trakt_current_season";
+const HISTORY_EPISODE_CACHE_KEY = "trakt_history_episode_cache";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTIAL_FOUND_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;

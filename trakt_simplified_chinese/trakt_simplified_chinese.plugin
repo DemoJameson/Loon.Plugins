@@ -10,6 +10,8 @@ latestHistoryEpisodeOnly = switch, "true", tag=历史剧集类别只展示最新
 backendBaseUrl = input, "https://loon-plugins.demojameson.de5.net", tag=翻译缓存API, desc=填写你部署的 Vercel 项目 URL
 
 [Script]
+# 手动清理本地缓存脚本
+cron "0 0 1 1 1" script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese_clear_cache.js, timeout=10, enable=false, tag=手动清理本地缓存脚本
 # 拦截 users/settings，修改 VIP 和广告显示状态
 http-response ^https:\/\/apiz\.trakt\.tv\/users\/settings(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=10, argument=[{backendBaseUrl}], tag=Trakt User Settings
 # 拦截 translations/zh 接口，按 zh-CN 优先级排序
