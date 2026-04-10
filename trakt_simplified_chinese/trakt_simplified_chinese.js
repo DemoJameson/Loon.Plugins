@@ -5,6 +5,7 @@ const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTIAL_FOUND_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;
 const SEASON_EPISODE_TRANSLATION_LIMIT = 50;
+const BACKEND_FETCH_MIN_REFS = 3;
 const CACHE_STATUS = {
     FOUND: 1,
     PARTIAL_FOUND: 2,
@@ -700,6 +701,14 @@ function getBackendFieldIds(refs) {
 async function fetchTranslationsFromBackend(cache, refsByType) {
     if (!backendBaseUrl) {
         return false;
+    }
+
+    const totalRefs = Object.keys(MEDIA_CONFIG).reduce((count, mediaType) => {
+        const refs = refsByType && Array.isArray(refsByType[mediaType]) ? refsByType[mediaType] : [];
+        return count + refs.length;
+    }, 0);
+    if (totalRefs < BACKEND_FETCH_MIN_REFS) {
+        return true;
     }
 
     const query = [];
