@@ -400,7 +400,7 @@ function normalizeTranslations(items) {
         items = [];
     }
 
-    const fallbackRegions = ["sg", "hk", "tw"];
+    const fallbackRegions = ["sg", "tw", "hk"];
     const fields = ["title", "overview", "tagline"];
     const requiredFoundFields = ["title", "overview"];
     let cnTranslation = findTranslationByRegion(items, "cn");
