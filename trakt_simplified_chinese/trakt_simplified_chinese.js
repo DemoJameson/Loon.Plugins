@@ -131,6 +131,7 @@ const body = typeof $response !== "undefined" && typeof $response.body === "stri
     ? $response.body
     : "";
 const requestUrl = ($request && $request.url) ? $request.url : "";
+const traktApiBaseUrl = resolveTraktApiBaseUrl(requestUrl);
 
 const pendingBackendWrites = createMediaMap();
 
@@ -148,6 +149,12 @@ function loadCache() {
         $.log("Trakt cache load failed: " + e);
         return {};
     }
+}
+
+function resolveTraktApiBaseUrl(url) {
+    const normalizedUrl = String(url || "");
+    const match = normalizedUrl.match(/^https:\/\/(apiz?\.trakt\.tv)(?:\/|$)/i);
+    return match ? "https://" + match[1] : "https://api.trakt.tv";
 }
 
 function saveCache(cache) {
@@ -767,7 +774,7 @@ function flushBackendWrites() {
 
 function buildTranslationUrl(mediaType, ref) {
     const path = getMediaConfig(mediaType).buildTranslationPath(ref);
-    return path ? "https://apiz.trakt.tv" + path : "";
+    return path ? traktApiBaseUrl + path : "";
 }
 
 function resolveTranslationRequestTarget(url) {
@@ -1027,11 +1034,11 @@ function buildDetailLookupUrl(mediaType, traktId) {
     }
 
     if (mediaType === MEDIA_TYPE.MOVIE) {
-        return "https://apiz.trakt.tv/movies/" + traktId + "?extended=cloud9,full,watchnow";
+        return traktApiBaseUrl + "/movies/" + traktId + "?extended=cloud9,full,watchnow";
     }
 
     if (mediaType === MEDIA_TYPE.SHOW) {
-        return "https://apiz.trakt.tv/shows/" + traktId + "?extended=cloud9,full,watchnow";
+        return traktApiBaseUrl + "/shows/" + traktId + "?extended=cloud9,full,watchnow";
     }
 
     return "";
@@ -2140,6 +2147,11 @@ async function handleHistoryEpisodeList() {
 
         if (/\/users\/[^\/]+?\/history\/movies\/?(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("history movie");
+            return;
+        }
+
+        if (/\/sync\/history\/?(?:\?|$)/.test(requestUrl)) {
+            await handleMediaList("sync history");
             return;
         }
 
