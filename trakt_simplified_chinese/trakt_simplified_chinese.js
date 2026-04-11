@@ -1,3 +1,4 @@
+const $ = new Env("优化Trakt简体中文体验");
 const CACHE_KEY = "trakt_zh_cn_cache_v2";
 const CURRENT_SEASON_CACHE_KEY = "trakt_current_season";
 const HISTORY_EPISODE_CACHE_KEY = "trakt_history_episode_cache";
@@ -134,18 +135,8 @@ const requestUrl = ($request && $request.url) ? $request.url : "";
 const pendingBackendWrites = createMediaMap();
 
 function loadCache() {
-    if (typeof $persistentStore === "undefined") {
-        return {};
-    }
-
-    const raw = $persistentStore.read(CACHE_KEY);
-    if (!raw) {
-        return {};
-    }
-
     try {
-        const parsed = JSON.parse(raw);
-        const cache = ensureObject(parsed);
+        const cache = ensureObject($.getjson(CACHE_KEY, {}));
         const prunedCache = pruneExpiredCacheEntries(cache);
 
         if (prunedCache.modified) {
@@ -154,128 +145,83 @@ function loadCache() {
 
         return prunedCache.cache;
     } catch (e) {
-        console.log("Trakt cache load failed: " + e);
+        $.log("Trakt cache load failed: " + e);
         return {};
     }
 }
 
 function saveCache(cache) {
-    if (typeof $persistentStore === "undefined") {
-        return;
-    }
-
     try {
-        $persistentStore.write(JSON.stringify(cache), CACHE_KEY);
+        $.setjson(cache, CACHE_KEY);
     } catch (e) {
-        console.log("Trakt cache save failed: " + e);
+        $.log("Trakt cache save failed: " + e);
     }
 }
 
 function loadHistoryEpisodeCache() {
-    if (typeof $persistentStore === "undefined") {
-        return {};
-    }
-
-    const raw = $persistentStore.read(HISTORY_EPISODE_CACHE_KEY);
-    if (!raw) {
-        return {};
-    }
-
     try {
-        const parsed = JSON.parse(raw);
-        return ensureObject(parsed);
+        return ensureObject($.getjson(HISTORY_EPISODE_CACHE_KEY, {}));
     } catch (e) {
-        console.log("Trakt history episode cache load failed: " + e);
+        $.log("Trakt history episode cache load failed: " + e);
         return {};
     }
 }
 
 function saveHistoryEpisodeCache(cache) {
-    if (typeof $persistentStore === "undefined") {
-        return;
-    }
-
     try {
-        $persistentStore.write(JSON.stringify(cache), HISTORY_EPISODE_CACHE_KEY);
+        $.setjson(cache, HISTORY_EPISODE_CACHE_KEY);
     } catch (e) {
-        console.log("Trakt history episode cache save failed: " + e);
+        $.log("Trakt history episode cache save failed: " + e);
     }
 }
 
 function loadLinkIdsCache() {
-    if (typeof $persistentStore === "undefined") {
-        return {};
-    }
-
-    const raw = $persistentStore.read(LINK_IDS_CACHE_KEY);
-    if (!raw) {
-        return {};
-    }
-
     try {
-        const parsed = JSON.parse(raw);
-        return ensureObject(parsed);
+        return ensureObject($.getjson(LINK_IDS_CACHE_KEY, {}));
     } catch (e) {
-        console.log("Trakt watchnow ids cache load failed: " + e);
+        $.log("Trakt watchnow ids cache load failed: " + e);
         return {};
     }
 }
 
 function saveLinkIdsCache(cache) {
-    if (typeof $persistentStore === "undefined") {
-        return;
-    }
-
     try {
-        $persistentStore.write(JSON.stringify(cache), LINK_IDS_CACHE_KEY);
+        $.setjson(cache, LINK_IDS_CACHE_KEY);
     } catch (e) {
-        console.log("Trakt watchnow ids cache save failed: " + e);
+        $.log("Trakt watchnow ids cache save failed: " + e);
     }
 }
 
 function setCurrentSeason(showId, seasonNumber) {
-    if (
-        typeof $persistentStore === "undefined" ||
-        isNullish(showId) ||
-        isNullish(seasonNumber)
-    ) {
+    if (isNullish(showId) || isNullish(seasonNumber)) {
         return;
     }
 
     try {
-        $persistentStore.write(JSON.stringify({
+        $.setjson({
             showId: String(showId),
             seasonNumber: Number(seasonNumber)
-        }), CURRENT_SEASON_CACHE_KEY);
+        }, CURRENT_SEASON_CACHE_KEY);
     } catch (e) {
-        console.log("Trakt current season cache save failed: " + e);
+        $.log("Trakt current season cache save failed: " + e);
     }
 }
 
 function clearCurrentSeason() {
-    if (typeof $persistentStore === "undefined") {
-        return;
-    }
-
     try {
-        $persistentStore.write("", CURRENT_SEASON_CACHE_KEY);
+        $.setdata("", CURRENT_SEASON_CACHE_KEY);
     } catch (e) {
-        console.log("Trakt current season cache save failed: " + e);
+        $.log("Trakt current season cache save failed: " + e);
     }
 }
 
 function getCurrentSeason(showId) {
-    if (typeof $persistentStore === "undefined" || isNullish(showId)) {
-        return 1;
-    }
-
-    const raw = $persistentStore.read(CURRENT_SEASON_CACHE_KEY);
-    if (!raw) {
+    if (isNullish(showId)) {
         return 1;
     }
 
     try {
-        const cache = JSON.parse(raw);
+        const cache = $.getjson(CURRENT_SEASON_CACHE_KEY, null);
         if (
             !cache ||
             typeof cache !== "object" ||
@@ -288,7 +234,7 @@ function getCurrentSeason(showId) {
 
         return Number.isFinite(Number(cache.seasonNumber)) ? Number(cache.seasonNumber) : 1;
     } catch (e) {
-        console.log("Trakt current season cache load failed: " + e);
+        $.log("Trakt current season cache load failed: " + e);
         return 1;
     }
 }
@@ -525,25 +471,20 @@ function buildRequestHeaders(extraHeaders, useSourceHeaders) {
 }
 
 function fetchJson(url, extraHeaders, useSourceHeaders) {
-    return new Promise((resolve, reject) => {
-        $httpClient.get({ url: url, headers: buildRequestHeaders(extraHeaders, useSourceHeaders) }, (error, response, data) => {
-            if (error) {
-                reject(error);
-                return;
-            }
+    return $.http.get({
+        url: url,
+        headers: buildRequestHeaders(extraHeaders, useSourceHeaders)
+    }).then((response) => {
+        const statusCode = response ? (response.statusCode || response.status) : 0;
+        if (statusCode < 200 || statusCode >= 300) {
+            throw new Error("HTTP " + statusCode + " for " + url);
+        }
 
-            const statusCode = response ? response.status : 0;
-            if (statusCode < 200 || statusCode >= 300) {
-                reject("HTTP " + statusCode + " for " + url);
-                return;
-            }
-
-            try {
-                resolve(JSON.parse(data));
-            } catch (e) {
-                reject("JSON parse failed for " + url + ": " + e);
-            }
-        });
+        try {
+            return JSON.parse(response.body);
+        } catch (e) {
+            throw new Error("JSON parse failed for " + url + ": " + e);
+        }
     });
 }
 
@@ -564,34 +505,25 @@ function isScriptInitiatedTranslationRequest() {
 }
 
 function postJson(url, payload, extraHeaders, useSourceHeaders) {
-    return new Promise((resolve, reject) => {
-        $httpClient.post({
-            url: url,
-            headers: buildRequestHeaders(extraHeaders, useSourceHeaders),
-            body: JSON.stringify(payload)
-        }, (error, response, data) => {
-            if (error) {
-                reject(error);
-                return;
-            }
+    return $.http.post({
+        url: url,
+        headers: buildRequestHeaders(extraHeaders, useSourceHeaders),
+        body: JSON.stringify(payload)
+    }).then((response) => {
+        const statusCode = response ? (response.statusCode || response.status) : 0;
+        if (statusCode < 200 || statusCode >= 300) {
+            throw new Error("HTTP " + statusCode + " for " + url);
+        }
 
-            const statusCode = response ? response.status : 0;
-            if (statusCode < 200 || statusCode >= 300) {
-                reject("HTTP " + statusCode + " for " + url);
-                return;
-            }
+        if (!response.body) {
+            return {};
+        }
 
-            if (!data) {
-                resolve({});
-                return;
-            }
-
-            try {
-                resolve(JSON.parse(data));
-            } catch (e) {
-                reject("JSON parse failed for " + url + ": " + e);
-            }
-        });
+        try {
+            return JSON.parse(response.body);
+        } catch (e) {
+            throw new Error("JSON parse failed for " + url + ": " + e);
+        }
     });
 }
 
@@ -825,7 +757,7 @@ function flushBackendWrites() {
     postJson(url, buildBackendWritePayload(), {
         "Content-Type": "application/json"
     }, false).catch(e => {
-        console.log("Trakt backend cache write failed during flush: " + e);
+        $.log("Trakt backend cache write failed during flush: " + e);
     });
 
     Object.keys(pendingBackendWrites).forEach((field) => {
@@ -1614,7 +1546,7 @@ async function hydrateFromBackend(cache, refsByType) {
         });
         await fetchTranslationsFromBackend(cache, missingRefsByType);
     } catch (e) {
-        console.log("Trakt backend cache read failed: " + e);
+        $.log("Trakt backend cache read failed: " + e);
     }
 }
 
@@ -1625,7 +1557,7 @@ async function fetchAndPersistMissing(cache, mediaType, refs, logLabel) {
             storeTranslationEntry(cache, mediaType, ref, merged);
             queueBackendWrite(mediaType, ref, merged);
         } catch (e) {
-            console.log("Trakt " + logLabel + " translation fetch failed for key=" + buildMediaCacheLookupKey(mediaType, ref) + ": " + e);
+            $.log("Trakt " + logLabel + " translation fetch failed for key=" + buildMediaCacheLookupKey(mediaType, ref) + ": " + e);
         }
     });
 }
@@ -2138,7 +2070,7 @@ async function getProcessedHistoryEpisodesBody() {
         const data = keepLatestHistoryEpisodes(JSON.parse(body));
         return JSON.stringify(filterHistoryEpisodesAcrossPages(data, requestUrl));
     } catch (e) {
-        console.log("Trakt history episode local merge failed: " + e);
+        $.log("Trakt history episode local merge failed: " + e);
         return body;
     }
 }
@@ -2318,7 +2250,7 @@ async function handleHistoryEpisodeList() {
 
         $done({ body: body });
     } catch (e) {
-        console.log("Trakt script error: " + e);
+        $.log("Trakt script error: " + e);
         $done({});
     }
 })();

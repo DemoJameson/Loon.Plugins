@@ -1,5 +1,5 @@
 #!name=优化Trakt简体中文体验
-#!desc=首页翻译为中文，详情页优先使用简体中文
+#!desc=翻译Trakt App首页和各种列表，并且优先使用简体中文；历史页面剧集类别只展示最新的一集，方便查看看过什么电视剧；影片详情页面添加EplayerX、Forward、Infuse的跳转按钮
 #!icon=https://app.trakt.tv/pwa/android/icon_192.png
 #!homepage=https://github.com/DemoJameson/Loon.Plugins
 #!openUrl=https://apps.apple.com/app/id1514873602

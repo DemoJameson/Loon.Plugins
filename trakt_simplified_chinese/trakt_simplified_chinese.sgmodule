@@ -1,0 +1,76 @@
+#!name=优化Trakt简体中文体验
+#!desc=翻译Trakt App首页和各种列表，并且优先使用简体中文；历史页面剧集类别只展示最新的一集，方便查看看过什么电视剧；影片详情页面添加EplayerX、Forward、Infuse的跳转按钮
+#!icon=https://app.trakt.tv/pwa/android/icon_192.png
+#!homepage=https://github.com/DemoJameson/Loon.Plugins
+#!author=DemoJameson
+#!arguments=latestHistoryEpisodeOnly:"true", backendBaseUrl:"https://loon-plugins.demojameson.de5.net"
+#!arguments-desc=latestHistoryEpisodeOnly: 是否只保留历史剧集分类中的最新一集，填入 true 或 false。\nbackendBaseUrl: 翻译缓存 API 地址，填入你部署的 Vercel 项目 URL。
+
+[Script]
+# 拦截 users/settings，修改 VIP 和广告显示状态
+Trakt User Settings = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/settings(\?.*)?$, requires-body=1, max-size=0, timeout=10, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 translations/zh 接口，按 zh-CN 优先级排序
+Trakt Translations = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/.+\/translations\/zh(\?.*)?$, requires-body=1, max-size=0, timeout=10, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 up_next_nitro，批量获取简体中文信息
+Trakt Up Next = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/sync\/progress\/up_next_nitro(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 playback/movies，批量获取简体中文信息
+Trakt Playback Movies = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/sync\/playback\/movies(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 watchlist/shows，批量获取简体中文信息
+Trakt Watchlist Shows = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/shows\/released\/desc(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 watchlist/movies，批量获取简体中文信息
+Trakt Watchlist Movies = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/movies\/released\/desc(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 calendars/my/shows，批量获取简体中文信息
+Trakt Calendar Shows = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/calendars\/my\/shows\/\d{4}-\d{2}-\d{2}\/\d+(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 calendars/my/movies，批量获取简体中文信息
+Trakt Calendar Movies = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/calendars\/my\/movies\/\d{4}-\d{2}-\d{2}\/\d+(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 history，批量获取简体中文信息
+Trakt History = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/history\/?(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 history/episodes 请求，放大 limit
+Trakt History Episodes Request = type=http-request, pattern=^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/history\/episodes\/?(\?.*)?$, timeout=10, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 history/episodes 响应，按剧集只保留最新一条
+Trakt History Episodes = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/history\/episodes(?:\/\d+)?\/?(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 history/movies，批量获取简体中文信息
+Trakt History Movies = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/history\/movies\/?(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 collection/media，批量获取简体中文信息
+Trakt Collection Media = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/collection\/media(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 following/activities，批量获取简体中文信息
+Trakt Following Activities = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/me\/following\/activities(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 list/items，批量获取简体中文信息
+Trakt List Items = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/lists\/\d+\/items(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截公共 list/items，批量获取简体中文信息
+Trakt Public List Items = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/lists\/\d+\/items(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 favorites，批量获取简体中文信息
+Trakt Favorites = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/favorites(?:\/(?:shows|movies))?\/?(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 media/trending，批量获取简体中文信息
+Trakt Media Trending = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/media\/trending(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 media/recommendations，批量获取简体中文信息
+Trakt Media Recommendations = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/media\/recommendations(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 media/anticipated，批量获取简体中文信息
+Trakt Media Anticipated = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/media\/anticipated(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 media/popular/next，批量获取简体中文信息
+Trakt Media Popular Next = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/media\/popular\/next(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 watchlist，批量获取简体中文信息
+Trakt Watchlist = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 watchlist/shows，批量获取简体中文信息
+Trakt Watchlist Shows Flat = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/shows(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 watchlist/movies，批量获取简体中文信息
+Trakt Watchlist Movies Flat = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/me\/watchlist\/movies(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截带季号的请求，记录当前浏览季
+Trakt Current Season Request = type=http-request, pattern=^https:\/\/apiz\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+(?:\/.*|\?.*)?$, timeout=10, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截季列表，批量获取简体中文信息
+Trakt Seasons List = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/shows\/[^\/]+\/seasons(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 shows 详情
+Trakt Show Detail = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/shows\/[^\/]+(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 movies 详情
+Trakt Movie Detail = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/movies\/[^\/]+(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 watchnow/sources，注入 Infuse 和 Forward 来源
+Trakt Watchnow Sources = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/watchnow\/sources(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 movie/show/episode watchnow，注入 Infuse 和 Forward 跳转链接
+Trakt Watchnow = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/(?:movies|shows|episodes)\/[^\/]+\/watchnow(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 episodes 详情
+Trakt Episode Detail = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 month in review
+Trakt Month in Review = type=http-response, pattern=^https:\/\/apiz\.trakt\.tv\/users\/[^\/]+?\/mir(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+
+[MITM]
+hostname = %APPEND% apiz.trakt.tv
