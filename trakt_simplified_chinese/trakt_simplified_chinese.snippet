@@ -71,6 +71,8 @@
 ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 month in review
 ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/mir(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 本地重定向 watchnow deeplink
+^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 
 [mitm]
-hostname = apiz.trakt.tv, api.trakt.tv
+hostname = apiz.trakt.tv, api.trakt.tv, loon-plugins.demojameson.de5.net

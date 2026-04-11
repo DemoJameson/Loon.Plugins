@@ -73,6 +73,8 @@ Trakt Watchnow = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/(?:mov
 Trakt Episode Detail = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 month in review
 Trakt Month in Review = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/mir(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 本地重定向 watchnow deeplink
+Trakt Watchnow Redirect = type=http-request, pattern=^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect(\?.*)?$, timeout=10, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 
 [MITM]
-hostname = %APPEND% apiz.trakt.tv, api.trakt.tv
+hostname = %APPEND% apiz.trakt.tv, api.trakt.tv, loon-plugins.demojameson.de5.net

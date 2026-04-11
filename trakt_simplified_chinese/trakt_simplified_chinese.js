@@ -24,6 +24,7 @@ const WATCHNOW_DEFAULT_CURRENCY = "hkd";
 const WATCHNOW_SOURCE_INFUSE = "infuse";
 const WATCHNOW_SOURCE_FORWARD = "forward";
 const WATCHNOW_SOURCE_EPLAYERX = "eplayerx";
+const WATCHNOW_REDIRECT_URL = "https://loon-plugins.demojameson.de5.net/api/redirect";
 const MEDIA_CONFIG = {
     [MEDIA_TYPE.SHOW]: {
         buildTranslationPath: function (ref) {
@@ -1101,11 +1102,25 @@ function buildWatchnowRedirectLink(deeplink) {
         return "";
     }
 
-    if (!backendBaseUrl) {
-        return deeplink;
+    return WATCHNOW_REDIRECT_URL + "?deeplink=" + encodeURIComponent(deeplink);
+}
+
+function handleWatchnowRedirectRequest() {
+    const params = parseQueryParams(parseUrlParts(requestUrl).query);
+    const deeplink = params.deeplink ? String(params.deeplink) : "";
+    if (!deeplink) {
+        $.done({});
+        return;
     }
 
-    return backendBaseUrl + "/api/redirect?deeplink=" + encodeURIComponent(deeplink);
+    $.done({
+        response: {
+            status: 302,
+            headers: {
+                Location: deeplink
+            }
+        }
+    });
 }
 
 function buildInfuseDeeplink(target, context) {
@@ -1914,6 +1929,10 @@ function parseQueryParams(query) {
     return params;
 }
 
+function isWatchnowRedirectRequest(url) {
+    return String(url || "").startsWith(WATCHNOW_REDIRECT_URL);
+}
+
 function getHistoryEpisodesCacheBucketKey(url) {
     const parts = parseUrlParts(url);
     const params = parseQueryParams(parts.query);
@@ -2089,6 +2108,14 @@ async function handleHistoryEpisodeList() {
 
 (async () => {
     try {
+        if (
+            typeof $response === "undefined" &&
+            isWatchnowRedirectRequest(requestUrl)
+        ) {
+            handleWatchnowRedirectRequest();
+            return;
+        }
+
         if (
             typeof $response === "undefined" &&
             /\/shows\/[^\/]+\/seasons\/\d+(?:\/|\?|$)/.test(requestUrl)
