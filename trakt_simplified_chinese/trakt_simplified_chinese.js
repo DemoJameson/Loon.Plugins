@@ -1416,7 +1416,7 @@ function injectCustomWatchnowEntriesIntoPayload(payload, customEntries) {
 
 function handleWatchnowSources() {
     const payload = JSON.parse(body);
-    $done({ body: JSON.stringify(injectCustomSourcesIntoPayload(payload)) });
+    $.done({ body: JSON.stringify(injectCustomSourcesIntoPayload(payload)) });
 }
 
 async function handleWatchnow() {
@@ -1424,14 +1424,14 @@ async function handleWatchnow() {
     const target = resolveWatchnowTarget(requestUrl);
 
     if (!target) {
-        $done({ body: body });
+        $.done({ body: body });
         return;
     }
 
     const linkCache = loadLinkIdsCache();
     const context = await resolveWatchnowContext(target, linkCache);
     const customEntries = buildCustomWatchnowEntries(target, context);
-    $done({ body: JSON.stringify(injectCustomWatchnowEntriesIntoPayload(payload, customEntries)) });
+    $.done({ body: JSON.stringify(injectCustomWatchnowEntriesIntoPayload(payload, customEntries)) });
 }
 
 function createMediaCollection() {
@@ -1586,31 +1586,31 @@ async function processMediaList(logLabel, sourceBody) {
 
 async function handleMediaList(logLabel, bodyOverride) {
     const sourceBody = isNonNullish(bodyOverride) ? bodyOverride : body;
-    $done({ body: await processMediaList(logLabel, sourceBody) });
+    $.done({ body: await processMediaList(logLabel, sourceBody) });
 }
 
 async function handleMir() {
     const data = JSON.parse(body);
     if (!data || typeof data !== "object" || Array.isArray(data)) {
-        $done({ body: body });
+        $.done({ body: body });
         return;
     }
 
     const firstWatched = data.first_watched;
     if (!firstWatched || typeof firstWatched !== "object") {
-        $done({ body: body });
+        $.done({ body: body });
         return;
     }
 
     if (!firstWatched.show && !firstWatched.movie && !firstWatched.episode) {
-        $done({ body: body });
+        $.done({ body: body });
         return;
     }
 
     const translated = JSON.parse(await processMediaList("mir", JSON.stringify([firstWatched])));
     const translatedItem = Array.isArray(translated) ? translated[0] : null;
     if (!translatedItem || typeof translatedItem !== "object") {
-        $done({ body: body });
+        $.done({ body: body });
         return;
     }
 
@@ -1620,19 +1620,19 @@ async function handleMir() {
         }
     });
 
-    $done({ body: JSON.stringify(data) });
+    $.done({ body: JSON.stringify(data) });
 }
 
 async function handleMediaDetail(mediaType) {
     const data = JSON.parse(body);
     if (!data || typeof data !== "object" || Array.isArray(data)) {
-        $done({ body: body });
+        $.done({ body: body });
         return;
     }
 
     const ref = resolveMediaDetailTarget(requestUrl, data, mediaType);
     if (!ref || !buildMediaCacheLookupKey(mediaType, ref)) {
-        $done({ body: body });
+        $.done({ body: body });
         return;
     }
 
@@ -1643,13 +1643,13 @@ async function handleMediaDetail(mediaType) {
 
     const cache = loadCache();
     applyTranslation(data, getCachedTranslation(cache, mediaType, ref));
-    $done({ body: JSON.stringify(data) });
+    $.done({ body: JSON.stringify(data) });
 }
 
 function handleTranslations() {
     const arr = JSON.parse(body);
     if (!Array.isArray(arr) || arr.length === 0) {
-        $done({ body: body });
+        $.done({ body: body });
         return;
     }
 
@@ -1673,14 +1673,14 @@ function handleTranslations() {
         }
     }
 
-    $done({ body: JSON.stringify(merged) });
+    $.done({ body: JSON.stringify(merged) });
 }
 
 function handleUserSettings() {
     const data = JSON.parse(body);
 
     if (!data || typeof data !== "object") {
-        $done({ body: body });
+        $.done({ body: body });
         return;
     }
 
@@ -1696,18 +1696,18 @@ function handleUserSettings() {
 
     data.browsing.watchnow.favorites = injectWatchnowFavoriteSources(data.browsing.watchnow.favorites);
 
-    $done({ body: JSON.stringify(data) });
+    $.done({ body: JSON.stringify(data) });
 }
 
 function handleCurrentSeasonRequest() {
     const target = resolveCurrentSeasonTarget(requestUrl);
     if (!target) {
-        $done({});
+        $.done({});
         return;
     }
 
     setCurrentSeason(target.showId, target.seasonNumber);
-    $done({});
+    $.done({});
 }
 
 async function handleSeasonEpisodesList() {
@@ -1715,7 +1715,7 @@ async function handleSeasonEpisodesList() {
         const target = resolveSeasonListTarget(requestUrl);
         const seasons = JSON.parse(body);
         if (!target || !Array.isArray(seasons) || seasons.length === 0) {
-            $done({ body: body });
+            $.done({ body: body });
             return;
         }
 
@@ -1733,7 +1733,7 @@ async function handleSeasonEpisodesList() {
         });
 
         if (!targetSeason) {
-            $done({ body: body });
+            $.done({ body: body });
             return;
         }
 
@@ -1824,7 +1824,7 @@ async function handleSeasonEpisodesList() {
             });
         });
 
-        $done({ body: JSON.stringify(seasons) });
+        $.done({ body: JSON.stringify(seasons) });
     } finally {
         clearCurrentSeason();
     }
@@ -2094,7 +2094,7 @@ async function handleHistoryEpisodeList() {
             typeof $response === "undefined" &&
             shouldApplyLatestHistoryEpisodeOnly(requestUrl)
         ) {
-            $done({ url: buildHistoryEpisodesRequestUrl(requestUrl) });
+            $.done({ url: buildHistoryEpisodesRequestUrl(requestUrl) });
             return;
         }
 
@@ -2251,7 +2251,7 @@ async function handleHistoryEpisodeList() {
         $done({ body: body });
     } catch (e) {
         $.log("Trakt script error: " + e);
-        $done({});
+        $.done({});
     }
 })();
 
