@@ -2175,12 +2175,12 @@ async function handleHistoryEpisodeList() {
             return;
         }
 
-        if (/\/users\/[^\/]+?\/lists\/\d+\/items(?:\?|$)/.test(requestUrl)) {
+        if (/\/users\/[^\/]+?\/lists\/\d+\/items(?:\/(?:shows|movies|episodes))?(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("list items");
             return;
         }
 
-        if (/\/lists\/\d+\/items(?:\?|$)/.test(requestUrl)) {
+        if (/\/lists\/\d+\/items(?:\/(?:shows|movies|episodes))?(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("public list items");
             return;
         }

@@ -36,9 +36,9 @@
 # 拦截 following/activities，批量获取简体中文信息
 ^https:\/\/apiz?\.trakt\.tv\/users\/me\/following\/activities(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 list/items，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/lists\/\d+\/items(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/lists\/\d+\/items(?:\/(?:shows|movies|episodes))?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截公共 list/items，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/lists\/\d+\/items(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+^https:\/\/apiz?\.trakt\.tv\/lists\/\d+\/items(?:\/(?:shows|movies|episodes))?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 favorites，批量获取简体中文信息
 ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/favorites(?:\/(?:shows|movies))?\/?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 media/trending，批量获取简体中文信息
