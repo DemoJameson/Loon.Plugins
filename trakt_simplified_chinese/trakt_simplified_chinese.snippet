@@ -1,10 +1,14 @@
 #!name=优化Trakt简体中文体验
-#!desc=翻译Trakt App首页和各种列表，并且优先使用简体中文；历史页面剧集类别只展示最新的一集，方便查看看过什么电视剧；影片详情页面添加EplayerX、Forward、Infuse的跳转按钮
+#!desc=翻译Trakt App首页和各种列表，并且优先使用简体中文；历史页面剧集类别只展示最新的一集；Trakt 和 Sofa Time 的影片详情页添加 EplayerX、Forward、Infuse 跳转按钮
 #!icon=https://app.trakt.tv/pwa/android/icon_192.png
 #!homepage=https://github.com/DemoJameson/Loon.Plugins
 #!author=DemoJameson
 
 # [rewrite_remote]
+# 处理播放器 deeplink 跳转
+^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?.*$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 处理 TMDB logo 跳转
+^https:\/\/image\.tmdb\.org\/t\/p\/w342\/[a-z0-9_-]+_logo\.webp(?:\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 users/settings，修改 VIP 和广告显示状态
 ^https:\/\/apiz?\.trakt\.tv\/users\/settings(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 translations/zh 接口，按 zh-CN 优先级排序
@@ -17,6 +21,12 @@
 ^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/shows\/released\/desc(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 watchlist/movies，批量获取简体中文信息
 ^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/movies\/released\/desc(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 仅拦截 Sofa Time 的 TMDB provider 列表，注入播放器
+^https:\/\/api\.(?:themoviedb|tmdb)\.org\/3\/watch\/providers\/(?:movie|tv)(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 仅拦截 Sofa Time 的 streaming-availability shows 详情，注入播放器
+^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/tt\d+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 仅拦截 Sofa Time 的 streaming-availability 国家服务列表，注入播放器
+^https:\/\/streaming-availability\.p\.rapidapi\.com\/countries\/[a-z]{2}(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 calendars/my/shows，批量获取简体中文信息
 ^https:\/\/apiz?\.trakt\.tv\/calendars\/my\/shows\/\d{4}-\d{2}-\d{2}\/\d+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 calendars/my/movies，批量获取简体中文信息
@@ -73,9 +83,5 @@
 ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 month in review
 ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/mir(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 重定向 watchnow deeplink
-^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?deeplink=(.+?)%3D(\d+)%26type%3D(\w+?)(?:&.*)?$ url 302 $1=$2&type=$3
-^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?deeplink=(.+?)(?:&.*)?$ url 302 $1
-
 # [mitm]
-hostname = apiz.trakt.tv, api.trakt.tv, loon-plugins.demojameson.de5.net
+hostname = apiz.trakt.tv, api.trakt.tv, api.themoviedb.org, api.tmdb.org, image.tmdb.org, streaming-availability.p.rapidapi.com, loon-plugins.demojameson.de5.net

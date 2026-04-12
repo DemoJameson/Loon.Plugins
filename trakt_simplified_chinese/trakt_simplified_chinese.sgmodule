@@ -1,5 +1,5 @@
 #!name=优化Trakt简体中文体验
-#!desc=翻译Trakt App首页和各种列表，并且优先使用简体中文；历史页面剧集类别只展示最新的一集，方便查看看过什么电视剧；影片详情页面添加EplayerX、Forward、Infuse的跳转按钮
+#!desc=翻译Trakt App首页和各种列表，并且优先使用简体中文；历史页面剧集类别只展示最新的一集；Trakt 和 Sofa Time 的影片详情页添加 EplayerX、Forward、Infuse 跳转按钮
 #!icon=https://app.trakt.tv/pwa/android/icon_192.png
 #!homepage=https://github.com/DemoJameson/Loon.Plugins
 #!author=DemoJameson
@@ -7,6 +7,10 @@
 #!arguments-desc=latestHistoryEpisodeOnly: 是否只保留历史剧集分类中的最新一集，作用于 history/episodes 和 sync/history/episodes，填入 true 或 false。\nbackendBaseUrl: 翻译缓存 API 地址，填入你部署的 Vercel 项目 URL。
 
 [Script]
+# 处理播放器 deeplink 跳转
+Direct Redirect = type=http-request, pattern=^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?.*$, timeout=10, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 处理 TMDB logo 跳转
+TMDB Logo Redirect = type=http-request, pattern=^https:\/\/image\.tmdb\.org\/t\/p\/w342\/[a-z0-9_-]+_logo\.webp(?:\?.*)?$, timeout=10, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 users/settings，修改 VIP 和广告显示状态
 Trakt User Settings = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/users\/settings(\?.*)?$, requires-body=1, max-size=0, timeout=10, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 translations/zh 接口，按 zh-CN 优先级排序
@@ -19,6 +23,12 @@ Trakt Playback Movies = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\
 Trakt Watchlist Shows = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/shows\/released\/desc(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 watchlist/movies，批量获取简体中文信息
 Trakt Watchlist Movies = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/movies\/released\/desc(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 仅拦截 Sofa Time 的 TMDB provider 列表，注入播放器
+TMDB Provider Catalog = type=http-response, pattern=^https:\/\/api\.(?:themoviedb|tmdb)\.org\/3\/watch\/providers\/(?:movie|tv)(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 仅拦截 Sofa Time 的 streaming-availability shows 详情，注入播放器
+Sofa Time Streaming Availability = type=http-response, pattern=^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/tt\d+(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 仅拦截 Sofa Time 的 streaming-availability 国家服务列表，注入播放器
+Sofa Time Country Services = type=http-response, pattern=^https:\/\/streaming-availability\.p\.rapidapi\.com\/countries\/[a-z]{2}(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 calendars/my/shows，批量获取简体中文信息
 Trakt Calendar Shows = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/calendars\/my\/shows\/\d{4}-\d{2}-\d{2}\/\d+(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 calendars/my/movies，批量获取简体中文信息
@@ -76,10 +86,5 @@ Trakt Episode Detail = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/
 # 拦截 month in review
 Trakt Month in Review = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/mir(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 
-[Url Rewrite]
-# 重定向 watchnow deeplink
-^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?deeplink=(.+?)%3D(\d+)%26type%3D(\w+?)(?:&.*)?$ $1=$2&type=$3 302
-^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?deeplink=(.+?)(?:&.*)?$ $1 302
-
 [MITM]
-hostname = %APPEND% apiz.trakt.tv, api.trakt.tv, loon-plugins.demojameson.de5.net
+hostname = %APPEND% apiz.trakt.tv, api.trakt.tv, api.themoviedb.org, api.tmdb.org, image.tmdb.org, streaming-availability.p.rapidapi.com, loon-plugins.demojameson.de5.net

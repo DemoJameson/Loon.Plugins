@@ -21,10 +21,76 @@ const MEDIA_TYPE = {
 const HISTORY_EPISODES_LIMIT = 500;
 const WATCHNOW_DEFAULT_REGION = "hk";
 const WATCHNOW_DEFAULT_CURRENCY = "hkd";
-const WATCHNOW_SOURCE_INFUSE = "infuse";
-const WATCHNOW_SOURCE_FORWARD = "forward";
-const WATCHNOW_SOURCE_EPLAYERX = "eplayerx";
 const WATCHNOW_REDIRECT_URL = "https://loon-plugins.demojameson.de5.net/api/redirect";
+const TMDB_LOGO_TARGET_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images";
+const REGION_CODES = [
+    "AE", "AD", "AG", "AL", "AO", "AR", "AT", "AU", "AZ", "BA", "BB", "BE", "BG", "BH", "BM", "BO",
+    "BR", "BS", "BY", "BZ", "CA", "CH", "CI", "CL", "CO", "CM", "CR", "CU", "CV", "CZ", "CY", "DE",
+    "DK", "DO", "DZ", "EC", "EE", "EG", "ES", "FI", "FJ", "FR", "GB", "GF", "GG", "GH", "GI", "GQ",
+    "GR", "GT", "HK", "HN", "HR", "HU", "ID", "IE", "IL", "IN", "IQ", "IT", "IS", "JM", "JP", "JO",
+    "KE", "KR", "KW", "LB", "LC", "LI", "LT", "LU", "MA", "LV", "LY", "MC", "ME", "MD", "MG", "MK",
+    "MT", "ML", "MU", "MX", "MZ", "MY", "NE", "NG", "NL", "NI", "NO", "NZ", "OM", "PA", "PE", "PK",
+    "PF", "PL", "PH", "PS", "PT", "PY", "QA", "RO", "RS", "SA", "SC", "SI", "SG", "SE", "SN", "SV",
+    "SK", "SM", "TC", "TH", "TD", "TN", "TR", "TT", "TW", "TZ", "UA", "UG", "US", "UY", "VE", "YE",
+    "ZA", "ZM", "ZW"
+];
+const PLAYER_TYPE = {
+    EPLAYERX: "eplayerx",
+    FORWARD: "forward",
+    INFUSE: "infuse"
+};
+const PLAYER_DEFINITIONS = {
+    [PLAYER_TYPE.EPLAYERX]: {
+        type: PLAYER_TYPE.EPLAYERX,
+        name: "EplayerX",
+        homePage: "https://apps.apple.com/cn/app/eplayerx/id6747369377",
+        logo: "eplayerx_logo.webp",
+        color: "#33c1c0",
+        tmdbProviderId: 1,
+        tmdbDisplayPriority: 1,
+        buildDeeplink: buildEplayerXDeeplink,
+        useRedirectLink: true
+    },
+    [PLAYER_TYPE.FORWARD]: {
+        type: PLAYER_TYPE.FORWARD,
+        name: "Forward",
+        homePage: "https://apps.apple.com/cn/app/forward/id6503940939",
+        logo: "forward_logo.webp",
+        color: "#000000",
+        tmdbProviderId: 2,
+        tmdbDisplayPriority: 2,
+        buildDeeplink: buildForwardDeeplink,
+        useRedirectLink: true
+    },
+    [PLAYER_TYPE.INFUSE]: {
+        type: PLAYER_TYPE.INFUSE,
+        name: "Infuse",
+        homePage: "https://firecore.com/infuse",
+        logo: "infuse_logo.webp",
+        color: "#ff8000",
+        tmdbProviderId: 3,
+        tmdbDisplayPriority: 3,
+        buildDeeplink: buildInfuseDeeplink,
+        useRedirectLink: false
+    }
+};
+const SOFA_TIME_COUNTRY_SERVICE_TYPES = {
+    addon: true,
+    buy: true,
+    rent: true,
+    free: true,
+    subscription: true
+};
+const TMDB_PROVIDER_LIST_ENTRIES = Object.values(PLAYER_TYPE).map((source) => {
+    const definition = PLAYER_DEFINITIONS[source];
+    return {
+        display_priorities: createZeroPriorityMap(REGION_CODES),
+        display_priority: 0,
+        logo_path: "/" + definition.logo,
+        provider_name: definition.name,
+        provider_id: definition.tmdbProviderId
+    };
+});
 const MEDIA_CONFIG = {
     [MEDIA_TYPE.SHOW]: {
         buildTranslationPath: function (ref) {
@@ -74,6 +140,56 @@ function parseBooleanArgument(value, fallbackValue) {
     return fallbackValue;
 }
 
+function createZeroPriorityMap(regionCodes) {
+    return ensureArray(regionCodes).reduce((acc, regionCode) => {
+        const code = String(regionCode || "").trim().toUpperCase();
+        if (code) {
+            acc[code] = 0;
+        }
+        return acc;
+    }, {});
+}
+
+function buildCustomPlayerImageSet(logoName) {
+    return {
+        lightThemeImage: TMDB_LOGO_TARGET_BASE_URL + "/" + logoName,
+        darkThemeImage: TMDB_LOGO_TARGET_BASE_URL + "/" + logoName,
+        whiteImage: TMDB_LOGO_TARGET_BASE_URL + "/" + logoName
+    };
+}
+
+function createSofaTimeTemplate(definition) {
+    return {
+        service: {
+            id: definition.type,
+            name: definition.name,
+            homePage: definition.homePage,
+            themeColorCode: definition.color,
+            imageSet: buildCustomPlayerImageSet(definition.logo)
+        },
+        type: "subscription",
+        link: "",
+        videoLink: "",
+        quality: "hd",
+        audios: [],
+        subtitles: [],
+        expiresSoon: false,
+        availableSince: 0
+    };
+}
+
+function createSofaTimeCountryService(definition) {
+    return {
+        id: definition.type,
+        name: definition.name,
+        homePage: definition.homePage,
+        themeColorCode: definition.color,
+        imageSet: buildCustomPlayerImageSet(definition.logo),
+        streamingOptionTypes: cloneObject(SOFA_TIME_COUNTRY_SERVICE_TYPES),
+        addons: []
+    };
+}
+
 function parseArgumentConfig() {
     const config = {
         latestHistoryEpisodeOnly: true,
@@ -100,9 +216,7 @@ function parseArgumentConfig() {
             config.latestHistoryEpisodeOnly = parseBooleanArgument(parts[0], config.latestHistoryEpisodeOnly);
         }
         if (parts.length > 1) {
-            config.backendBaseUrl = parts[1];
-        } else if (/^https?:\/\//i.test(parts[0])) {
-            config.backendBaseUrl = parts[0];
+            config.backendBaseUrl = parts[1] || config.backendBaseUrl;
         }
     }
 
@@ -115,12 +229,12 @@ const backendBaseUrl = (() => {
     let value = argumentConfig.backendBaseUrl;
 
     if (typeof value !== "string") {
-        return "";
+        return DEFAULT_BACKEND_BASE_URL;
     }
 
     value = value.trim();
     if (!/^https?:\/\//i.test(value)) {
-        return "";
+        return DEFAULT_BACKEND_BASE_URL;
     }
 
     return value.replace(/\/+$/, "");
@@ -1105,6 +1219,254 @@ function buildWatchnowRedirectLink(deeplink) {
     return WATCHNOW_REDIRECT_URL + "?deeplink=" + encodeURIComponent(deeplink);
 }
 
+function doneRedirect(location) {
+    const targetLocation = String(location || "").trim();
+    if (!targetLocation) {
+        $.done({});
+        return;
+    }
+
+    if ($.isQuanX()) {
+        $done({
+            status: "HTTP/1.1 302 Found",
+            headers: {
+                Location: targetLocation
+            }
+        });
+        return;
+    }
+
+    $done({
+        response: {
+            status: 302,
+            headers: {
+                Location: targetLocation
+            }
+        }
+    });
+}
+
+function resolveDirectRedirectLocation(url) {
+    const normalizedUrl = String(url || "");
+    let match = normalizedUrl.match(/^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?deeplink=([^&]+)(?:&.*)?$/i);
+    if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+    }
+
+    match = normalizedUrl.match(/^https:\/\/image\.tmdb\.org\/t\/p\/w342\/([a-z0-9_-]+)_logo\.webp(?:\?.*)?$/i);
+    if (match && match[1]) {
+        return TMDB_LOGO_TARGET_BASE_URL + "/" + match[1].toLowerCase() + "_logo.webp";
+    }
+
+    return "";
+}
+
+function handleDirectRedirectRequest() {
+    doneRedirect(resolveDirectRedirectLocation(requestUrl));
+}
+
+function isSofaTimeRequest() {
+    return /^Sofa(?:\s|%20)Time/i.test(String(getRequestHeaderValue("User-Agent") || "").trim());
+}
+
+function resolveStreamingAvailabilityTarget(url) {
+    const normalizedUrl = String(url || "");
+    let match = normalizedUrl.match(/^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/(tt\d+)(?:\?|$)/i);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.SHOW,
+            imdbId: match[1]
+        };
+    }
+
+    match = normalizedUrl.match(/^https:\/\/streaming-availability\.p\.rapidapi\.com\/movies\/(tt\d+)(?:\?|$)/i);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.MOVIE,
+            imdbId: match[1]
+        };
+    }
+
+    return null;
+}
+
+function isStreamingAvailabilityCountriesRequest(url) {
+    return /^https:\/\/streaming-availability\.p\.rapidapi\.com\/countries\/[a-z]{2}(?:\?.*)?$/i.test(String(url || ""));
+}
+
+function resolveStreamingAvailabilityTmdbTarget(payload, fallbackTarget) {
+    const tmdbValue = payload && payload.tmdbId ? String(payload.tmdbId).trim() : "";
+    const match = tmdbValue.match(/^(movie|tv)\/(\d+)$/i);
+    if (!match) {
+        return fallbackTarget;
+    }
+
+    const tmdbType = match[1].toLowerCase();
+    const tmdbId = Number(match[2]);
+    return {
+        mediaType: tmdbType === "movie" ? MEDIA_TYPE.MOVIE : MEDIA_TYPE.SHOW,
+        imdbId: fallbackTarget && fallbackTarget.imdbId ? fallbackTarget.imdbId : "",
+        tmdbId: tmdbId,
+        showTmdbId: tmdbType === "tv" ? tmdbId : null
+    };
+}
+
+function createSofaTimeStreamingOption(source, target) {
+    const definition = PLAYER_DEFINITIONS[source];
+    if (!definition || !target || isNullish(target.tmdbId) || typeof definition.buildDeeplink !== "function") {
+        return null;
+    }
+
+    const context = {
+        tmdbId: target.tmdbId,
+        showTmdbId: isNonNullish(target.showTmdbId) ? target.showTmdbId : null
+    };
+    const deeplink = definition.buildDeeplink(target, context);
+    const link = definition.useRedirectLink ? buildWatchnowRedirectLink(deeplink) : deeplink;
+
+    if (!deeplink || !link) {
+        return null;
+    }
+
+    const option = createSofaTimeTemplate(definition);
+    option.link = link;
+    option.videoLink = link;
+    return option;
+}
+
+function injectSofaTimeStreamingOptions(payload, target) {
+    if (!isPlainObject(payload)) {
+        return payload;
+    }
+
+    const streamingTarget = resolveStreamingAvailabilityTmdbTarget(payload, target);
+
+    rewriteStreamingOptionsMap(payload, streamingTarget);
+
+    const seasons = Array.isArray(payload.seasons) ? payload.seasons : [];
+    seasons.forEach((season) => {
+        if (!isPlainObject(season)) {
+            return;
+        }
+
+        rewriteStreamingOptionsMap(season, streamingTarget);
+
+        const episodes = Array.isArray(season.episodes) ? season.episodes : [];
+        episodes.forEach((episode) => {
+            if (!isPlainObject(episode)) {
+                return;
+            }
+
+            rewriteStreamingOptionsMap(episode, streamingTarget);
+        });
+    });
+
+    return payload;
+}
+
+function createSofaTimeStreamingOptionsByRegion(regionCode, target) {
+    return Object.values(PLAYER_TYPE).map((source) => createSofaTimeStreamingOption(source, target)).filter(Boolean);
+}
+
+function rewriteStreamingOptionsMap(target, streamingTarget) {
+    if (!isPlainObject(target)) {
+        return;
+    }
+
+    const streamingOptions = isPlainObject(target.streamingOptions) ? target.streamingOptions : {};
+    const regionCodes = Object.keys(streamingOptions);
+    const finalRegionCodes = regionCodes.length > 0 ? regionCodes : REGION_CODES;
+    finalRegionCodes.forEach((regionCode) => {
+        const options = createSofaTimeStreamingOptionsByRegion(regionCode, streamingTarget);
+        if (options.length === 0) {
+            return;
+        }
+
+        streamingOptions[String(regionCode || "").toLowerCase()] = options;
+    });
+    target.streamingOptions = streamingOptions;
+}
+
+function handleSofaTimeStreamingAvailability() {
+    if (typeof $response === "undefined" || !isSofaTimeRequest()) {
+        $.done({ body: body });
+        return;
+    }
+
+    const target = resolveStreamingAvailabilityTarget(requestUrl);
+    if (!target) {
+        $.done({ body: body });
+        return;
+    }
+
+    const payload = JSON.parse(body);
+    $.done({ body: JSON.stringify(injectSofaTimeStreamingOptions(payload, target)) });
+}
+
+function injectSofaTimeCountryServices(payload) {
+    if (!isPlainObject(payload)) {
+        return payload;
+    }
+
+    const services = Array.isArray(payload.services) ? payload.services.slice() : [];
+    const filteredServices = services.filter((service) => {
+        const id = service && service.id ? String(service.id).toLowerCase() : "";
+        return !Object.values(PLAYER_TYPE).includes(id);
+    });
+
+    Object.values(PLAYER_TYPE).slice().reverse().forEach((source) => {
+        filteredServices.unshift(createSofaTimeCountryService(PLAYER_DEFINITIONS[source]));
+    });
+    payload.services = filteredServices;
+    return payload;
+}
+
+function handleSofaTimeCountries() {
+    if (typeof $response === "undefined" || !isSofaTimeRequest()) {
+        $.done({ body: body });
+        return;
+    }
+
+    if (!isStreamingAvailabilityCountriesRequest(requestUrl)) {
+        $.done({ body: body });
+        return;
+    }
+
+    const payload = JSON.parse(body);
+    $.done({ body: JSON.stringify(injectSofaTimeCountryServices(payload)) });
+}
+
+function injectTmdbProviderCatalog(payload) {
+    if (!isPlainObject(payload)) {
+        return payload;
+    }
+
+    const results = Array.isArray(payload.results) ? payload.results.slice() : [];
+    const filteredResults = results.filter((item) => {
+        const providerId = item && item.provider_id ? Number(item.provider_id) : NaN;
+        const providerName = item && item.provider_name ? String(item.provider_name).toLowerCase() : "";
+        return !TMDB_PROVIDER_LIST_ENTRIES.some((entry) => {
+            return providerId === entry.provider_id || providerName === String(entry.provider_name).toLowerCase();
+        });
+    });
+
+    TMDB_PROVIDER_LIST_ENTRIES.slice().reverse().forEach((entry) => {
+        filteredResults.unshift(cloneObject(entry));
+    });
+    payload.results = filteredResults;
+    return payload;
+}
+
+function handleTmdbProviderCatalog() {
+    if (typeof $response === "undefined" || !isSofaTimeRequest()) {
+        $.done({ body: body });
+        return;
+    }
+
+    const payload = JSON.parse(body);
+    $.done({ body: JSON.stringify(injectTmdbProviderCatalog(payload)) });
+}
+
 function buildInfuseDeeplink(target, context) {
     if (!target || !context) {
         return "";
@@ -1201,32 +1563,27 @@ function injectWatchnowFavoriteSources(items) {
     const favorites = ensureArray(items).slice();
     const filtered = favorites.filter((item) => {
         const normalized = String(item || "").toLowerCase();
-        return normalized !== buildWatchnowFavoriteSource(WATCHNOW_SOURCE_INFUSE) &&
-            normalized !== buildWatchnowFavoriteSource(WATCHNOW_SOURCE_FORWARD) &&
-            normalized !== buildWatchnowFavoriteSource(WATCHNOW_SOURCE_EPLAYERX);
+        return !Object.values(PLAYER_TYPE).some((source) => normalized === buildWatchnowFavoriteSource(source));
     });
 
-    filtered.unshift(buildWatchnowFavoriteSource(WATCHNOW_SOURCE_EPLAYERX));
-    filtered.unshift(buildWatchnowFavoriteSource(WATCHNOW_SOURCE_FORWARD));
-    filtered.unshift(buildWatchnowFavoriteSource(WATCHNOW_SOURCE_INFUSE));
+    Object.values(PLAYER_TYPE).slice().reverse().forEach((source) => {
+        filtered.unshift(buildWatchnowFavoriteSource(source));
+    });
     return filtered;
 }
 
 function filterOutCustomSources(items) {
     return ensureArray(items).filter((item) => {
         const source = item && item.source ? String(item.source).toLowerCase() : "";
-        return source !== WATCHNOW_SOURCE_INFUSE &&
-            source !== WATCHNOW_SOURCE_FORWARD &&
-            source !== WATCHNOW_SOURCE_EPLAYERX;
+        return !Object.values(PLAYER_TYPE).includes(source);
     });
 }
 
 function injectCustomSourcesIntoList(items) {
-    return [
-        createSourceDefinition(WATCHNOW_SOURCE_INFUSE, "Infuse", "#ff8000"),
-        createSourceDefinition(WATCHNOW_SOURCE_FORWARD, "Forward", "#000000"),
-        createSourceDefinition(WATCHNOW_SOURCE_EPLAYERX, "EplayerX", "#33c1c0")
-    ].concat(filterOutCustomSources(items));
+    return Object.values(PLAYER_TYPE).slice().reverse().map((source) => {
+        const definition = PLAYER_DEFINITIONS[source];
+        return createSourceDefinition(definition.type, definition.name, definition.color);
+    }).concat(filterOutCustomSources(items));
 }
 
 function ensureWatchnowSourcesDefaultRegion(payload) {
@@ -1361,24 +1718,24 @@ function buildCustomWatchnowEntries(target, context) {
         return [];
     }
 
-    const entries = [];
-    const infuseDeeplink = buildInfuseDeeplink(target, context);
-    const forwardDeeplink = buildForwardDeeplink(target, context);
-    const eplayerXDeeplink = buildEplayerXDeeplink(target, context);
+    return Object.values(PLAYER_TYPE).map((source) => {
+        const definition = PLAYER_DEFINITIONS[source];
+        if (!definition || typeof definition.buildDeeplink !== "function") {
+            return null;
+        }
 
-    if (infuseDeeplink) {
-        entries.push(createWatchnowLinkEntry(WATCHNOW_SOURCE_INFUSE, buildWatchnowRedirectLink(infuseDeeplink)));
-    }
+        const deeplink = definition.buildDeeplink(target, context);
+        if (!deeplink) {
+            return null;
+        }
 
-    if (forwardDeeplink) {
-        entries.push(createWatchnowLinkEntry(WATCHNOW_SOURCE_FORWARD, buildWatchnowRedirectLink(forwardDeeplink)));
-    }
+        const link = buildWatchnowRedirectLink(deeplink);
+        if (!link) {
+            return null;
+        }
 
-    if (eplayerXDeeplink) {
-        entries.push(createWatchnowLinkEntry(WATCHNOW_SOURCE_EPLAYERX, buildWatchnowRedirectLink(eplayerXDeeplink)));
-    }
-
-    return entries;
+        return createWatchnowLinkEntry(source, link);
+    }).filter(Boolean);
 }
 
 function injectCustomWatchnowEntriesIntoRegion(regionData, customEntries) {
@@ -2088,6 +2445,17 @@ async function handleHistoryEpisodeList() {
     try {
         if (
             typeof $response === "undefined" &&
+            (
+                /^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?/i.test(requestUrl) ||
+                /^https:\/\/image\.tmdb\.org\/t\/p\/w342\/[a-z0-9_-]+_logo\.webp(?:\?.*)?$/i.test(requestUrl)
+            )
+        ) {
+            handleDirectRedirectRequest();
+            return;
+        }
+
+        if (
+            typeof $response === "undefined" &&
             /\/shows\/[^\/]+\/seasons\/\d+(?:\/|\?|$)/.test(requestUrl)
         ) {
             handleCurrentSeasonRequest();
@@ -2224,6 +2592,21 @@ async function handleHistoryEpisodeList() {
 
         if (/\/users\/me\/watchlist\/movies(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("watchlist movie");
+            return;
+        }
+
+        if (/^https:\/\/api\.(?:themoviedb|tmdb)\.org\/3\/watch\/providers\/(?:movie|tv)(?:\?.*)?$/i.test(String(requestUrl || ""))) {
+            handleTmdbProviderCatalog();
+            return;
+        }
+
+        if (/^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/tt\d+(?:\?.*)?$/i.test(requestUrl)) {
+            handleSofaTimeStreamingAvailability();
+            return;
+        }
+
+        if (isStreamingAvailabilityCountriesRequest(requestUrl)) {
+            handleSofaTimeCountries();
             return;
         }
 
