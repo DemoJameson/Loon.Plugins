@@ -25,6 +25,8 @@
 ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 sync/history，批量获取简体中文信息
 ^https:\/\/apiz?\.trakt\.tv\/sync\/history(?:\/(?:movies|shows|episodes))?\/?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 sync/history/episodes 请求，放大 limit
+^https:\/\/apiz?\.trakt\.tv\/sync\/history\/episodes\/?(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 history/episodes 请求，放大 limit
 ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/episodes\/?(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 history/episodes 响应，按剧集只保留最新一条

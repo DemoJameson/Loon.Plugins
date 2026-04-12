@@ -6,7 +6,7 @@
 #!author=DemoJameson
 
 [Argument]
-latestHistoryEpisodeOnly = switch, "true", tag=历史剧集类别只展示最新一集, desc=启用后会将 history/episodes 请求的 limit 提升到 1000，并在响应中同一个剧集只保留集序最新的一集数据
+latestHistoryEpisodeOnly = switch, "true", tag=历史剧集类别只展示最新一集, desc=启用后会将 history/episodes 和 sync/history/episodes 请求的 limit 提升到 1000，并在响应中同一个剧集只保留集序最新的一集数据
 backendBaseUrl = input, "https://loon-plugins.demojameson.de5.net", tag=翻译缓存API, desc=填写你部署的 Vercel 项目 URL
 
 [Script]
@@ -31,7 +31,9 @@ http-response ^https:\/\/apiz?\.trakt\.tv\/calendars\/my\/movies\/\d{4}-\d{2}-\d
 # 拦截 history，批量获取简体中文信息
 http-response ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/?(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt History
 # 拦截 sync/history，批量获取简体中文信息
-http-response ^https:\/\/apiz?\.trakt\.tv\/sync\/history(?:\/(?:movies|shows|episodes))?\/?(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Sync History
+http-response ^https:\/\/apiz?\.trakt\.tv\/sync\/history(?:\/(?:movies|shows|episodes))?\/?(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{backendBaseUrl}], tag=Trakt Sync History
+# 拦截 sync/history/episodes 请求，放大 limit
+http-request ^https:\/\/apiz?\.trakt\.tv\/sync\/history\/episodes\/?(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, timeout=10, argument=[{latestHistoryEpisodeOnly},{backendBaseUrl}], tag=Trakt Sync History Episodes Request
 # 拦截 history/episodes 请求，放大 limit
 http-request ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/episodes\/?(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, timeout=10, argument=[{latestHistoryEpisodeOnly},{backendBaseUrl}], tag=Trakt History Episodes Request
 # 拦截 history/episodes 响应，按剧集只保留最新一条

@@ -4,7 +4,7 @@
 #!homepage=https://github.com/DemoJameson/Loon.Plugins
 #!author=DemoJameson
 #!arguments=latestHistoryEpisodeOnly:"true", backendBaseUrl:"https://loon-plugins.demojameson.de5.net"
-#!arguments-desc=latestHistoryEpisodeOnly: 是否只保留历史剧集分类中的最新一集，填入 true 或 false。\nbackendBaseUrl: 翻译缓存 API 地址，填入你部署的 Vercel 项目 URL。
+#!arguments-desc=latestHistoryEpisodeOnly: 是否只保留历史剧集分类中的最新一集，作用于 history/episodes 和 sync/history/episodes，填入 true 或 false。\nbackendBaseUrl: 翻译缓存 API 地址，填入你部署的 Vercel 项目 URL。
 
 [Script]
 # 拦截 users/settings，修改 VIP 和广告显示状态
@@ -27,6 +27,8 @@ Trakt Calendar Movies = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\
 Trakt History = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/?(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 sync/history，批量获取简体中文信息
 Trakt Sync History = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/sync\/history(?:\/(?:movies|shows|episodes))?\/?(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 sync/history/episodes 请求，放大 limit
+Trakt Sync History Episodes Request = type=http-request, pattern=^https:\/\/apiz?\.trakt\.tv\/sync\/history\/episodes\/?(\?.*)?$, timeout=10, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 history/episodes 请求，放大 limit
 Trakt History Episodes Request = type=http-request, pattern=^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/episodes\/?(\?.*)?$, timeout=10, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 history/episodes 响应，按剧集只保留最新一条

@@ -18,7 +18,7 @@ const MEDIA_TYPE = {
     MOVIE: "movie",
     EPISODE: "episode"
 };
-const HISTORY_EPISODES_LIMIT = 1000;
+const HISTORY_EPISODES_LIMIT = 500;
 const WATCHNOW_DEFAULT_REGION = "hk";
 const WATCHNOW_DEFAULT_CURRENCY = "hkd";
 const WATCHNOW_SOURCE_INFUSE = "infuse";
@@ -1876,7 +1876,7 @@ function buildHistoryEpisodesRequestUrl(url) {
 }
 
 function isHistoryEpisodesListUrl(url) {
-    return /\/users\/[^\/]+?\/history\/episodes\/?(?:\?|$)/.test(String(url || ""));
+    return /\/(?:users\/[^\/]+?\/history\/episodes|sync\/history\/episodes)\/?(?:\?|$)/.test(String(url || ""));
 }
 
 function shouldApplyLatestHistoryEpisodeOnly(url) {
@@ -2144,6 +2144,11 @@ async function handleHistoryEpisodeList() {
 
         if (/\/users\/[^\/]+?\/history\/movies\/?(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("history movie");
+            return;
+        }
+
+        if (/\/sync\/history\/episodes\/?(?:\?|$)/.test(requestUrl)) {
+            await handleHistoryEpisodeList();
             return;
         }
 
