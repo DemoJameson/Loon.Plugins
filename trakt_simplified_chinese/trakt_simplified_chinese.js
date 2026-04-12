@@ -2147,7 +2147,7 @@ async function handleHistoryEpisodeList() {
             return;
         }
 
-        if (/\/sync\/history\/?(?:\?|$)/.test(requestUrl)) {
+        if (/\/sync\/history(?:\/(?:movies|shows|episodes))?\/?(?:\?.*)?$/.test(requestUrl)) {
             await handleMediaList("sync history");
             return;
         }

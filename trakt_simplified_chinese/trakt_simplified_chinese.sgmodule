@@ -26,7 +26,7 @@ Trakt Calendar Movies = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\
 # 拦截 history，批量获取简体中文信息
 Trakt History = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/?(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 sync/history，批量获取简体中文信息
-Trakt Sync History = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/sync\/history\/?(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+Trakt Sync History = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/sync\/history(?:\/(?:movies|shows|episodes))?\/?(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 history/episodes 请求，放大 limit
 Trakt History Episodes Request = type=http-request, pattern=^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/episodes\/?(\?.*)?$, timeout=10, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 history/episodes 响应，按剧集只保留最新一条
