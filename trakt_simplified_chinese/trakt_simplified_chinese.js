@@ -1106,8 +1106,14 @@ function buildWatchnowRedirectLink(deeplink) {
 }
 
 function handleWatchnowRedirectRequest() {
-    const params = parseQueryParams(parseUrlParts(requestUrl).query);
-    const deeplink = params.deeplink ? String(params.deeplink) : "";
+    let deeplink = "";
+
+    try {
+        deeplink = new URL(requestUrl).searchParams.get("deeplink") || "";
+    } catch (e) {
+        // ignore
+    }
+
     if (!deeplink) {
         $.done({});
         return;

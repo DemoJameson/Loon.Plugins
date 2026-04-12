@@ -4,7 +4,7 @@
 #!homepage=https://github.com/DemoJameson/Loon.Plugins
 #!author=DemoJameson
 
-[rewrite_local]
+# [rewrite_remote]
 # 拦截 users/settings，修改 VIP 和广告显示状态
 ^https:\/\/apiz?\.trakt\.tv\/users\/settings(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 translations/zh 接口，按 zh-CN 优先级排序
@@ -74,5 +74,5 @@
 # 本地重定向 watchnow deeplink
 ^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 
-[mitm]
+# [mitm]
 hostname = apiz.trakt.tv, api.trakt.tv, loon-plugins.demojameson.de5.net
