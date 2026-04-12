@@ -1105,30 +1105,6 @@ function buildWatchnowRedirectLink(deeplink) {
     return WATCHNOW_REDIRECT_URL + "?deeplink=" + encodeURIComponent(deeplink);
 }
 
-function handleWatchnowRedirectRequest() {
-    let deeplink = "";
-
-    try {
-        deeplink = new URL(requestUrl).searchParams.get("deeplink") || "";
-    } catch (e) {
-        // ignore
-    }
-
-    if (!deeplink) {
-        $.done({});
-        return;
-    }
-
-    $.done({
-        response: {
-            status: 302,
-            headers: {
-                Location: deeplink
-            }
-        }
-    });
-}
-
 function buildInfuseDeeplink(target, context) {
     if (!target || !context) {
         return "";
@@ -1935,10 +1911,6 @@ function parseQueryParams(query) {
     return params;
 }
 
-function isWatchnowRedirectRequest(url) {
-    return String(url || "").startsWith(WATCHNOW_REDIRECT_URL);
-}
-
 function getHistoryEpisodesCacheBucketKey(url) {
     const parts = parseUrlParts(url);
     const params = parseQueryParams(parts.query);
@@ -2114,14 +2086,6 @@ async function handleHistoryEpisodeList() {
 
 (async () => {
     try {
-        if (
-            typeof $response === "undefined" &&
-            isWatchnowRedirectRequest(requestUrl)
-        ) {
-            handleWatchnowRedirectRequest();
-            return;
-        }
-
         if (
             typeof $response === "undefined" &&
             /\/shows\/[^\/]+\/seasons\/\d+(?:\/|\?|$)/.test(requestUrl)
