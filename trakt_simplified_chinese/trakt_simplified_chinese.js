@@ -1553,19 +1553,27 @@ function createSourceDefinition(source, name, color) {
     };
 }
 
-function buildWatchnowFavoriteSource(source) {
-    return `${WATCHNOW_DEFAULT_REGION}-${source}`;
+function resolveWatchnowRegion(watchnow) {
+    const country = String(watchnow?.country ?? "").trim().toLowerCase();
+    return country || WATCHNOW_DEFAULT_REGION;
 }
 
-function injectWatchnowFavoriteSources(items) {
+function buildWatchnowFavoriteSource(source, regionCode) {
+    return `${regionCode || WATCHNOW_DEFAULT_REGION}-${source}`;
+}
+
+function injectWatchnowFavoriteSources(items, regionCode) {
     const favorites = ensureArray(items).slice();
+    const resolvedRegionCode = String(regionCode || WATCHNOW_DEFAULT_REGION).trim().toLowerCase();
     const filtered = favorites.filter((item) => {
         const normalized = String(item ?? "").toLowerCase();
-        return !Object.values(PLAYER_TYPE).some((source) => normalized === buildWatchnowFavoriteSource(source));
+        return !Object.values(PLAYER_TYPE).some((source) => {
+            return normalized === buildWatchnowFavoriteSource(source, resolvedRegionCode);
+        });
     });
 
     Object.values(PLAYER_TYPE).slice().reverse().forEach((source) => {
-        filtered.unshift(buildWatchnowFavoriteSource(source));
+        filtered.unshift(buildWatchnowFavoriteSource(source, resolvedRegionCode));
     });
     return filtered;
 }
@@ -2052,8 +2060,12 @@ function handleUserSettings() {
     data.browsing = ensureObject(data.browsing);
 
     data.browsing.watchnow = ensureObject(data.browsing.watchnow);
+    const watchnowRegion = resolveWatchnowRegion(data.browsing.watchnow);
 
-    data.browsing.watchnow.favorites = injectWatchnowFavoriteSources(data.browsing.watchnow.favorites);
+    data.browsing.watchnow.favorites = injectWatchnowFavoriteSources(
+        data.browsing.watchnow.favorites,
+        watchnowRegion
+    );
 
     $.done({ body: JSON.stringify(data) });
 }
