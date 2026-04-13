@@ -1,13 +1,17 @@
 const $ = new Env("优化Trakt简体中文体验");
 const CACHE_KEY = "trakt_zh_cn_cache_v2";
-const CURRENT_SEASON_CACHE_KEY = "trakt_current_season";
+const CURRENT_SEASON_CACHE_KEY = "trakt_current_season_cache";
 const HISTORY_EPISODE_CACHE_KEY = "trakt_history_episode_cache";
 const LINK_IDS_CACHE_KEY = "trakt_watchnow_ids_cache";
+const COMMENT_TRANSLATION_CACHE_KEY = "trakt_comment_translation_cache";
+const SENTIMENT_TRANSLATION_CACHE_KEY = "trakt_sentiment_translation_cache";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTIAL_FOUND_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;
 const SEASON_EPISODE_TRANSLATION_LIMIT = 50;
 const BACKEND_FETCH_MIN_REFS = 3;
+const GOOGLE_TRANSLATE_API_KEY = "QUl6YVN5QmNRak1SQTYyVGFYSm4xOXdiZExHNXJWUkJCaDJqbnVzQ2tzNzY=";
+const GOOGLE_TRANSLATE_API_URL = "https://translation.googleapis.com/language/translate/v2";
 const CACHE_STATUS = {
     FOUND: 1,
     PARTIAL_FOUND: 2,
@@ -193,6 +197,7 @@ function createSofaTimeCountryService(definition) {
 function parseArgumentConfig() {
     const config = {
         latestHistoryEpisodeOnly: true,
+        commentTranslationEnabled: true,
         backendBaseUrl: "https://loon-plugins.demojameson.de5.net"
     };
 
@@ -200,6 +205,10 @@ function parseArgumentConfig() {
         config.latestHistoryEpisodeOnly = parseBooleanArgument(
             $argument.latestHistoryEpisodeOnly,
             config.latestHistoryEpisodeOnly
+        );
+        config.commentTranslationEnabled = parseBooleanArgument(
+            $argument.commentTranslationEnabled,
+            config.commentTranslationEnabled
         );
         config.backendBaseUrl = $argument.backendBaseUrl?.trim() || config.backendBaseUrl;
         return config;
@@ -216,7 +225,10 @@ function parseArgumentConfig() {
             config.latestHistoryEpisodeOnly = parseBooleanArgument(parts[0], config.latestHistoryEpisodeOnly);
         }
         if (parts.length > 1) {
-            config.backendBaseUrl = parts[1] || config.backendBaseUrl;
+            config.commentTranslationEnabled = parseBooleanArgument(parts[1], config.commentTranslationEnabled);
+        }
+        if (parts.length > 2) {
+            config.backendBaseUrl = parts[2] || config.backendBaseUrl;
         }
     }
 
@@ -225,6 +237,7 @@ function parseArgumentConfig() {
 
 const argumentConfig = parseArgumentConfig();
 const latestHistoryEpisodeOnly = argumentConfig.latestHistoryEpisodeOnly;
+const commentTranslationEnabled = argumentConfig.commentTranslationEnabled;
 const backendBaseUrl = (() => {
     let value = argumentConfig.backendBaseUrl;
 
@@ -311,6 +324,40 @@ function saveLinkIdsCache(cache) {
         $.setjson(cache, LINK_IDS_CACHE_KEY);
     } catch (e) {
         $.log(`Trakt watchnow ids cache save failed: ${e}`);
+    }
+}
+
+function loadCommentTranslationCache() {
+    try {
+        return ensureObject($.getjson(COMMENT_TRANSLATION_CACHE_KEY, {}));
+    } catch (e) {
+        $.log(`Trakt comment translation cache load failed: ${e}`);
+        return {};
+    }
+}
+
+function saveCommentTranslationCache(cache) {
+    try {
+        $.setjson(cache, COMMENT_TRANSLATION_CACHE_KEY);
+    } catch (e) {
+        $.log(`Trakt comment translation cache save failed: ${e}`);
+    }
+}
+
+function loadSentimentTranslationCache() {
+    try {
+        return ensureObject($.getjson(SENTIMENT_TRANSLATION_CACHE_KEY, {}));
+    } catch (e) {
+        $.log(`Trakt sentiment translation cache load failed: ${e}`);
+        return {};
+    }
+}
+
+function saveSentimentTranslationCache(cache) {
+    try {
+        $.setjson(cache, SENTIMENT_TRANSLATION_CACHE_KEY);
+    } catch (e) {
+        $.log(`Trakt sentiment translation cache save failed: ${e}`);
     }
 }
 
@@ -450,8 +497,16 @@ function isNonNullish(value) {
     return !isNullish(value);
 }
 
+function isArray(value) {
+    return Array.isArray(value);
+}
+
+function isNotArray(value) {
+    return !isArray(value);
+}
+
 function isPlainObject(value) {
-    return !!(value && typeof value === "object" && !Array.isArray(value));
+    return !!(value && typeof value === "object" && isNotArray(value));
 }
 
 function ensureObject(value, fallbackValue) {
@@ -459,7 +514,7 @@ function ensureObject(value, fallbackValue) {
 }
 
 function ensureArray(value) {
-    return Array.isArray(value) ? value : [];
+    return isArray(value) ? value : [];
 }
 
 function getMediaConfig(mediaType) {
@@ -517,7 +572,7 @@ function isChineseTranslation(item) {
 }
 
 function normalizeTranslations(items) {
-    if (!Array.isArray(items)) {
+    if (isNotArray(items)) {
         items = [];
     }
 
@@ -649,7 +704,7 @@ function postJson(url, payload, extraHeaders, useSourceHeaders) {
 }
 
 function pickCnTranslation(items) {
-    if (!Array.isArray(items) || items.length === 0) {
+    if (isNotArray(items) || items.length === 0) {
         return null;
     }
 
@@ -756,16 +811,13 @@ function getCachedTranslation(cache, mediaType, ref) {
 }
 
 function hasZhAvailableTranslation(availableTranslations) {
-    return Array.isArray(availableTranslations) && availableTranslations.some((language) => {
+    return isArray(availableTranslations) && availableTranslations.some((language) => {
         return String(language ?? "").toLowerCase() === "zh";
     });
 }
 
 function shouldSkipTranslationLookup(ref) {
-    const availableTranslations = Array.isArray(ref?.availableTranslations)
-        ? ref.availableTranslations
-        : null;
-
+    const availableTranslations = ensureArray(ref?.availableTranslations);
     return !!(availableTranslations && availableTranslations.length > 0 && !hasZhAvailableTranslation(availableTranslations));
 }
 
@@ -805,20 +857,20 @@ function getBackendFieldIds(refs) {
 
 async function fetchTranslationsFromBackend(cache, refsByType) {
     if (!backendBaseUrl) {
-        return false;
+        return;
     }
 
     const totalRefs = Object.keys(MEDIA_CONFIG).reduce((count, mediaType) => {
-        const refs = Array.isArray(refsByType?.[mediaType]) ? refsByType[mediaType] : [];
+        const refs = ensureArray(refsByType?.[mediaType]);
         return count + refs.length;
     }, 0);
-    if (totalRefs < BACKEND_FETCH_MIN_REFS) {
-        return true;
+    if (totalRefs <= BACKEND_FETCH_MIN_REFS) {
+        return;
     }
 
     const query = [];
     Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
-        const refs = Array.isArray(refsByType?.[mediaType]) ? refsByType[mediaType] : [];
+        const refs = ensureArray(refsByType?.[mediaType]);
         const ids = getBackendFieldIds(refs);
         if (ids.length > 0) {
             query.push(`${getMediaBackendField(mediaType)}=${ids.map((id) => String(id)).join(",")}`);
@@ -826,7 +878,7 @@ async function fetchTranslationsFromBackend(cache, refsByType) {
     });
 
     if (query.length === 0) {
-        return true;
+        return;
     }
 
     const url = `${backendBaseUrl}/api/trakt/translations?${query.join("&")}`;
@@ -844,7 +896,6 @@ async function fetchTranslationsFromBackend(cache, refsByType) {
     });
 
     saveCache(cache);
-    return true;
 }
 
 function queueBackendWrite(mediaType, ref, entry) {
@@ -1009,6 +1060,421 @@ function cloneObject(value) {
     return isPlainObject(value) ? { ...value } : null;
 }
 
+function escapeQueryComponent(value) {
+    return encodeURIComponent(String(value ?? ""));
+}
+
+function decodeBase64Value(value) {
+    const normalizedValue = String(value ?? "");
+    if (!normalizedValue) {
+        return "";
+    }
+
+    try {
+        if (typeof Buffer !== "undefined") {
+            return Buffer.from(normalizedValue, "base64").toString("utf-8");
+        }
+
+        if (typeof atob === "function") {
+            return decodeURIComponent(escape(atob(normalizedValue)));
+        }
+    } catch (e) {
+        $.log(`Trakt google api key decode failed: ${e}`);
+    }
+
+    return "";
+}
+
+function getGoogleTranslateApiKey() {
+    const decodedValue = decodeBase64Value(GOOGLE_TRANSLATE_API_KEY);
+    return decodedValue.length > 5 ? decodedValue.slice(0, -5) : "";
+}
+
+function buildGoogleTranslateFormBody(texts, sourceLanguage) {
+    const apiKey = getGoogleTranslateApiKey();
+    return [
+        `key=${escapeQueryComponent(apiKey)}`,
+        ...texts.map((text) => `q=${escapeQueryComponent(text)}`),
+        `target=${escapeQueryComponent(preferredLanguage)}`,
+        `source=${escapeQueryComponent(sourceLanguage)}`,
+        "format=text",
+        "model=base"
+    ].join("&");
+}
+
+async function translateTextsWithGoogle(texts, sourceLanguage) {
+    const normalizedTexts = ensureArray(texts).map((item) => String(item ?? ""));
+    if (normalizedTexts.length === 0) {
+        return [];
+    }
+
+    const response = await $.http.post({
+        url: GOOGLE_TRANSLATE_API_URL,
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+        },
+        body: buildGoogleTranslateFormBody(normalizedTexts, sourceLanguage)
+    });
+    const statusCode = response?.statusCode || response?.status || 0;
+    if (statusCode < 200 || statusCode >= 300) {
+        throw new Error(`HTTP ${statusCode} for ${GOOGLE_TRANSLATE_API_URL}`);
+    }
+
+    let payload;
+    try {
+        payload = JSON.parse(response.body);
+    } catch (e) {
+        throw new Error(`JSON parse failed for ${GOOGLE_TRANSLATE_API_URL}: ${e}`);
+    }
+    const translations = ensureArray(payload?.data?.translations);
+
+    return normalizedTexts.map((_, index) => {
+        return String(translations[index]?.translatedText ?? "");
+    });
+}
+
+function isChineseLanguage(language) {
+    const normalized = String(language ?? "").trim().toLowerCase();
+    return normalized === "zh" || normalized.startsWith("zh-");
+}
+
+function buildSentimentCacheKey(mediaType, traktId) {
+    if (!traktId || (mediaType !== MEDIA_TYPE.SHOW && mediaType !== MEDIA_TYPE.MOVIE)) {
+        return "";
+    }
+
+    return `${mediaType}:${traktId}`;
+}
+
+function resolveSentimentRequestTarget(url) {
+    let match = String(url ?? "").match(/\/shows\/(\d+)\/sentiments(?:\?|$)/i);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.SHOW,
+            traktId: match[1]
+        };
+    }
+
+    match = String(url ?? "").match(/\/movies\/(\d+)\/sentiments(?:\?|$)/i);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.MOVIE,
+            traktId: match[1]
+        };
+    }
+
+    return null;
+}
+
+function normalizeSentimentItem(item) {
+    const normalized = ensureObject(item);
+    return {
+        ...normalized,
+        sentiment: String(normalized.sentiment ?? "")
+    };
+}
+
+function cloneSentimentsPayload(payload) {
+    const normalized = ensureObject(payload);
+    return {
+        ...normalized,
+        bad: ensureArray(normalized.bad).map(normalizeSentimentItem),
+        good: ensureArray(normalized.good).map(normalizeSentimentItem)
+    };
+}
+
+function extractSentimentTexts(items) {
+    return ensureArray(items).map((item) => String(item?.sentiment ?? ""));
+}
+
+function buildSentimentTranslationPayload(payload) {
+    return {
+        bad: ensureArray(payload?.bad).map((item) => {
+            return {
+                sourceText: String(item?.sourceSentiment ?? item?.sentiment ?? ""),
+                translatedText: String(item?.translatedSentiment ?? item?.sentiment ?? "")
+            };
+        }),
+        good: ensureArray(payload?.good).map((item) => {
+            return {
+                sourceText: String(item?.sourceSentiment ?? item?.sentiment ?? ""),
+                translatedText: String(item?.translatedSentiment ?? item?.sentiment ?? "")
+            };
+        })
+    };
+}
+
+function applySentimentTranslationPayload(target, translation) {
+    const payload = cloneSentimentsPayload(target);
+    const translated = ensureObject(translation);
+
+    ensureArray(payload.bad).forEach((item, index) => {
+        const entry = ensureObject(ensureArray(translated.bad)[index]);
+        const sourceText = String(item?.sentiment ?? "");
+        const translatedText = String(entry.translatedText ?? "").trim();
+        if (translatedText && String(entry.sourceText ?? "") === sourceText) {
+            item.sentiment = translatedText;
+        }
+    });
+
+    ensureArray(payload.good).forEach((item, index) => {
+        const entry = ensureObject(ensureArray(translated.good)[index]);
+        const sourceText = String(item?.sentiment ?? "");
+        const translatedText = String(entry.translatedText ?? "").trim();
+        if (translatedText && String(entry.sourceText ?? "") === sourceText) {
+            item.sentiment = translatedText;
+        }
+    });
+
+    return payload;
+}
+
+function hasMatchingSentimentTranslationPayload(target, translation) {
+    const payload = cloneSentimentsPayload(target);
+    const translated = ensureObject(translation);
+    const groups = ["bad", "good"];
+
+    return groups.every((group) => {
+        const currentItems = ensureArray(payload[group]);
+        const cachedItems = ensureArray(translated[group]);
+        if (currentItems.length !== cachedItems.length) {
+            return false;
+        }
+
+        return currentItems.every((item, index) => {
+            return String(item?.sentiment ?? "") === String(cachedItems[index]?.sourceText ?? "");
+        });
+    });
+}
+
+function getSentimentTranslationCacheEntry(cache, mediaType, traktId) {
+    const cacheKey = buildSentimentCacheKey(mediaType, traktId);
+    const entry = cacheKey ? cache[cacheKey] : null;
+    return isFresh(entry) ? entry : null;
+}
+
+function storeSentimentTranslationCacheEntry(cache, mediaType, traktId, payload) {
+    const cacheKey = buildSentimentCacheKey(mediaType, traktId);
+    if (!cacheKey) {
+        return;
+    }
+
+    cache[cacheKey] = {
+        translation: buildSentimentTranslationPayload(payload)
+    };
+}
+
+async function translateSentimentItems(items) {
+    const sentimentItems = ensureArray(items).filter((item) => {
+        return String(item?.sentiment ?? "").trim();
+    });
+    if (sentimentItems.length === 0) {
+        return;
+    }
+
+    const translatedTexts = await translateTextsWithGoogle(
+        sentimentItems.map((item) => String(item.sentiment).trim()),
+        "en"
+    );
+
+    sentimentItems.forEach((item, index) => {
+        const translatedText = String(translatedTexts[index] ?? "").trim();
+        if (translatedText) {
+            item.sourceSentiment = String(item.sentiment).trim();
+            item.translatedSentiment = translatedText;
+        }
+    });
+}
+
+async function handleSentiments() {
+    if (!commentTranslationEnabled) {
+        $.done({ body: body });
+        return;
+    }
+
+    const data = JSON.parse(body);
+    if (!isPlainObject(data)) {
+        $.done({ body: body });
+        return;
+    }
+
+    const target = resolveSentimentRequestTarget(requestUrl);
+    if (!target) {
+        $.done({ body: body });
+        return;
+    }
+
+    const cache = loadSentimentTranslationCache();
+    const cachedEntry = getSentimentTranslationCacheEntry(cache, target.mediaType, target.traktId);
+    if (cachedEntry?.translation && hasMatchingSentimentTranslationPayload(data, cachedEntry.translation)) {
+        $.done({ body: JSON.stringify(applySentimentTranslationPayload(data, cachedEntry.translation)) });
+        return;
+    }
+
+    const translatedData = cloneSentimentsPayload(data);
+    const sentimentItems = [
+        ...ensureArray(translatedData.bad),
+        ...ensureArray(translatedData.good)
+    ];
+
+    try {
+        await translateSentimentItems(sentimentItems);
+        sentimentItems.forEach((item) => {
+            if (String(item?.translatedSentiment ?? "").trim()) {
+                item.sentiment = String(item.translatedSentiment);
+            }
+            delete item.sourceSentiment;
+            delete item.translatedSentiment;
+        });
+        const cachePayload = cloneSentimentsPayload(data);
+        const cacheItems = [
+            ...ensureArray(cachePayload.bad),
+            ...ensureArray(cachePayload.good)
+        ];
+        cacheItems.forEach((item, index) => {
+            const translatedItem = sentimentItems[index];
+            item.sourceSentiment = String(item?.sentiment ?? "");
+            item.translatedSentiment = String(translatedItem?.sentiment ?? item?.sentiment ?? "");
+        });
+        storeSentimentTranslationCacheEntry(cache, target.mediaType, target.traktId, cachePayload);
+        saveSentimentTranslationCache(cache);
+    } catch (e) {
+        $.log(`Trakt sentiments translation failed for ${target.mediaType}:${target.traktId}: ${e}`);
+    }
+
+    $.done({ body: JSON.stringify(translatedData) });
+}
+
+function getCommentTranslationCacheEntry(cache, commentId) {
+    if (!cache || isNullish(commentId)) {
+        return null;
+    }
+
+    const entry = cache[String(commentId)];
+    return isPlainObject(entry) ? entry : null;
+}
+
+function setCommentTranslationCacheEntry(cache, commentId, sourceText, translatedText) {
+    if (!cache || isNullish(commentId)) {
+        return false;
+    }
+
+    const key = String(commentId);
+    const nextEntry = {
+        sourceText: String(sourceText ?? ""),
+        translatedText: String(translatedText ?? "")
+    };
+    const currentEntry = getCommentTranslationCacheEntry(cache, key);
+
+    if (
+        currentEntry &&
+        currentEntry.sourceText === nextEntry.sourceText &&
+        currentEntry.translatedText === nextEntry.translatedText
+    ) {
+        return false;
+    }
+
+    cache[key] = nextEntry;
+    return true;
+}
+
+function getCachedCommentTranslation(cache, comment) {
+    const entry = getCommentTranslationCacheEntry(cache, comment?.id);
+    if (!entry) {
+        return null;
+    }
+
+    const sourceText = String(comment?.comment ?? "");
+    if (entry.sourceText !== sourceText) {
+        return null;
+    }
+
+    return String(entry.translatedText ?? "");
+}
+
+function shouldTranslateComment(comment) {
+    return !!(
+        isPlainObject(comment) &&
+        isNonNullish(comment.id) &&
+        typeof comment.comment === "string" &&
+        !isChineseLanguage(comment.language)
+    );
+}
+
+function collectCommentTranslationGroups(comments, cache) {
+    const groups = {};
+
+    ensureArray(comments).forEach((comment) => {
+        if (!shouldTranslateComment(comment)) {
+            return;
+        }
+
+        const cachedTranslation = getCachedCommentTranslation(cache, comment);
+        if (cachedTranslation) {
+            comment.comment = cachedTranslation;
+            return;
+        }
+
+        const language = String(comment.language ?? "en").toLowerCase();
+        if (!groups[language]) {
+            groups[language] = [];
+        }
+
+        groups[language].push(comment);
+    });
+
+    return groups;
+}
+
+async function translateCommentGroup(comments, sourceLanguage, cache) {
+    const sourceTexts = comments.map((item) => item.comment);
+    const translatedTexts = await translateTextsWithGoogle(sourceTexts, sourceLanguage);
+
+    comments.forEach((comment, index) => {
+        const translatedText = String(translatedTexts[index] ?? "").trim();
+        if (!translatedText) {
+            return;
+        }
+
+        setCommentTranslationCacheEntry(
+            cache,
+            comment.id,
+            sourceTexts[index],
+            translatedText
+        );
+        comment.comment = translatedText;
+    });
+}
+
+async function handleComments() {
+    if (!commentTranslationEnabled) {
+        $.done({ body: body });
+        return;
+    }
+
+    const comments = JSON.parse(body);
+    if (isNotArray(comments) || comments.length === 0) {
+        $.done({ body: body });
+        return;
+    }
+
+    const cache = loadCommentTranslationCache();
+    const groups = collectCommentTranslationGroups(comments, cache);
+    const languages = Object.keys(groups);
+
+    for (const language of languages) {
+        try {
+            await translateCommentGroup(groups[language], language, cache);
+        } catch (e) {
+            $.log(`Trakt comment translation failed for language=${language}: ${e}`);
+        }
+    }
+
+    saveCommentTranslationCache(cache);
+    $.done({ body: JSON.stringify(comments) });
+}
+
 function getLinkIdsCacheEntry(cache, traktId) {
     if (!cache || isNullish(traktId)) {
         return null;
@@ -1112,7 +1578,7 @@ function cacheMediaIdsFromDetailResponse(linkCache, mediaType, ref, data) {
 }
 
 function cacheEpisodeIdsFromSeasonList(linkCache, showId, seasons) {
-    if (!linkCache || !Array.isArray(seasons)) {
+    if (!linkCache || isNotArray(seasons)) {
         return false;
     }
 
@@ -1120,7 +1586,7 @@ function cacheEpisodeIdsFromSeasonList(linkCache, showId, seasons) {
     const showIds = buildFallbackShowIds(showId, linkCache);
 
     seasons.forEach((season) => {
-        const episodes = Array.isArray(season?.episodes) ? season.episodes : [];
+        const episodes = ensureArray(season?.episodes);
         episodes.forEach((episode) => {
             const episodeTraktId = episode?.ids?.trakt ?? null;
             if (isNullish(episodeTraktId)) {
@@ -1341,7 +1807,7 @@ function injectSofaTimeStreamingOptions(payload, target) {
 
     rewriteStreamingOptionsMap(payload, streamingTarget);
 
-    const seasons = Array.isArray(payload.seasons) ? payload.seasons : [];
+    const seasons = ensureArray(payload.seasons);
     seasons.forEach((season) => {
         if (!isPlainObject(season)) {
             return;
@@ -1349,7 +1815,7 @@ function injectSofaTimeStreamingOptions(payload, target) {
 
         rewriteStreamingOptionsMap(season, streamingTarget);
 
-        const episodes = Array.isArray(season.episodes) ? season.episodes : [];
+        const episodes = ensureArray(season.episodes);
         episodes.forEach((episode) => {
             if (!isPlainObject(episode)) {
                 return;
@@ -1406,7 +1872,7 @@ function injectSofaTimeCountryServices(payload) {
         return payload;
     }
 
-    const services = Array.isArray(payload.services) ? payload.services.slice() : [];
+    const services = ensureArray(payload.services).slice();
     const filteredServices = services.filter((service) => {
         const id = service?.id ? String(service.id).toLowerCase() : "";
         return !Object.values(PLAYER_TYPE).includes(id);
@@ -1439,7 +1905,7 @@ function injectTmdbProviderCatalog(payload) {
         return payload;
     }
 
-    const results = Array.isArray(payload.results) ? payload.results.slice() : [];
+    const results = ensureArray(payload.results).slice();
     const filteredResults = results.filter((item) => {
         const providerId = item?.provider_id ? Number(item.provider_id) : NaN;
         const providerName = item?.provider_name ? String(item.provider_name).toLowerCase() : "";
@@ -1593,12 +2059,12 @@ function injectCustomSourcesIntoList(items) {
 }
 
 function ensureWatchnowSourcesDefaultRegion(payload) {
-    if (!Array.isArray(payload)) {
+    if (isNotArray(payload)) {
         return payload;
     }
 
     const hasDefaultRegion = payload.some((item) => {
-        return isPlainObject(item) && Array.isArray(item[WATCHNOW_DEFAULT_REGION]);
+        return isPlainObject(item) && isArray(item[WATCHNOW_DEFAULT_REGION]);
     });
 
     if (!hasDefaultRegion) {
@@ -1613,14 +2079,14 @@ function ensureWatchnowSourcesDefaultRegion(payload) {
 function injectCustomSourcesIntoPayload(payload) {
     payload = ensureWatchnowSourcesDefaultRegion(payload);
 
-    if (Array.isArray(payload)) {
+    if (isArray(payload)) {
         payload.forEach((item) => {
             if (!isPlainObject(item)) {
                 return;
             }
 
             Object.keys(item).forEach((regionCode) => {
-                if (!Array.isArray(item[regionCode])) {
+                if (isNotArray(item[regionCode])) {
                     return;
                 }
 
@@ -1636,7 +2102,7 @@ function injectCustomSourcesIntoPayload(payload) {
     }
 
     Object.keys(payload).forEach((regionCode) => {
-        if (!Array.isArray(payload[regionCode])) {
+        if (isNotArray(payload[regionCode])) {
             return;
         }
 
@@ -1772,7 +2238,7 @@ function ensureWatchnowAllRegions(payload) {
 }
 
 function injectCustomWatchnowEntriesIntoPayload(payload, customEntries) {
-    if (!Array.isArray(customEntries) || customEntries.length === 0) {
+    if (isNotArray(customEntries) || customEntries.length === 0) {
         return payload;
     }
 
@@ -1865,7 +2331,7 @@ function buildMediaRef(item, mediaType) {
         mediaType: mediaType,
         traktId: traktId,
         backendLookupKey: String(traktId),
-        availableTranslations: Array.isArray(target.available_translations) ? target.available_translations : null
+        availableTranslations: isArray(target.available_translations) ? target.available_translations : null
     };
 }
 
@@ -1884,7 +2350,7 @@ function buildEpisodeRef(item, episode) {
         seasonNumber: seasonNumber,
         episodeNumber: episodeNumber,
         backendLookupKey: buildEpisodeCompositeKey(showId, seasonNumber, episodeNumber),
-        availableTranslations: Array.isArray(episode.available_translations) ? episode.available_translations : null
+        availableTranslations: isArray(episode.available_translations) ? episode.available_translations : null
     };
 }
 
@@ -1939,7 +2405,7 @@ async function fetchAndPersistMissing(cache, mediaType, refs, logLabel) {
 
 async function processMediaList(logLabel, sourceBody) {
     const arr = JSON.parse(sourceBody);
-    if (!Array.isArray(arr) || arr.length === 0) {
+    if (isNotArray(arr) || arr.length === 0) {
         return sourceBody;
     }
 
@@ -1966,7 +2432,7 @@ async function handleMediaList(logLabel, bodyOverride) {
 
 async function handleMir() {
     const data = JSON.parse(body);
-    if (!data || typeof data !== "object" || Array.isArray(data)) {
+    if (!isPlainObject(data)) {
         $.done({ body: body });
         return;
     }
@@ -1983,7 +2449,7 @@ async function handleMir() {
     }
 
     const translated = JSON.parse(await processMediaList("mir", JSON.stringify([firstWatched])));
-    const translatedItem = Array.isArray(translated) ? translated[0] : null;
+    const translatedItem = isArray(translated) ? translated[0] : null;
     if (!translatedItem || typeof translatedItem !== "object") {
         $.done({ body: body });
         return;
@@ -2000,7 +2466,7 @@ async function handleMir() {
 
 async function handleMediaDetail(mediaType) {
     const data = JSON.parse(body);
-    if (!data || typeof data !== "object" || Array.isArray(data)) {
+    if (!isPlainObject(data)) {
         $.done({ body: body });
         return;
     }
@@ -2023,7 +2489,7 @@ async function handleMediaDetail(mediaType) {
 
 function handleTranslations() {
     const arr = JSON.parse(body);
-    if (!Array.isArray(arr) || arr.length === 0) {
+    if (isNotArray(arr) || arr.length === 0) {
         $.done({ body: body });
         return;
     }
@@ -2093,7 +2559,7 @@ async function handleSeasonEpisodesList() {
     try {
         const target = resolveSeasonListTarget(requestUrl);
         const seasons = JSON.parse(body);
-        if (!target || !Array.isArray(seasons) || seasons.length === 0) {
+        if (!target || isNotArray(seasons) || seasons.length === 0) {
             $.done({ body: body });
             return;
         }
@@ -2105,7 +2571,7 @@ async function handleSeasonEpisodesList() {
 
         const currentSeasonNumber = getCurrentSeason(target.showId);
         const targetSeason = seasons.find((item) => {
-            const episodes = Array.isArray(item?.episodes) ? item.episodes : [];
+            const episodes = ensureArray(item?.episodes);
             return episodes.some((episode) => {
                 return Number(episode?.season) === currentSeasonNumber;
             });
@@ -2118,7 +2584,7 @@ async function handleSeasonEpisodesList() {
 
         const cache = loadCache();
         const allEpisodeRefs = seasons.flatMap((item) => {
-            const seasonEpisodes = Array.isArray(item?.episodes) ? item.episodes : [];
+            const seasonEpisodes = ensureArray(item?.episodes);
             return seasonEpisodes.map((episode) => {
                 return {
                     mediaType: MEDIA_TYPE.EPISODE,
@@ -2126,7 +2592,7 @@ async function handleSeasonEpisodesList() {
                     seasonNumber: episode?.season ?? null,
                     episodeNumber: episode?.number ?? null,
                     backendLookupKey: buildEpisodeCompositeKey(target.showId, episode?.season ?? null, episode?.number ?? null),
-                    availableTranslations: Array.isArray(episode?.available_translations) ? episode.available_translations : null,
+                    availableTranslations: isArray(episode?.available_translations) ? episode.available_translations : null,
                     seasonFirstAired: item?.first_aired ?? null,
                     episodeFirstAired: episode?.first_aired ?? null
                 };
@@ -2191,7 +2657,7 @@ async function handleSeasonEpisodesList() {
         flushBackendWrites();
 
         seasons.forEach((season) => {
-            const seasonEpisodes = Array.isArray(season?.episodes) ? season.episodes : [];
+            const seasonEpisodes = ensureArray(season?.episodes);
             seasonEpisodes.forEach((episode) => {
                 const ref = {
                     mediaType: MEDIA_TYPE.EPISODE,
@@ -2341,7 +2807,7 @@ function createHistoryEpisodeCacheSnapshot(item) {
 }
 
 function filterHistoryEpisodesAcrossPages(arr, url) {
-    if (!Array.isArray(arr) || arr.length === 0 || !isHistoryEpisodesListUrl(url)) {
+    if (isNotArray(arr) || arr.length === 0 || !isHistoryEpisodesListUrl(url)) {
         return arr;
     }
 
@@ -2388,8 +2854,8 @@ function filterHistoryEpisodesAcrossPages(arr, url) {
 }
 
 function keepLatestHistoryEpisodes(arr) {
-    if (!Array.isArray(arr) || arr.length === 0) {
-        return Array.isArray(arr) ? arr : [];
+    if (isNotArray(arr) || arr.length === 0) {
+        return ensureArray(arr);
     }
 
     const latestByShow = {};
@@ -2630,6 +3096,18 @@ async function handleHistoryEpisodeList() {
 
         if (/\/watchnow\/sources(?:\?|$)/.test(requestUrl)) {
             handleWatchnowSources();
+            return;
+        }
+
+        if (/\/(?:movies|shows)\/[^\/]+\/comments\/[^\/?#]+(?:\?.*)?$/i.test(requestUrl) ||
+            /\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+\/comments\/[^\/?#]+(?:\?.*)?$/i.test(requestUrl) ||
+            /\/comments\/\d+\/replies(?:\?.*)?$/i.test(requestUrl)) {
+            await handleComments();
+            return;
+        }
+
+        if (/\/(?:movies|shows)\/\d+\/sentiments(?:\?.*)?$/i.test(requestUrl)) {
+            await handleSentiments();
             return;
         }
 
