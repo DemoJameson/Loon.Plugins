@@ -86,33 +86,33 @@ const TMDB_PROVIDER_LIST_ENTRIES = Object.values(PLAYER_TYPE).map((source) => {
     return {
         display_priorities: createZeroPriorityMap(REGION_CODES),
         display_priority: 0,
-        logo_path: "/" + definition.logo,
+        logo_path: `/${definition.logo}`,
         provider_name: definition.name,
         provider_id: definition.tmdbProviderId
     };
 });
 const MEDIA_CONFIG = {
     [MEDIA_TYPE.SHOW]: {
-        buildTranslationPath: function (ref) {
-            return isNonNullish(ref && ref.traktId)
-                ? "/shows/" + ref.traktId + "/translations/zh?extended=all"
+        buildTranslationPath(ref) {
+            return isNonNullish(ref?.traktId)
+                ? `/shows/${ref.traktId}/translations/zh?extended=all`
                 : "";
         }
     },
     [MEDIA_TYPE.MOVIE]: {
-        buildTranslationPath: function (ref) {
-            return isNonNullish(ref && ref.traktId)
-                ? "/movies/" + ref.traktId + "/translations/zh?extended=all"
+        buildTranslationPath(ref) {
+            return isNonNullish(ref?.traktId)
+                ? `/movies/${ref.traktId}/translations/zh?extended=all`
                 : "";
         }
     },
     [MEDIA_TYPE.EPISODE]: {
-        buildTranslationPath: function (ref) {
+        buildTranslationPath(ref) {
             return ref &&
                 isNonNullish(ref.showId) &&
                 isNonNullish(ref.seasonNumber) &&
                 isNonNullish(ref.episodeNumber)
-                ? "/shows/" + ref.showId + "/seasons/" + ref.seasonNumber + "/episodes/" + ref.episodeNumber + "/translations/zh?extended=all"
+                ? `/shows/${ref.showId}/seasons/${ref.seasonNumber}/episodes/${ref.episodeNumber}/translations/zh?extended=all`
                 : "";
         }
     }
@@ -142,7 +142,7 @@ function parseBooleanArgument(value, fallbackValue) {
 
 function createZeroPriorityMap(regionCodes) {
     return ensureArray(regionCodes).reduce((acc, regionCode) => {
-        const code = String(regionCode || "").trim().toUpperCase();
+        const code = String(regionCode ?? "").trim().toUpperCase();
         if (code) {
             acc[code] = 0;
         }
@@ -152,9 +152,9 @@ function createZeroPriorityMap(regionCodes) {
 
 function buildCustomPlayerImageSet(logoName) {
     return {
-        lightThemeImage: TMDB_LOGO_TARGET_BASE_URL + "/" + logoName,
-        darkThemeImage: TMDB_LOGO_TARGET_BASE_URL + "/" + logoName,
-        whiteImage: TMDB_LOGO_TARGET_BASE_URL + "/" + logoName
+        lightThemeImage: `${TMDB_LOGO_TARGET_BASE_URL}/${logoName}`,
+        darkThemeImage: `${TMDB_LOGO_TARGET_BASE_URL}/${logoName}`,
+        whiteImage: `${TMDB_LOGO_TARGET_BASE_URL}/${logoName}`
     };
 }
 
@@ -201,7 +201,7 @@ function parseArgumentConfig() {
             $argument.latestHistoryEpisodeOnly,
             config.latestHistoryEpisodeOnly
         );
-        config.backendBaseUrl = ($argument.backendBaseUrl || "").trim() || config.backendBaseUrl;
+        config.backendBaseUrl = $argument.backendBaseUrl?.trim() || config.backendBaseUrl;
         return config;
     }
 
@@ -245,7 +245,7 @@ const SCRIPT_TRANSLATION_REQUEST_VALUE = "script";
 const body = typeof $response !== "undefined" && typeof $response.body === "string"
     ? $response.body
     : "";
-const requestUrl = ($request && $request.url) ? $request.url : "";
+const requestUrl = $request?.url ?? "";
 const traktApiBaseUrl = resolveTraktApiBaseUrl(requestUrl);
 
 const pendingBackendWrites = createMediaMap();
@@ -261,22 +261,22 @@ function loadCache() {
 
         return prunedCache.cache;
     } catch (e) {
-        $.log("Trakt cache load failed: " + e);
+        $.log(`Trakt cache load failed: ${e}`);
         return {};
     }
 }
 
 function resolveTraktApiBaseUrl(url) {
-    const normalizedUrl = String(url || "");
+    const normalizedUrl = String(url ?? "");
     const match = normalizedUrl.match(/^https:\/\/(apiz?\.trakt\.tv)(?:\/|$)/i);
-    return match ? "https://" + match[1] : "https://api.trakt.tv";
+    return match ? `https://${match[1]}` : "https://api.trakt.tv";
 }
 
 function saveCache(cache) {
     try {
         $.setjson(cache, CACHE_KEY);
     } catch (e) {
-        $.log("Trakt cache save failed: " + e);
+        $.log(`Trakt cache save failed: ${e}`);
     }
 }
 
@@ -284,7 +284,7 @@ function loadHistoryEpisodeCache() {
     try {
         return ensureObject($.getjson(HISTORY_EPISODE_CACHE_KEY, {}));
     } catch (e) {
-        $.log("Trakt history episode cache load failed: " + e);
+        $.log(`Trakt history episode cache load failed: ${e}`);
         return {};
     }
 }
@@ -293,7 +293,7 @@ function saveHistoryEpisodeCache(cache) {
     try {
         $.setjson(cache, HISTORY_EPISODE_CACHE_KEY);
     } catch (e) {
-        $.log("Trakt history episode cache save failed: " + e);
+        $.log(`Trakt history episode cache save failed: ${e}`);
     }
 }
 
@@ -301,7 +301,7 @@ function loadLinkIdsCache() {
     try {
         return ensureObject($.getjson(LINK_IDS_CACHE_KEY, {}));
     } catch (e) {
-        $.log("Trakt watchnow ids cache load failed: " + e);
+        $.log(`Trakt watchnow ids cache load failed: ${e}`);
         return {};
     }
 }
@@ -310,7 +310,7 @@ function saveLinkIdsCache(cache) {
     try {
         $.setjson(cache, LINK_IDS_CACHE_KEY);
     } catch (e) {
-        $.log("Trakt watchnow ids cache save failed: " + e);
+        $.log(`Trakt watchnow ids cache save failed: ${e}`);
     }
 }
 
@@ -325,7 +325,7 @@ function setCurrentSeason(showId, seasonNumber) {
             seasonNumber: Number(seasonNumber)
         }, CURRENT_SEASON_CACHE_KEY);
     } catch (e) {
-        $.log("Trakt current season cache save failed: " + e);
+        $.log(`Trakt current season cache save failed: ${e}`);
     }
 }
 
@@ -333,7 +333,7 @@ function clearCurrentSeason() {
     try {
         $.setdata("", CURRENT_SEASON_CACHE_KEY);
     } catch (e) {
-        $.log("Trakt current season cache save failed: " + e);
+        $.log(`Trakt current season cache save failed: ${e}`);
     }
 }
 
@@ -356,7 +356,7 @@ function getCurrentSeason(showId) {
 
         return Number.isFinite(Number(cache.seasonNumber)) ? Number(cache.seasonNumber) : 1;
     } catch (e) {
-        $.log("Trakt current season cache load failed: " + e);
+        $.log(`Trakt current season cache load failed: ${e}`);
         return 1;
     }
 }
@@ -400,15 +400,15 @@ function pruneExpiredCacheEntries(cache) {
 
     return {
         cache: nextCache,
-        modified: modified
+        modified
     };
 }
 
 function getLanguagePreference() {
     const match = preferredLanguage.match(/([a-zA-Z]{2})(?:-([a-zA-Z]{2}))?/);
     return {
-        lang: match && match[1] ? match[1].toLowerCase() : null,
-        region: match && match[2] ? match[2].toLowerCase() : null
+        lang: match?.[1]?.toLowerCase() ?? null,
+        region: match?.[2]?.toLowerCase() ?? null
     };
 }
 
@@ -420,8 +420,8 @@ function sortTranslations(arr) {
 
     arr.sort((a, b) => {
         const getScore = (item) => {
-            const itemLang = item && item.language ? item.language.toLowerCase() : null;
-            const itemRegion = item && item.country ? item.country.toLowerCase() : null;
+            const itemLang = item?.language?.toLowerCase() ?? null;
+            const itemRegion = item?.country?.toLowerCase() ?? null;
 
             if (itemLang !== preference.lang) {
                 return 0;
@@ -467,11 +467,11 @@ function getMediaConfig(mediaType) {
 }
 
 function getMediaBackendField(mediaType) {
-    return mediaType + "s";
+    return `${mediaType}s`;
 }
 
 function getMediaCachePrefix(mediaType) {
-    return mediaType + ":";
+    return `${mediaType}:`;
 }
 
 function createMediaMap() {
@@ -497,9 +497,9 @@ function normalizeTranslationPayload(translation) {
     }
 
     const normalized = {
-        title: translation.title || null,
-        overview: translation.overview || null,
-        tagline: translation.tagline || null
+        title: translation.title ?? null,
+        overview: translation.overview ?? null,
+        tagline: translation.tagline ?? null
     };
 
     return hasUsefulTranslation(normalized) ? normalized : null;
@@ -507,14 +507,13 @@ function normalizeTranslationPayload(translation) {
 
 function findTranslationByRegion(items, region) {
     return items.find((item) => {
-        return item &&
-            String(item.language || "").toLowerCase() === "zh" &&
-            String(item.country || "").toLowerCase() === region;
-    }) || null;
+        return String(item?.language ?? "").toLowerCase() === "zh" &&
+            String(item?.country ?? "").toLowerCase() === region;
+    }) ?? null;
 }
 
 function isChineseTranslation(item) {
-    return !!(item && String(item.language || "").toLowerCase() === "zh");
+    return String(item?.language ?? "").toLowerCase() === "zh";
 }
 
 function normalizeTranslations(items) {
@@ -567,7 +566,7 @@ function normalizeTranslations(items) {
 
 function buildRequestHeaders(extraHeaders, useSourceHeaders) {
     const headers = {};
-    const sourceHeaders = ($request && $request.headers) ? $request.headers : {};
+    const sourceHeaders = $request?.headers ?? {};
 
     if (useSourceHeaders !== false) {
         Object.keys(sourceHeaders).forEach((key) => {
@@ -597,21 +596,21 @@ function fetchJson(url, extraHeaders, useSourceHeaders) {
         url: url,
         headers: buildRequestHeaders(extraHeaders, useSourceHeaders)
     }).then((response) => {
-        const statusCode = response ? (response.statusCode || response.status) : 0;
+        const statusCode = response?.statusCode || response?.status || 0;
         if (statusCode < 200 || statusCode >= 300) {
-            throw new Error("HTTP " + statusCode + " for " + url);
+            throw new Error(`HTTP ${statusCode} for ${url}`);
         }
 
         try {
             return JSON.parse(response.body);
         } catch (e) {
-            throw new Error("JSON parse failed for " + url + ": " + e);
+            throw new Error(`JSON parse failed for ${url}: ${e}`);
         }
     });
 }
 
 function getRequestHeaderValue(headerName) {
-    if (!$request || !$request.headers || !headerName) {
+    if (!$request?.headers || !headerName) {
         return null;
     }
 
@@ -622,7 +621,7 @@ function getRequestHeaderValue(headerName) {
 }
 
 function isScriptInitiatedTranslationRequest() {
-    return String(getRequestHeaderValue(SCRIPT_TRANSLATION_REQUEST_HEADER) || "").toLowerCase() ===
+    return String(getRequestHeaderValue(SCRIPT_TRANSLATION_REQUEST_HEADER) ?? "").toLowerCase() ===
         SCRIPT_TRANSLATION_REQUEST_VALUE;
 }
 
@@ -632,9 +631,9 @@ function postJson(url, payload, extraHeaders, useSourceHeaders) {
         headers: buildRequestHeaders(extraHeaders, useSourceHeaders),
         body: JSON.stringify(payload)
     }).then((response) => {
-        const statusCode = response ? (response.statusCode || response.status) : 0;
+        const statusCode = response?.statusCode || response?.status || 0;
         if (statusCode < 200 || statusCode >= 300) {
-            throw new Error("HTTP " + statusCode + " for " + url);
+            throw new Error(`HTTP ${statusCode} for ${url}`);
         }
 
         if (!response.body) {
@@ -644,7 +643,7 @@ function postJson(url, payload, extraHeaders, useSourceHeaders) {
         try {
             return JSON.parse(response.body);
         } catch (e) {
-            throw new Error("JSON parse failed for " + url + ": " + e);
+            throw new Error(`JSON parse failed for ${url}: ${e}`);
         }
     });
 }
@@ -655,10 +654,9 @@ function pickCnTranslation(items) {
     }
 
     return items.find((item) => {
-        return item &&
-            String(item.language || "").toLowerCase() === "zh" &&
-            String(item.country || "").toLowerCase() === "cn";
-    }) || null;
+        return String(item?.language ?? "").toLowerCase() === "zh" &&
+            String(item?.country ?? "").toLowerCase() === "cn";
+    }) ?? null;
 }
 
 function extractNormalizedTranslation(items) {
@@ -666,7 +664,7 @@ function extractNormalizedTranslation(items) {
     const translation = normalizeTranslationPayload(cnTranslation);
 
     return {
-        status: cnTranslation && cnTranslation.status ? cnTranslation.status : CACHE_STATUS.NOT_FOUND,
+        status: cnTranslation?.status ?? CACHE_STATUS.NOT_FOUND,
         translation: translation
     };
 }
@@ -676,11 +674,11 @@ function buildEpisodeCompositeKey(showId, seasonNumber, episodeNumber) {
         return "";
     }
 
-    return String(showId) + ":" + String(seasonNumber) + ":" + String(episodeNumber);
+    return `${showId}:${seasonNumber}:${episodeNumber}`;
 }
 
 function parseEpisodeLookupKey(value) {
-    const match = String(value || "").match(/^(\d+):(\d+):(\d+)$/);
+    const match = String(value ?? "").match(/^(\d+):(\d+):(\d+)$/);
     if (!match) {
         return null;
     }
@@ -734,10 +732,10 @@ function storeTranslationEntry(cache, mediaType, ref, entry) {
         return null;
     }
 
-    const translation = normalizeTranslationPayload(entry ? entry.translation : null);
-    const status = entry && entry.status === CACHE_STATUS.FOUND
+    const translation = normalizeTranslationPayload(entry?.translation ?? null);
+    const status = entry?.status === CACHE_STATUS.FOUND
         ? CACHE_STATUS.FOUND
-        : entry && entry.status === CACHE_STATUS.PARTIAL_FOUND
+        : entry?.status === CACHE_STATUS.PARTIAL_FOUND
             ? CACHE_STATUS.PARTIAL_FOUND
             : CACHE_STATUS.NOT_FOUND;
 
@@ -759,12 +757,12 @@ function getCachedTranslation(cache, mediaType, ref) {
 
 function hasZhAvailableTranslation(availableTranslations) {
     return Array.isArray(availableTranslations) && availableTranslations.some((language) => {
-        return String(language || "").toLowerCase() === "zh";
+        return String(language ?? "").toLowerCase() === "zh";
     });
 }
 
 function shouldSkipTranslationLookup(ref) {
-    const availableTranslations = ref && Array.isArray(ref.availableTranslations)
+    const availableTranslations = Array.isArray(ref?.availableTranslations)
         ? ref.availableTranslations
         : null;
 
@@ -811,7 +809,7 @@ async function fetchTranslationsFromBackend(cache, refsByType) {
     }
 
     const totalRefs = Object.keys(MEDIA_CONFIG).reduce((count, mediaType) => {
-        const refs = refsByType && Array.isArray(refsByType[mediaType]) ? refsByType[mediaType] : [];
+        const refs = Array.isArray(refsByType?.[mediaType]) ? refsByType[mediaType] : [];
         return count + refs.length;
     }, 0);
     if (totalRefs < BACKEND_FETCH_MIN_REFS) {
@@ -820,10 +818,10 @@ async function fetchTranslationsFromBackend(cache, refsByType) {
 
     const query = [];
     Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
-        const refs = refsByType && Array.isArray(refsByType[mediaType]) ? refsByType[mediaType] : [];
+        const refs = Array.isArray(refsByType?.[mediaType]) ? refsByType[mediaType] : [];
         const ids = getBackendFieldIds(refs);
         if (ids.length > 0) {
-            query.push(getMediaBackendField(mediaType) + "=" + ids.map((id) => String(id)).join(","));
+            query.push(`${getMediaBackendField(mediaType)}=${ids.map((id) => String(id)).join(",")}`);
         }
     });
 
@@ -831,12 +829,12 @@ async function fetchTranslationsFromBackend(cache, refsByType) {
         return true;
     }
 
-    const url = backendBaseUrl + "/api/trakt/translations?" + query.join("&");
+    const url = `${backendBaseUrl}/api/trakt/translations?${query.join("&")}`;
     const payload = await fetchJson(url, null, false);
 
     Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
         const collectionField = getMediaBackendField(mediaType);
-        const entries = ensureObject(payload && payload[collectionField]);
+        const entries = ensureObject(payload?.[collectionField]);
         Object.keys(entries).forEach((id) => {
             const ref = mediaType === MEDIA_TYPE.EPISODE
                 ? parseEpisodeLookupKey(id)
@@ -875,11 +873,11 @@ function flushBackendWrites() {
         return;
     }
 
-    const url = backendBaseUrl + "/api/trakt/translations";
+    const url = `${backendBaseUrl}/api/trakt/translations`;
     postJson(url, buildBackendWritePayload(), {
         "Content-Type": "application/json"
     }, false).catch(e => {
-        $.log("Trakt backend cache write failed during flush: " + e);
+        $.log(`Trakt backend cache write failed during flush: ${e}`);
     });
 
     Object.keys(pendingBackendWrites).forEach((field) => {
@@ -889,11 +887,11 @@ function flushBackendWrites() {
 
 function buildTranslationUrl(mediaType, ref) {
     const path = getMediaConfig(mediaType).buildTranslationPath(ref);
-    return path ? traktApiBaseUrl + path : "";
+    return path ? `${traktApiBaseUrl}${path}` : "";
 }
 
 function resolveTranslationRequestTarget(url) {
-    const normalizedUrl = String(url || "");
+    const normalizedUrl = String(url ?? "");
     let match = normalizedUrl.match(/\/shows\/(\d+)\/translations\/zh(?:\?|$)/);
     if (match) {
         return {
@@ -925,7 +923,7 @@ function resolveTranslationRequestTarget(url) {
 
 function resolveMediaDetailTarget(url, data, mediaType) {
     if (mediaType === MEDIA_TYPE.EPISODE) {
-        const match = String(url || "").match(/\/shows\/(\d+)\/seasons\/(\d+)\/episodes\/(\d+)(?:\?|$)/);
+        const match = String(url ?? "").match(/\/shows\/(\d+)\/seasons\/(\d+)\/episodes\/(\d+)(?:\?|$)/);
         if (!match) {
             return null;
         }
@@ -938,7 +936,7 @@ function resolveMediaDetailTarget(url, data, mediaType) {
         };
     }
 
-    const traktId = data && data.ids ? data.ids.trakt : null;
+    const traktId = data?.ids?.trakt ?? null;
     return isNonNullish(traktId)
         ? {
             mediaType: mediaType,
@@ -948,7 +946,7 @@ function resolveMediaDetailTarget(url, data, mediaType) {
 }
 
 function resolveCurrentSeasonTarget(url) {
-    const match = String(url || "").match(/\/shows\/(\d+)\/seasons\/(\d+)(?:\/|\?|$)/);
+    const match = String(url ?? "").match(/\/shows\/(\d+)\/seasons\/(\d+)(?:\/|\?|$)/);
     if (!match) {
         return null;
     }
@@ -960,7 +958,7 @@ function resolveCurrentSeasonTarget(url) {
 }
 
 function resolveSeasonListTarget(url) {
-    const match = String(url || "").match(/\/shows\/(\d+)\/seasons(?:\?|$)/);
+    const match = String(url ?? "").match(/\/shows\/(\d+)\/seasons(?:\?|$)/);
     if (!match) {
         return null;
     }
@@ -971,11 +969,11 @@ function resolveSeasonListTarget(url) {
 }
 
 async function fetchDirectTranslation(mediaType, ref) {
-    const traktId = ref && isNonNullish(ref.traktId) ? ref.traktId : null;
+    const traktId = isNonNullish(ref?.traktId) ? ref.traktId : null;
     const url = buildTranslationUrl(mediaType, ref);
 
     if (!url) {
-        throw new Error("Missing translation lookup metadata for mediaType=" + mediaType + ", traktId=" + traktId);
+        throw new Error(`Missing translation lookup metadata for mediaType=${mediaType}, traktId=${traktId}`);
     }
 
     const translations = normalizeTranslations(await fetchJson(url, {
@@ -1008,7 +1006,7 @@ function applyTranslation(target, entry) {
 }
 
 function cloneObject(value) {
-    return isPlainObject(value) ? Object.assign({}, value) : null;
+    return isPlainObject(value) ? { ...value } : null;
 }
 
 function getLinkIdsCacheEntry(cache, traktId) {
@@ -1024,8 +1022,8 @@ function mergeLinkIdsCacheEntry(currentEntry, nextEntry) {
     const current = ensureObject(currentEntry);
     const incoming = ensureObject(nextEntry);
     const merged = {};
-    const mergedIds = Object.assign({}, ensureObject(current.ids), ensureObject(incoming.ids));
-    const mergedShowIds = Object.assign({}, ensureObject(current.showIds), ensureObject(incoming.showIds));
+    const mergedIds = { ...ensureObject(current.ids), ...ensureObject(incoming.ids) };
+    const mergedShowIds = { ...ensureObject(current.showIds), ...ensureObject(incoming.showIds) };
 
     if (Object.keys(mergedIds).length > 0) {
         merged.ids = mergedIds;
@@ -1075,7 +1073,7 @@ function buildFallbackShowIds(showTraktId, linkCache) {
     }
 
     const showEntry = getLinkIdsCacheEntry(linkCache, showTraktId);
-    if (showEntry && isPlainObject(showEntry.ids)) {
+    if (isPlainObject(showEntry?.ids)) {
         return cloneObject(showEntry.ids);
     }
 
@@ -1090,23 +1088,23 @@ function cacheMediaIdsFromDetailResponse(linkCache, mediaType, ref, data) {
     }
 
     if (mediaType === MEDIA_TYPE.MOVIE || mediaType === MEDIA_TYPE.SHOW) {
-        const traktId = data && data.ids ? data.ids.trakt : null;
+        const traktId = data?.ids?.trakt ?? null;
         return setLinkIdsCacheEntry(linkCache, traktId, {
             ids: cloneObject(data.ids)
         });
     }
 
     if (mediaType === MEDIA_TYPE.EPISODE) {
-        const episodeTraktId = data && data.ids ? data.ids.trakt : null;
+        const episodeTraktId = data?.ids?.trakt ?? null;
         if (isNullish(episodeTraktId)) {
             return false;
         }
 
         return setLinkIdsCacheEntry(linkCache, episodeTraktId, {
             ids: cloneObject(data.ids),
-            showIds: buildFallbackShowIds(ref && ref.showId, linkCache),
-            seasonNumber: isNonNullish(data.season) ? data.season : ref && ref.seasonNumber,
-            episodeNumber: isNonNullish(data.number) ? data.number : ref && ref.episodeNumber
+            showIds: buildFallbackShowIds(ref?.showId, linkCache),
+            seasonNumber: isNonNullish(data.season) ? data.season : ref?.seasonNumber,
+            episodeNumber: isNonNullish(data.number) ? data.number : ref?.episodeNumber
         });
     }
 
@@ -1122,9 +1120,9 @@ function cacheEpisodeIdsFromSeasonList(linkCache, showId, seasons) {
     const showIds = buildFallbackShowIds(showId, linkCache);
 
     seasons.forEach((season) => {
-        const episodes = season && Array.isArray(season.episodes) ? season.episodes : [];
+        const episodes = Array.isArray(season?.episodes) ? season.episodes : [];
         episodes.forEach((episode) => {
-            const episodeTraktId = episode && episode.ids ? episode.ids.trakt : null;
+            const episodeTraktId = episode?.ids?.trakt ?? null;
             if (isNullish(episodeTraktId)) {
                 return;
             }
@@ -1132,8 +1130,8 @@ function cacheEpisodeIdsFromSeasonList(linkCache, showId, seasons) {
             if (setLinkIdsCacheEntry(linkCache, episodeTraktId, {
                 ids: cloneObject(episode.ids),
                 showIds: cloneObject(showIds),
-                seasonNumber: episode ? episode.season : null,
-                episodeNumber: episode ? episode.number : null
+                seasonNumber: episode?.season ?? null,
+                episodeNumber: episode?.number ?? null
             })) {
                 changed = true;
             }
@@ -1149,11 +1147,11 @@ function buildDetailLookupUrl(mediaType, traktId) {
     }
 
     if (mediaType === MEDIA_TYPE.MOVIE) {
-        return traktApiBaseUrl + "/movies/" + traktId + "?extended=cloud9,full,watchnow";
+        return `${traktApiBaseUrl}/movies/${traktId}?extended=cloud9,full,watchnow`;
     }
 
     if (mediaType === MEDIA_TYPE.SHOW) {
-        return traktApiBaseUrl + "/shows/" + traktId + "?extended=cloud9,full,watchnow";
+        return `${traktApiBaseUrl}/shows/${traktId}?extended=cloud9,full,watchnow`;
     }
 
     return "";
@@ -1188,7 +1186,7 @@ async function ensureMediaIdsCacheEntry(linkCache, mediaType, traktId) {
 
 async function ensureEpisodeShowIds(linkCache, episodeTraktId, episodeEntry) {
     if (!linkCache || isNullish(episodeTraktId) || !episodeEntry || !isPlainObject(episodeEntry.showIds)) {
-        return episodeEntry && isPlainObject(episodeEntry.showIds) ? episodeEntry.showIds : null;
+        return isPlainObject(episodeEntry?.showIds) ? episodeEntry.showIds : null;
     }
 
     if (isNonNullish(episodeEntry.showIds.tmdb)) {
@@ -1216,11 +1214,11 @@ function buildWatchnowRedirectLink(deeplink) {
         return "";
     }
 
-    return WATCHNOW_REDIRECT_URL + "?deeplink=" + encodeURIComponent(deeplink);
+    return `${WATCHNOW_REDIRECT_URL}?deeplink=${encodeURIComponent(deeplink)}`;
 }
 
 function doneRedirect(location) {
-    const targetLocation = String(location || "").trim();
+    const targetLocation = String(location ?? "").trim();
     if (!targetLocation) {
         $.done({});
         return;
@@ -1247,15 +1245,15 @@ function doneRedirect(location) {
 }
 
 function resolveDirectRedirectLocation(url) {
-    const normalizedUrl = String(url || "");
+    const normalizedUrl = String(url ?? "");
     let match = normalizedUrl.match(/^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?deeplink=([^&]+)(?:&.*)?$/i);
-    if (match && match[1]) {
+    if (match?.[1]) {
         return decodeURIComponent(match[1]);
     }
 
     match = normalizedUrl.match(/^https:\/\/image\.tmdb\.org\/t\/p\/w342\/([a-z0-9_-]+)_logo\.webp(?:\?.*)?$/i);
-    if (match && match[1]) {
-        return TMDB_LOGO_TARGET_BASE_URL + "/" + match[1].toLowerCase() + "_logo.webp";
+    if (match?.[1]) {
+        return `${TMDB_LOGO_TARGET_BASE_URL}/${match[1].toLowerCase()}_logo.webp`;
     }
 
     return "";
@@ -1266,11 +1264,11 @@ function handleDirectRedirectRequest() {
 }
 
 function isSofaTimeRequest() {
-    return /^Sofa(?:\s|%20)Time/i.test(String(getRequestHeaderValue("User-Agent") || "").trim());
+    return /^Sofa(?:\s|%20)Time/i.test(String(getRequestHeaderValue("User-Agent") ?? "").trim());
 }
 
 function resolveStreamingAvailabilityTarget(url) {
-    const normalizedUrl = String(url || "");
+    const normalizedUrl = String(url ?? "");
     let match = normalizedUrl.match(/^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/(tt\d+)(?:\?|$)/i);
     if (match) {
         return {
@@ -1291,11 +1289,11 @@ function resolveStreamingAvailabilityTarget(url) {
 }
 
 function isStreamingAvailabilityCountriesRequest(url) {
-    return /^https:\/\/streaming-availability\.p\.rapidapi\.com\/countries\/[a-z]{2}(?:\?.*)?$/i.test(String(url || ""));
+    return /^https:\/\/streaming-availability\.p\.rapidapi\.com\/countries\/[a-z]{2}(?:\?.*)?$/i.test(String(url ?? ""));
 }
 
 function resolveStreamingAvailabilityTmdbTarget(payload, fallbackTarget) {
-    const tmdbValue = payload && payload.tmdbId ? String(payload.tmdbId).trim() : "";
+    const tmdbValue = payload?.tmdbId ? String(payload.tmdbId).trim() : "";
     const match = tmdbValue.match(/^(movie|tv)\/(\d+)$/i);
     if (!match) {
         return fallbackTarget;
@@ -1305,8 +1303,8 @@ function resolveStreamingAvailabilityTmdbTarget(payload, fallbackTarget) {
     const tmdbId = Number(match[2]);
     return {
         mediaType: tmdbType === "movie" ? MEDIA_TYPE.MOVIE : MEDIA_TYPE.SHOW,
-        imdbId: fallbackTarget && fallbackTarget.imdbId ? fallbackTarget.imdbId : "",
-        tmdbId: tmdbId,
+        imdbId: fallbackTarget?.imdbId ?? "",
+        tmdbId,
         showTmdbId: tmdbType === "tv" ? tmdbId : null
     };
 }
@@ -1382,7 +1380,7 @@ function rewriteStreamingOptionsMap(target, streamingTarget) {
             return;
         }
 
-        streamingOptions[String(regionCode || "").toLowerCase()] = options;
+        streamingOptions[String(regionCode ?? "").toLowerCase()] = options;
     });
     target.streamingOptions = streamingOptions;
 }
@@ -1410,7 +1408,7 @@ function injectSofaTimeCountryServices(payload) {
 
     const services = Array.isArray(payload.services) ? payload.services.slice() : [];
     const filteredServices = services.filter((service) => {
-        const id = service && service.id ? String(service.id).toLowerCase() : "";
+        const id = service?.id ? String(service.id).toLowerCase() : "";
         return !Object.values(PLAYER_TYPE).includes(id);
     });
 
@@ -1443,8 +1441,8 @@ function injectTmdbProviderCatalog(payload) {
 
     const results = Array.isArray(payload.results) ? payload.results.slice() : [];
     const filteredResults = results.filter((item) => {
-        const providerId = item && item.provider_id ? Number(item.provider_id) : NaN;
-        const providerName = item && item.provider_name ? String(item.provider_name).toLowerCase() : "";
+        const providerId = item?.provider_id ? Number(item.provider_id) : NaN;
+        const providerName = item?.provider_name ? String(item.provider_name).toLowerCase() : "";
         return !TMDB_PROVIDER_LIST_ENTRIES.some((entry) => {
             return providerId === entry.provider_id || providerName === String(entry.provider_name).toLowerCase();
         });
@@ -1473,11 +1471,11 @@ function buildInfuseDeeplink(target, context) {
     }
 
     if (target.mediaType === MEDIA_TYPE.MOVIE && isNonNullish(context.tmdbId)) {
-        return "infuse://movie/" + context.tmdbId;
+        return `infuse://movie/${context.tmdbId}`;
     }
 
     if (target.mediaType === MEDIA_TYPE.SHOW && isNonNullish(context.tmdbId)) {
-        return "infuse://series/" + context.tmdbId;
+        return `infuse://series/${context.tmdbId}`;
     }
 
     if (
@@ -1486,7 +1484,7 @@ function buildInfuseDeeplink(target, context) {
         isNonNullish(context.seasonNumber) &&
         isNonNullish(context.episodeNumber)
     ) {
-        return "infuse://series/" + context.showTmdbId + "-" + context.seasonNumber + "-" + context.episodeNumber;
+        return `infuse://series/${context.showTmdbId}-${context.seasonNumber}-${context.episodeNumber}`;
     }
 
     return "";
@@ -1498,11 +1496,11 @@ function buildForwardDeeplink(target, context) {
     }
 
     if (target.mediaType === MEDIA_TYPE.MOVIE && isNonNullish(context.tmdbId)) {
-        return "forward://tmdb?id=" + context.tmdbId + "&type=movie";
+        return `forward://tmdb?id=${context.tmdbId}&type=movie`;
     }
 
-    if ((target.mediaType === MEDIA_TYPE.SHOW || target.mediaType === MEDIA_TYPE.EPISODE) && isNonNullish(context.showTmdbId || context.tmdbId)) {
-        return "forward://tmdb?id=" + (context.showTmdbId || context.tmdbId) + "&type=tv";
+    if ((target.mediaType === MEDIA_TYPE.SHOW || target.mediaType === MEDIA_TYPE.EPISODE) && isNonNullish(context.showTmdbId ?? context.tmdbId)) {
+        return `forward://tmdb?id=${context.showTmdbId ?? context.tmdbId}&type=tv`;
     }
 
     return "";
@@ -1514,11 +1512,11 @@ function buildEplayerXDeeplink(target, context) {
     }
 
     if (target.mediaType === MEDIA_TYPE.MOVIE && isNonNullish(context.tmdbId)) {
-        return "eplayerx://tmdb-info/detail?id=" + context.tmdbId + "&type=movie";
+        return `eplayerx://tmdb-info/detail?id=${context.tmdbId}&type=movie`;
     }
 
-    if ((target.mediaType === MEDIA_TYPE.SHOW || target.mediaType === MEDIA_TYPE.EPISODE) && isNonNullish(context.showTmdbId || context.tmdbId)) {
-        return "eplayerx://tmdb-info/detail?id=" + (context.showTmdbId || context.tmdbId) + "&type=tv";
+    if ((target.mediaType === MEDIA_TYPE.SHOW || target.mediaType === MEDIA_TYPE.EPISODE) && isNonNullish(context.showTmdbId ?? context.tmdbId)) {
+        return `eplayerx://tmdb-info/detail?id=${context.showTmdbId ?? context.tmdbId}&type=tv`;
     }
 
     return "";
@@ -1548,7 +1546,7 @@ function createSourceDefinition(source, name, color) {
         link_count: 99999,
         color: color,
         images: {
-            logo: "raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/" + source + ".webp",
+            logo: `raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/${source}.webp`,
             logo_colorized: null,
             channel: null
         }
@@ -1556,13 +1554,13 @@ function createSourceDefinition(source, name, color) {
 }
 
 function buildWatchnowFavoriteSource(source) {
-    return WATCHNOW_DEFAULT_REGION + "-" + source;
+    return `${WATCHNOW_DEFAULT_REGION}-${source}`;
 }
 
 function injectWatchnowFavoriteSources(items) {
     const favorites = ensureArray(items).slice();
     const filtered = favorites.filter((item) => {
-        const normalized = String(item || "").toLowerCase();
+        const normalized = String(item ?? "").toLowerCase();
         return !Object.values(PLAYER_TYPE).some((source) => normalized === buildWatchnowFavoriteSource(source));
     });
 
@@ -1574,7 +1572,7 @@ function injectWatchnowFavoriteSources(items) {
 
 function filterOutCustomSources(items) {
     return ensureArray(items).filter((item) => {
-        const source = item && item.source ? String(item.source).toLowerCase() : "";
+        const source = item?.source ? String(item.source).toLowerCase() : "";
         return !Object.values(PLAYER_TYPE).includes(source);
     });
 }
@@ -1641,7 +1639,7 @@ function injectCustomSourcesIntoPayload(payload) {
 }
 
 function resolveWatchnowTarget(url) {
-    const normalizedUrl = String(url || "");
+    const normalizedUrl = String(url ?? "");
     let match = normalizedUrl.match(/\/movies\/(\d+)\/watchnow(?:\?|$)/);
     if (match) {
         return {
@@ -1808,7 +1806,7 @@ function collectUniqueRef(target, seen, ref) {
         return;
     }
 
-    const mediaType = ref.mediaType || null;
+    const mediaType = ref.mediaType ?? null;
     const key = mediaType ? buildMediaCacheLookupKey(mediaType, ref) : "";
     if (!key) {
         return;
@@ -1822,18 +1820,18 @@ function collectUniqueRef(target, seen, ref) {
 
 function getItemMediaTarget(item, mediaType) {
     if (mediaType === MEDIA_TYPE.EPISODE) {
-        if (item && item.episode) {
+        if (item?.episode) {
             return item.episode;
         }
 
-        if (item && item.progress && item.progress.next_episode) {
+        if (item?.progress?.next_episode) {
             return item.progress.next_episode;
         }
 
         return null;
     }
 
-    return item ? item[mediaType] : null;
+    return item?.[mediaType] ?? null;
 }
 
 function buildMediaRef(item, mediaType) {
@@ -1842,7 +1840,7 @@ function buildMediaRef(item, mediaType) {
     }
 
     const target = getItemMediaTarget(item, mediaType);
-    const traktId = target && target.ids ? target.ids.trakt : null;
+    const traktId = target?.ids?.trakt ?? null;
     if (isNullish(traktId)) {
         return null;
     }
@@ -1856,9 +1854,9 @@ function buildMediaRef(item, mediaType) {
 }
 
 function buildEpisodeRef(item, episode) {
-    const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
-    const seasonNumber = episode ? episode.season : null;
-    const episodeNumber = episode ? episode.number : null;
+    const showId = item?.show?.ids?.trakt ?? null;
+    const seasonNumber = episode?.season ?? null;
+    const episodeNumber = episode?.number ?? null;
 
     if (isNullish(showId) || isNullish(seasonNumber) || isNullish(episodeNumber)) {
         return null;
@@ -1903,11 +1901,11 @@ async function hydrateFromBackend(cache, refsByType) {
     try {
         const missingRefsByType = createMediaCollection();
         Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
-            missingRefsByType[mediaType] = getMissingRefs(cache, mediaType, refsByType[mediaType] || []);
+            missingRefsByType[mediaType] = getMissingRefs(cache, mediaType, refsByType[mediaType] ?? []);
         });
         await fetchTranslationsFromBackend(cache, missingRefsByType);
     } catch (e) {
-        $.log("Trakt backend cache read failed: " + e);
+        $.log(`Trakt backend cache read failed: ${e}`);
     }
 }
 
@@ -1918,7 +1916,7 @@ async function fetchAndPersistMissing(cache, mediaType, refs, logLabel) {
             storeTranslationEntry(cache, mediaType, ref, merged);
             queueBackendWrite(mediaType, ref, merged);
         } catch (e) {
-            $.log("Trakt " + logLabel + " translation fetch failed for key=" + buildMediaCacheLookupKey(mediaType, ref) + ": " + e);
+            $.log(`Trakt ${logLabel} translation fetch failed for key=${buildMediaCacheLookupKey(mediaType, ref)}: ${e}`);
         }
     });
 }
@@ -1935,7 +1933,7 @@ async function processMediaList(logLabel, sourceBody) {
     await hydrateFromBackend(cache, refsByType);
 
     for (const mediaType of Object.keys(MEDIA_CONFIG)) {
-        await fetchAndPersistMissing(cache, mediaType, refsByType[mediaType], logLabel + " " + mediaType);
+        await fetchAndPersistMissing(cache, mediaType, refsByType[mediaType], `${logLabel} ${mediaType}`);
     }
 
     saveCache(cache);
@@ -2087,9 +2085,9 @@ async function handleSeasonEpisodesList() {
 
         const currentSeasonNumber = getCurrentSeason(target.showId);
         const targetSeason = seasons.find((item) => {
-            const episodes = item && Array.isArray(item.episodes) ? item.episodes : [];
+            const episodes = Array.isArray(item?.episodes) ? item.episodes : [];
             return episodes.some((episode) => {
-                return Number(episode && episode.season) === currentSeasonNumber;
+                return Number(episode?.season) === currentSeasonNumber;
             });
         });
 
@@ -2100,17 +2098,17 @@ async function handleSeasonEpisodesList() {
 
         const cache = loadCache();
         const allEpisodeRefs = seasons.flatMap((item) => {
-            const seasonEpisodes = item && Array.isArray(item.episodes) ? item.episodes : [];
+            const seasonEpisodes = Array.isArray(item?.episodes) ? item.episodes : [];
             return seasonEpisodes.map((episode) => {
                 return {
                     mediaType: MEDIA_TYPE.EPISODE,
                     showId: target.showId,
-                    seasonNumber: episode ? episode.season : null,
-                    episodeNumber: episode ? episode.number : null,
-                    backendLookupKey: buildEpisodeCompositeKey(target.showId, episode ? episode.season : null, episode ? episode.number : null),
-                    availableTranslations: episode && Array.isArray(episode.available_translations) ? episode.available_translations : null,
-                    seasonFirstAired: item ? item.first_aired : null,
-                    episodeFirstAired: episode ? episode.first_aired : null
+                    seasonNumber: episode?.season ?? null,
+                    episodeNumber: episode?.number ?? null,
+                    backendLookupKey: buildEpisodeCompositeKey(target.showId, episode?.season ?? null, episode?.number ?? null),
+                    availableTranslations: Array.isArray(episode?.available_translations) ? episode.available_translations : null,
+                    seasonFirstAired: item?.first_aired ?? null,
+                    episodeFirstAired: episode?.first_aired ?? null
                 };
             });
         }).filter((ref) => {
@@ -2122,18 +2120,18 @@ async function handleSeasonEpisodesList() {
             episode: allEpisodeRefs
         });
         const missingEpisodeRefs = getMissingRefs(cache, MEDIA_TYPE.EPISODE, allEpisodeRefs).filter((ref) => {
-            return isNonNullish(ref && ref.seasonFirstAired) && isNonNullish(ref && ref.episodeFirstAired);
+            return isNonNullish(ref?.seasonFirstAired) && isNonNullish(ref?.episodeFirstAired);
         });
         const prioritizedEpisodeRefs = missingEpisodeRefs
             .map((ref, index) => {
                 return {
-                    ref: ref,
-                    index: index
+                    ref,
+                    index
                 };
             })
             .sort((left, right) => {
-                const leftSeason = Number(left.ref && left.ref.seasonNumber);
-                const rightSeason = Number(right.ref && right.ref.seasonNumber);
+                const leftSeason = Number(left.ref?.seasonNumber);
+                const rightSeason = Number(right.ref?.seasonNumber);
                 const getBucket = (seasonNumber) => {
                     if (seasonNumber === currentSeasonNumber) {
                         return 0;
@@ -2173,13 +2171,13 @@ async function handleSeasonEpisodesList() {
         flushBackendWrites();
 
         seasons.forEach((season) => {
-            const seasonEpisodes = season && Array.isArray(season.episodes) ? season.episodes : [];
+            const seasonEpisodes = Array.isArray(season?.episodes) ? season.episodes : [];
             seasonEpisodes.forEach((episode) => {
                 const ref = {
                     mediaType: MEDIA_TYPE.EPISODE,
                     showId: target.showId,
-                    seasonNumber: episode ? episode.season : null,
-                    episodeNumber: episode ? episode.number : null
+                    seasonNumber: episode?.season ?? null,
+                    episodeNumber: episode?.number ?? null
                 };
                 applyTranslation(episode, getCachedTranslation(cache, MEDIA_TYPE.EPISODE, ref));
             });
@@ -2196,13 +2194,13 @@ function buildHistoryEpisodesRequestUrl(url) {
         return url;
     }
 
-    const match = String(url || "").match(/^([^?]+)(\?.*)?$/);
+    const match = String(url ?? "").match(/^([^?]+)(\?.*)?$/);
     if (!match) {
         return url;
     }
 
     const path = match[1];
-    const query = match[2] || "";
+    const query = match[2] ?? "";
     const params = {};
     const queryWithoutPrefix = query.replace(/^\?/, "");
 
@@ -2213,7 +2211,7 @@ function buildHistoryEpisodesRequestUrl(url) {
             }
 
             const pieces = part.split("=");
-            const key = decodeURIComponent(pieces[0] || "");
+            const key = decodeURIComponent(pieces[0] ?? "");
             if (!key) {
                 return;
             }
@@ -2226,14 +2224,14 @@ function buildHistoryEpisodesRequestUrl(url) {
     params.limit = String(HISTORY_EPISODES_LIMIT);
 
     const nextQuery = Object.keys(params).map((key) => {
-        return encodeURIComponent(key) + "=" + encodeURIComponent(params[key]);
+        return `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`;
     }).join("&");
 
-    return path + (nextQuery ? "?" + nextQuery : "");
+    return `${path}${nextQuery ? `?${nextQuery}` : ""}`;
 }
 
 function isHistoryEpisodesListUrl(url) {
-    return /\/(?:users\/[^\/]+?\/history\/episodes|sync\/history\/episodes)\/?(?:\?|$)/.test(String(url || ""));
+    return /\/(?:users\/[^\/]+?\/history\/episodes|sync\/history\/episodes)\/?(?:\?|$)/.test(String(url ?? ""));
 }
 
 function shouldApplyLatestHistoryEpisodeOnly(url) {
@@ -2241,23 +2239,23 @@ function shouldApplyLatestHistoryEpisodeOnly(url) {
 }
 
 function parseUrlParts(url) {
-    const match = String(url || "").match(/^([^?]+)(?:\?(.*))?$/);
+    const match = String(url ?? "").match(/^([^?]+)(?:\?(.*))?$/);
     return {
-        path: match && match[1] ? match[1] : "",
-        query: match && match[2] ? match[2] : ""
+        path: match?.[1] ?? "",
+        query: match?.[2] ?? ""
     };
 }
 
 function parseQueryParams(query) {
     const params = {};
 
-    String(query || "").split("&").forEach((part) => {
+    String(query ?? "").split("&").forEach((part) => {
         if (!part) {
             return;
         }
 
         const pieces = part.split("=");
-        const key = decodeURIComponent(pieces[0] || "");
+        const key = decodeURIComponent(pieces[0] ?? "");
         if (!key) {
             return;
         }
@@ -2275,10 +2273,10 @@ function getHistoryEpisodesCacheBucketKey(url) {
     delete params.limit;
 
     const query = Object.keys(params).sort().map((key) => {
-        return encodeURIComponent(key) + "=" + encodeURIComponent(params[key]);
+        return `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`;
     }).join("&");
 
-    return parts.path + (query ? "?" + query : "");
+    return `${parts.path}${query ? `?${query}` : ""}`;
 }
 
 function getHistoryEpisodesPageNumber(url) {
@@ -2288,14 +2286,14 @@ function getHistoryEpisodesPageNumber(url) {
 }
 
 function getHistoryEpisodeShowKey(item) {
-    const showId = item && item.show && item.show.ids ? item.show.ids.trakt : null;
+    const showId = item?.show?.ids?.trakt ?? null;
     return isNonNullish(showId) ? String(showId) : "";
 }
 
 function getHistoryEpisodeSortKey(item) {
-    const episode = item && item.episode ? item.episode : null;
-    const season = episode && Number.isFinite(Number(episode.season)) ? Number(episode.season) : -1;
-    const number = episode && Number.isFinite(Number(episode.number)) ? Number(episode.number) : -1;
+    const episode = item?.episode ?? null;
+    const season = Number.isFinite(Number(episode?.season)) ? Number(episode.season) : -1;
+    const number = Number.isFinite(Number(episode?.number)) ? Number(episode.number) : -1;
     return {
         season: season,
         number: number
@@ -2308,11 +2306,11 @@ function createHistoryEpisodeCacheSnapshot(item) {
 
     return {
         id: item && item.id ? Number(item.id) : 0,
-        watched_at: item && item.watched_at ? item.watched_at : null,
-        listed_at: item && item.listed_at ? item.listed_at : null,
+        watched_at: item?.watched_at ?? null,
+        listed_at: item?.listed_at ?? null,
         show: {
             ids: {
-                trakt: showId || null
+                trakt: showId ?? null
             }
         },
         episode: {
@@ -2431,7 +2429,7 @@ async function getProcessedHistoryEpisodesBody() {
         const data = keepLatestHistoryEpisodes(JSON.parse(body));
         return JSON.stringify(filterHistoryEpisodesAcrossPages(data, requestUrl));
     } catch (e) {
-        $.log("Trakt history episode local merge failed: " + e);
+        $.log(`Trakt history episode local merge failed: ${e}`);
         return body;
     }
 }
@@ -2595,7 +2593,7 @@ async function handleHistoryEpisodeList() {
             return;
         }
 
-        if (/^https:\/\/api\.(?:themoviedb|tmdb)\.org\/3\/watch\/providers\/(?:movie|tv)(?:\?.*)?$/i.test(String(requestUrl || ""))) {
+        if (/^https:\/\/api\.(?:themoviedb|tmdb)\.org\/3\/watch\/providers\/(?:movie|tv)(?:\?.*)?$/i.test(String(requestUrl ?? ""))) {
             handleTmdbProviderCatalog();
             return;
         }
@@ -2647,7 +2645,7 @@ async function handleHistoryEpisodeList() {
 
         $done({ body: body });
     } catch (e) {
-        $.log("Trakt script error: " + e);
+        $.log(`Trakt script error: ${e}`);
         $.done({});
     }
 })();
