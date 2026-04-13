@@ -75,9 +75,9 @@
 ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 movies 详情
 ^https:\/\/apiz?\.trakt\.tv\/movies\/[^\/]+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 watchnow/sources，注入 Infuse 和 Forward 来源
+# 拦截 watchnow/sources，注入播放器作为服务商
 ^https:\/\/apiz?\.trakt\.tv\/watchnow\/sources(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 movie/show/episode watchnow，注入 Infuse 和 Forward 跳转链接
+# 拦截 movie/show/episode watchnow，注入播放器跳转链接
 ^https:\/\/apiz?\.trakt\.tv\/(?:movies|shows|episodes)\/[^\/]+\/watchnow(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 episodes 详情
 ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js

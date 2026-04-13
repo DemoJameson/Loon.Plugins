@@ -82,9 +82,9 @@ http-response ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons(\?.*)?$ script
 http-response ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Show Detail
 # 拦截 movies 详情
 http-response ^https:\/\/apiz?\.trakt\.tv\/movies\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Movie Detail
-# 拦截 watchnow/sources，注入 Infuse 和 Forward 来源
+# 拦截 watchnow/sources，注入播放器作为服务商
 http-response ^https:\/\/apiz?\.trakt\.tv\/watchnow\/sources(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Watchnow Sources
-# 拦截 movie/show/episode watchnow，注入 Infuse 和 Forward 跳转链接
+# 拦截 movie/show/episode watchnow，注入播放器跳转链接
 http-response ^https:\/\/apiz?\.trakt\.tv\/(?:movies|shows|episodes)\/[^\/]+\/watchnow(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Watchnow
 # 拦截 episodes 详情
 http-response ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{backendBaseUrl}], tag=Trakt Episode Detail

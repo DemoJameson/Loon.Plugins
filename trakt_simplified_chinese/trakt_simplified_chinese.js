@@ -19,20 +19,20 @@ const MEDIA_TYPE = {
     EPISODE: "episode"
 };
 const HISTORY_EPISODES_LIMIT = 500;
-const WATCHNOW_DEFAULT_REGION = "hk";
-const WATCHNOW_DEFAULT_CURRENCY = "hkd";
+const WATCHNOW_DEFAULT_REGION = "us";
+const WATCHNOW_DEFAULT_CURRENCY = "usd";
 const WATCHNOW_REDIRECT_URL = "https://loon-plugins.demojameson.de5.net/api/redirect";
 const TMDB_LOGO_TARGET_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images";
 const REGION_CODES = [
-    "AE", "AD", "AG", "AL", "AO", "AR", "AT", "AU", "AZ", "BA", "BB", "BE", "BG", "BH", "BM", "BO",
-    "BR", "BS", "BY", "BZ", "CA", "CH", "CI", "CL", "CO", "CM", "CR", "CU", "CV", "CZ", "CY", "DE",
-    "DK", "DO", "DZ", "EC", "EE", "EG", "ES", "FI", "FJ", "FR", "GB", "GF", "GG", "GH", "GI", "GQ",
-    "GR", "GT", "HK", "HN", "HR", "HU", "ID", "IE", "IL", "IN", "IQ", "IT", "IS", "JM", "JP", "JO",
-    "KE", "KR", "KW", "LB", "LC", "LI", "LT", "LU", "MA", "LV", "LY", "MC", "ME", "MD", "MG", "MK",
-    "MT", "ML", "MU", "MX", "MZ", "MY", "NE", "NG", "NL", "NI", "NO", "NZ", "OM", "PA", "PE", "PK",
-    "PF", "PL", "PH", "PS", "PT", "PY", "QA", "RO", "RS", "SA", "SC", "SI", "SG", "SE", "SN", "SV",
-    "SK", "SM", "TC", "TH", "TD", "TN", "TR", "TT", "TW", "TZ", "UA", "UG", "US", "UY", "VE", "YE",
-    "ZA", "ZM", "ZW"
+    "AD", "AE", "AG", "AL", "AO", "AR", "AT", "AU", "AZ", "BA", "BB", "BE", "BF", "BG", "BH", "BM",
+    "BO", "BR", "BS", "BY", "BZ", "CA", "CD", "CH", "CI", "CL", "CM", "CO", "CR", "CU", "CV", "CY",
+    "CZ", "DE", "DK", "DO", "DZ", "EC", "EE", "EG", "ES", "FI", "FJ", "FR", "GB", "GF", "GG", "GH",
+    "GI", "GQ", "GR", "GT", "GY", "HK", "HN", "HR", "HU", "ID", "IE", "IL", "IN", "IQ", "IS", "IT",
+    "JM", "JO", "JP", "KE", "KR", "KW", "LB", "LC", "LI", "LT", "LU", "LV", "LY", "MA", "MC", "MD",
+    "ME", "MG", "MK", "ML", "MT", "MU", "MW", "MX", "MY", "MZ", "NE", "NG", "NI", "NL", "NO", "NZ",
+    "OM", "PA", "PE", "PF", "PG", "PH", "PK", "PL", "PS", "PT", "PY", "QA", "RO", "RS", "RU", "SA",
+    "SC", "SE", "SG", "SI", "SK", "SM", "SN", "SV", "TC", "TD", "TH", "TN", "TR", "TT", "TW", "TZ",
+    "UA", "UG", "US", "UY", "VA", "VE", "XK", "YE", "ZA", "ZM", "ZW"
 ];
 const PLAYER_TYPE = {
     EPLAYERX: "eplayerx",
@@ -1751,14 +1751,22 @@ function injectCustomWatchnowEntriesIntoRegion(regionData, customEntries) {
     return nextRegion;
 }
 
-function ensureWatchnowDefaultRegion(payload) {
+function ensureWatchnowAllRegions(payload) {
     if (!isPlainObject(payload)) {
         return payload;
     }
 
-    if (!isPlainObject(payload[WATCHNOW_DEFAULT_REGION])) {
-        payload[WATCHNOW_DEFAULT_REGION] = {};
-    }
+    const finalRegionCodes = Array.from(new Set(REGION_CODES.concat(Object.keys(payload))));
+    finalRegionCodes.forEach((regionCode) => {
+        const normalizedRegionCode = String(regionCode ?? "").trim().toLowerCase();
+        if (!normalizedRegionCode) {
+            return;
+        }
+
+        if (!isPlainObject(payload[normalizedRegionCode])) {
+            payload[normalizedRegionCode] = {};
+        }
+    });
 
     return payload;
 }
@@ -1768,7 +1776,7 @@ function injectCustomWatchnowEntriesIntoPayload(payload, customEntries) {
         return payload;
     }
 
-    payload = ensureWatchnowDefaultRegion(payload);
+    payload = ensureWatchnowAllRegions(payload);
 
     if (!isPlainObject(payload)) {
         return payload;

@@ -77,9 +77,9 @@ Trakt Seasons List = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/sh
 Trakt Show Detail = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 movies 详情
 Trakt Movie Detail = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/movies\/[^\/]+(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 watchnow/sources，注入 Infuse 和 Forward 来源
+# 拦截 watchnow/sources，注入播放器作为服务商
 Trakt Watchnow Sources = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/watchnow\/sources(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 movie/show/episode watchnow，注入 Infuse 和 Forward 跳转链接
+# 拦截 movie/show/episode watchnow，注入播放器跳转链接
 Trakt Watchnow = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/(?:movies|shows|episodes)\/[^\/]+\/watchnow(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 episodes 详情
 Trakt Episode Detail = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(\?.*)?$, requires-body=1, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
