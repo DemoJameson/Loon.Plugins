@@ -268,8 +268,8 @@ function loadCache() {
 
 function resolveTraktApiBaseUrl(url) {
     const normalizedUrl = String(url ?? "");
-    const match = normalizedUrl.match(/^https:\/\/(apiz?\.trakt\.tv)(?:\/|$)/i);
-    return match ? `https://${match[1]}` : "https://api.trakt.tv";
+    const match = normalizedUrl.match(/^(https:\/\/apiz?\.trakt\.tv)(?:\/|$)/i);
+    return match ? match[1] : "";
 }
 
 function saveCache(cache) {
@@ -2543,12 +2543,12 @@ async function handleHistoryEpisodeList() {
             return;
         }
 
-        if (/\/users\/[^\/]+?\/lists\/\d+\/items(?:\/(?:shows|movies|episodes))?(?:\?|$)/.test(requestUrl)) {
+        if (/\/users\/[^\/]+?\/lists\/\d+\/items(?:\/(?:show|movie|episode)s?)?(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("list items");
             return;
         }
 
-        if (/\/lists\/\d+\/items(?:\/(?:shows|movies|episodes))?(?:\?|$)/.test(requestUrl)) {
+        if (/\/lists\/\d+\/items(?:\/(?:show|movie|episode)s?)?(?:\?|$)/.test(requestUrl)) {
             await handleMediaList("public list items");
             return;
         }
