@@ -5,7 +5,7 @@
 #!author=DemoJameson
 
 [Argument]
-localBaseUrl = input, "http://192.168.50.2", tag=本地目标地址, desc=填写本地测试服务根地址，不要带结尾斜杠
+localBaseUrl = input, "http://192.168.50.2:8080", tag=本地目标地址, desc=填写本地测试服务根地址，不要带结尾斜杠
 
 [Script]
 # 使用脚本重定向，这样本地地址可以通过参数配置

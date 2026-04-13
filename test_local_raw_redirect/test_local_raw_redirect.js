@@ -1,4 +1,4 @@
-const DEFAULT_BASE_URL = "http://192.168.50.2";
+const DEFAULT_BASE_URL = "http://192.168.50.2:8080";
 
 function getArgumentValue(name) {
   if (typeof $argument === "object" && $argument !== null) {
@@ -27,6 +27,23 @@ function appendTimestamp(url) {
   return `${url}${separator}t=${Date.now()}`;
 }
 
+function mapRawGithubUrlToLocalPath(url, prefix) {
+  const suffix = url.slice(prefix.length);
+  const segments = suffix.split("/");
+
+  if (segments.length < 4) {
+    return "";
+  }
+
+  const [, repo, , ...pathSegments] = segments;
+
+  if (!repo || pathSegments.length === 0) {
+    return "";
+  }
+
+  return `${repo}/${pathSegments.join("/")}`;
+}
+
 const requestUrl = $request.url;
 const localBaseUrl = trimTrailingSlash(getArgumentValue("localBaseUrl") || DEFAULT_BASE_URL);
 const requestPrefix = "https://raw.githubusercontent.com/";
@@ -34,15 +51,20 @@ const requestPrefix = "https://raw.githubusercontent.com/";
 if (!requestUrl.startsWith(requestPrefix)) {
   $done({});
 } else {
-  const suffix = requestUrl.slice(requestPrefix.length);
-  const redirectUrl = appendTimestamp(`${localBaseUrl}/${suffix}`);
+  const mappedPath = mapRawGithubUrlToLocalPath(requestUrl, requestPrefix);
 
-  $done({
-    response: {
-      status: 307,
-      headers: {
-        Location: redirectUrl
+  if (!mappedPath) {
+    $done({});
+  } else {
+    const redirectUrl = appendTimestamp(`${localBaseUrl}/${mappedPath}`);
+
+    $done({
+      response: {
+        status: 307,
+        headers: {
+          Location: redirectUrl
+        }
       }
-    }
-  });
+    });
+  }
 }
