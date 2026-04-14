@@ -8,8 +8,9 @@ const SENTIMENT_TRANSLATION_CACHE_KEY = "trakt_sentiment_translation_cache";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTIAL_FOUND_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;
-const SEASON_EPISODE_TRANSLATION_LIMIT = 50;
+const SEASON_EPISODE_TRANSLATION_LIMIT = 10;
 const BACKEND_FETCH_MIN_REFS = 3;
+const HISTORY_EPISODES_LIMIT = 500;
 const GOOGLE_TRANSLATE_API_KEY = "QUl6YVN5QmNRak1SQTYyVGFYSm4xOXdiZExHNXJWUkJCaDJqbnVzQ2tzNzY=";
 const GOOGLE_TRANSLATE_API_URL = "https://translation.googleapis.com/language/translate/v2";
 const CACHE_STATUS = {
@@ -22,7 +23,6 @@ const MEDIA_TYPE = {
     MOVIE: "movie",
     EPISODE: "episode"
 };
-const HISTORY_EPISODES_LIMIT = 500;
 const WATCHNOW_DEFAULT_REGION = "us";
 const WATCHNOW_DEFAULT_CURRENCY = "usd";
 const WATCHNOW_REDIRECT_URL = "https://loon-plugins.demojameson.de5.net/api/redirect";
