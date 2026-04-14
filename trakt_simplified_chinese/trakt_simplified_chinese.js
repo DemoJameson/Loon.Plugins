@@ -651,7 +651,7 @@ function fetchJson(url, extraHeaders, useSourceHeaders) {
         url: url,
         headers: buildRequestHeaders(extraHeaders, useSourceHeaders)
     }).then((response) => {
-        const statusCode = response?.statusCode || response?.status || 0;
+        const statusCode = response?.statusCode || 0;
         if (statusCode < 200 || statusCode >= 300) {
             throw new Error(`HTTP ${statusCode} for ${url}`);
         }
@@ -686,7 +686,7 @@ function postJson(url, payload, extraHeaders, useSourceHeaders) {
         headers: buildRequestHeaders(extraHeaders, useSourceHeaders),
         body: JSON.stringify(payload)
     }).then((response) => {
-        const statusCode = response?.statusCode || response?.status || 0;
+        const statusCode = response?.statusCode || 0;
         if (statusCode < 200 || statusCode >= 300) {
             throw new Error(`HTTP ${statusCode} for ${url}`);
         }
@@ -1116,7 +1116,7 @@ async function translateTextsWithGoogle(texts, sourceLanguage) {
         },
         body: buildGoogleTranslateFormBody(normalizedTexts, sourceLanguage)
     });
-    const statusCode = response?.statusCode || response?.status || 0;
+    const statusCode = response?.statusCode || 0;
     if (statusCode < 200 || statusCode >= 300) {
         throw new Error(`HTTP ${statusCode} for ${GOOGLE_TRANSLATE_API_URL}`);
     }
@@ -1691,7 +1691,7 @@ function doneRedirect(location) {
     }
 
     if ($.isQuanX()) {
-        $done({
+        $.done({
             status: "HTTP/1.1 302 Found",
             headers: {
                 Location: targetLocation
@@ -1700,7 +1700,7 @@ function doneRedirect(location) {
         return;
     }
 
-    $done({
+    $.done({
         response: {
             status: 302,
             headers: {
@@ -2925,157 +2925,94 @@ async function handleHistoryEpisodeList() {
     await handleMediaList("history episode", historyBody);
 }
 
+function handleRequestWithoutResponse(url) {
+    if (typeof $response !== "undefined") {
+        return false;
+    }
+
+    const routes = [
+        {
+            pattern: /^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?/i,
+            handler: () => handleDirectRedirectRequest()
+        },
+        {
+            pattern: /^https:\/\/image\.tmdb\.org\/t\/p\/w342\/[a-z0-9_-]+_logo\.webp(?:\?.*)?$/i,
+            handler: () => handleDirectRedirectRequest()
+        },
+        {
+            pattern: /\/shows\/[^\/]+\/seasons\/\d+(?:\/|\?|$)/,
+            handler: () => handleCurrentSeasonRequest()
+        },
+        {
+            pattern: null,
+            condition: () => shouldApplyLatestHistoryEpisodeOnly(url),
+            handler: () => $.done({ url: buildHistoryEpisodesRequestUrl(url) })
+        }
+    ];
+
+    for (let i = 0; i < routes.length; i += 1) {
+        const route = routes[i];
+        const matched = route.pattern ? route.pattern.test(url) : route.condition?.();
+        if (matched) {
+            route.handler();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+async function handleRequestRoute(url) {
+    const routes = [
+        { pattern: /\/sync\/progress\/up_next_nitro(?:\?|$)/, handler: () => handleMediaList("up_next") },
+        { pattern: /\/sync\/playback\/movies(?:\?|$)/, handler: () => handleMediaList("playback") },
+        { pattern: /\/users\/me\/watchlist\/shows\/released\/desc(?:\?|$)/, handler: () => handleMediaList("watchlist show") },
+        { pattern: /\/users\/me\/watchlist\/movies\/released\/desc(?:\?|$)/, handler: () => handleMediaList("watchlist movie") },
+        { pattern: /\/calendars\/my\/shows\/\d{4}-\d{2}-\d{2}\/\d+(?:\?|$)/, handler: () => handleMediaList("calendar show") },
+        { pattern: /\/calendars\/my\/movies\/\d{4}-\d{2}-\d{2}\/\d+(?:\?|$)/, handler: () => handleMediaList("calendar movie") },
+        { pattern: /\/users\/[^\/]+?\/history\/episodes(?:\/\d+)?\/?(?:\?|$)/, handler: () => handleHistoryEpisodeList() },
+        { pattern: /\/users\/[^\/]+?\/history\/movies\/?(?:\?|$)/, handler: () => handleMediaList("history movie") },
+        { pattern: /\/sync\/history\/episodes\/?(?:\?|$)/, handler: () => handleHistoryEpisodeList() },
+        { pattern: /\/sync\/history(?:\/(?:movies|shows|episodes))?\/?(?:\?.*)?$/, handler: () => handleMediaList("sync history") },
+        { pattern: /\/users\/[^\/]+?\/history\/?(?:\?|$)/, handler: () => handleMediaList("history") },
+        { pattern: /\/users\/[^\/]+?\/collection\/media(?:\?|$)/, handler: () => handleMediaList("collection media") },
+        { pattern: /\/users\/[^\/]+?\/mir(?:\?|$)/, handler: () => handleMir() },
+        { pattern: /\/users\/me\/following\/activities(?:\?|$)/, handler: () => handleMediaList("following activities") },
+        { pattern: /\/users\/[^\/]+?\/lists\/\d+\/items(?:\/(?:show|movie|episode)s?)?(?:\?|$)/, handler: () => handleMediaList("list items") },
+        { pattern: /\/lists\/\d+\/items(?:\/(?:show|movie|episode)s?)?(?:\?|$)/, handler: () => handleMediaList("public list items") },
+        { pattern: /\/users\/[^\/]+?\/favorites(?:\/(?:shows|movies))?\/?(?:\?.*)?$/, handler: () => handleMediaList("favorites") },
+        { pattern: /\/media\/trending(?:\?|$)/, handler: () => handleMediaList("media trending") },
+        { pattern: /\/media\/recommendations(?:\?|$)/, handler: () => handleMediaList("media recommendations") },
+        { pattern: /\/media\/anticipated(?:\?|$)/, handler: () => handleMediaList("media anticipated") },
+        { pattern: /\/media\/popular\/next(?:\?|$)/, handler: () => handleMediaList("media popular next") },
+        { pattern: /\/users\/me\/watchlist(?:\?|$)/, handler: () => handleMediaList("watchlist") },
+        { pattern: /\/users\/me\/watchlist\/shows(?:\?|$)/, handler: () => handleMediaList("watchlist show") },
+        { pattern: /\/users\/me\/watchlist\/movies(?:\?|$)/, handler: () => handleMediaList("watchlist movie") }
+    ];
+
+    for (let i = 0; i < routes.length; i += 1) {
+        const route = routes[i];
+        if (route.pattern.test(url)) {
+            await route.handler();
+            return true;
+        }
+    }
+
+    return false;
+}
+
 (async () => {
     try {
-        if (
-            typeof $response === "undefined" &&
-            (
-                /^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?/i.test(requestUrl) ||
-                /^https:\/\/image\.tmdb\.org\/t\/p\/w342\/[a-z0-9_-]+_logo\.webp(?:\?.*)?$/i.test(requestUrl)
-            )
-        ) {
-            handleDirectRedirectRequest();
+        if (handleRequestWithoutResponse(requestUrl)) {
             return;
         }
 
-        if (
-            typeof $response === "undefined" &&
-            /\/shows\/[^\/]+\/seasons\/\d+(?:\/|\?|$)/.test(requestUrl)
-        ) {
-            handleCurrentSeasonRequest();
-            return;
-        }
-
-        if (
-            typeof $response === "undefined" &&
-            shouldApplyLatestHistoryEpisodeOnly(requestUrl)
-        ) {
-            $.done({ url: buildHistoryEpisodesRequestUrl(requestUrl) });
+        if (await handleRequestRoute(requestUrl)) {
             return;
         }
 
         if (/\/users\/settings(?:\?|$)/.test(requestUrl)) {
             handleUserSettings();
-            return;
-        }
-
-        if (/\/sync\/progress\/up_next_nitro(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("up_next");
-            return;
-        }
-
-        if (/\/sync\/playback\/movies(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("playback");
-            return;
-        }
-
-        if (/\/users\/me\/watchlist\/shows\/released\/desc(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("watchlist show");
-            return;
-        }
-
-        if (/\/users\/me\/watchlist\/movies\/released\/desc(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("watchlist movie");
-            return;
-        }
-
-        if (/\/calendars\/my\/shows\/\d{4}-\d{2}-\d{2}\/\d+(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("calendar show");
-            return;
-        }
-
-        if (/\/calendars\/my\/movies\/\d{4}-\d{2}-\d{2}\/\d+(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("calendar movie");
-            return;
-        }
-
-        if (/\/users\/[^\/]+?\/history\/episodes(?:\/\d+)?\/?(?:\?|$)/.test(requestUrl)) {
-            await handleHistoryEpisodeList();
-            return;
-        }
-
-        if (/\/users\/[^\/]+?\/history\/movies\/?(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("history movie");
-            return;
-        }
-
-        if (/\/sync\/history\/episodes\/?(?:\?|$)/.test(requestUrl)) {
-            await handleHistoryEpisodeList();
-            return;
-        }
-
-        if (/\/sync\/history(?:\/(?:movies|shows|episodes))?\/?(?:\?.*)?$/.test(requestUrl)) {
-            await handleMediaList("sync history");
-            return;
-        }
-
-        if (/\/users\/[^\/]+?\/history\/?(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("history");
-            return;
-        }
-
-        if (/\/users\/[^\/]+?\/collection\/media(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("collection media");
-            return;
-        }
-
-        if (/\/users\/[^\/]+?\/mir(?:\?|$)/.test(requestUrl)) {
-            await handleMir();
-            return;
-        }
-
-        if (/\/users\/me\/following\/activities(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("following activities");
-            return;
-        }
-
-        if (/\/users\/[^\/]+?\/lists\/\d+\/items(?:\/(?:show|movie|episode)s?)?(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("list items");
-            return;
-        }
-
-        if (/\/lists\/\d+\/items(?:\/(?:show|movie|episode)s?)?(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("public list items");
-            return;
-        }
-
-        if (/\/users\/[^\/]+?\/favorites(?:\/(?:shows|movies))?\/?(?:\?.*)?$/.test(requestUrl)) {
-            await handleMediaList("favorites");
-            return;
-        }
-
-        if (/\/media\/trending(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("media trending");
-            return;
-        }
-
-        if (/\/media\/recommendations(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("media recommendations");
-            return;
-        }
-
-        if (/\/media\/anticipated(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("media anticipated");
-            return;
-        }
-
-        if (/\/media\/popular\/next(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("media popular next");
-            return;
-        }
-
-        if (/\/users\/me\/watchlist(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("watchlist");
-            return;
-        }
-
-        if (/\/users\/me\/watchlist\/shows(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("watchlist show");
-            return;
-        }
-
-        if (/\/users\/me\/watchlist\/movies(?:\?|$)/.test(requestUrl)) {
-            await handleMediaList("watchlist movie");
             return;
         }
 
@@ -3141,7 +3078,7 @@ async function handleHistoryEpisodeList() {
             return;
         }
 
-        $done({ body: body });
+        $.done({ body: body });
     } catch (e) {
         $.log(`Trakt script error: ${e}`);
         $.done({});
