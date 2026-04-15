@@ -1,0 +1,11 @@
+#!name=Proxy Tools Compatibility Test
+#!desc=访问 https://m.163.com 输出当前 iOS 代理工具脚本环境兼容性测试结果
+#!homepage=https://github.com/DemoJameson/Loon.Plugins
+#!author=DemoJameson
+#!openUrl=https://m.163.com
+
+[Script]
+http-response ^https:\/\/m\.163\.com(?:\/|\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/proxy_tools_compatibility_test/proxy_tools_compatibility_test.js, requires-body=true, timeout=10, tag=Proxy Tools Compatibility Test
+
+[MITM]
+hostname = m.163.com
