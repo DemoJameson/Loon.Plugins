@@ -4,7 +4,7 @@
 #!author=DemoJameson
 
 [Script]
-Proxy Tools Compatibility Test = type=http-response, pattern=^https:\/\/m\.163\.com(?:\/|\?.*)?$, requires-body=1, max-size=0, timeout=10, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/proxy_tools_compatibility_test/proxy_tools_compatibility_test.js
+Proxy Tools Compatibility Test = type=http-response, pattern=^https:\/\/m\.163\.com(?:\/|\?.*)?$, requires-body=true, max-size=0, timeout=10, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/proxy_tools_compatibility_test/proxy_tools_compatibility_test.js
 
 [MITM]
 hostname = %APPEND% m.163.com
