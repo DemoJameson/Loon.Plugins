@@ -1,0 +1,14 @@
+#!name=GitHub Raw链接重定向到本地
+#!desc=将指定仓库的 raw.githubusercontent.com 请求重定向到本地测试服务，例如把 https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/a.js 转到 http://192.168.50.2:8080/Loon.Plugins/a.js
+#!homepage=https://github.com/DemoJameson/Loon.Plugins
+#!author=DemoJameson
+
+# 默认参数：
+# localBaseUrl = http://192.168.50.2:8080
+# repository = Loon.Plugins
+# Quantumult X 使用脚本内默认值；如需自定义参数，优先使用 Loon 或 Surge 配置。
+
+# [rewrite_local]
+^https:\/\/raw\.githubusercontent\.com\/.*$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/github_redirect_to_local/github_redirect_to_local.js
+# [mitm]
+hostname = raw.githubusercontent.com

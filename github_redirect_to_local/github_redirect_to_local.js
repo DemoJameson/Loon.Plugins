@@ -1,21 +1,39 @@
 const DEFAULT_BASE_URL = "http://192.168.50.2:8080";
+const DEFAULT_REPOSITORY = "Loon.Plugins";
+
+function normalizeArgumentValue(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function parseArgumentString(argument) {
+  const rawArgument = argument.trim().replace(/^\[|\]$/g, "");
+
+  if (!rawArgument) {
+    return {};
+  }
+
+  const tokens = rawArgument.split(",").map((item) => item.trim()).filter(Boolean);
+  const positionalNames = ["localBaseUrl", "repository"];
+  const parsedArguments = {};
+
+  positionalNames.forEach((name, index) => {
+    parsedArguments[name] = tokens[index] || "";
+  });
+
+  return parsedArguments;
+}
 
 function getArgumentValue(name) {
   if (typeof $argument === "object" && $argument !== null) {
-    const value = $argument[name];
-    return typeof value === "string" ? value.trim() : "";
+    return normalizeArgumentValue($argument[name]);
   }
 
   if (typeof $argument !== "string" || !$argument) {
     return "";
   }
 
-  const rawArgument = $argument.trim().replace(/^\[|\]$/g, "");
-  if (!rawArgument) {
-    return "";
-  }
-
-  return name === "localBaseUrl" ? rawArgument : "";
+  const parsedArguments = parseArgumentString($argument);
+  return normalizeArgumentValue(parsedArguments[name]);
 }
 
 function trimTrailingSlash(value) {
@@ -27,7 +45,7 @@ function appendTimestamp(url) {
   return `${url}${separator}t=${Date.now()}`;
 }
 
-function mapRawGithubUrlToLocalPath(url, prefix) {
+function mapRawGithubUrlToLocalPath(url, prefix, repository) {
   const suffix = url.slice(prefix.length);
   const segments = suffix.split("/");
 
@@ -41,17 +59,22 @@ function mapRawGithubUrlToLocalPath(url, prefix) {
     return "";
   }
 
+  if (repository && repo !== repository) {
+    return "";
+  }
+
   return `${repo}/${pathSegments.join("/")}`;
 }
 
 const requestUrl = $request.url;
 const localBaseUrl = trimTrailingSlash(getArgumentValue("localBaseUrl") || DEFAULT_BASE_URL);
+const repository = getArgumentValue("repository") || DEFAULT_REPOSITORY;
 const requestPrefix = "https://raw.githubusercontent.com/";
 
 if (!requestUrl.startsWith(requestPrefix)) {
   $done({});
 } else {
-  const mappedPath = mapRawGithubUrlToLocalPath(requestUrl, requestPrefix);
+  const mappedPath = mapRawGithubUrlToLocalPath(requestUrl, requestPrefix, repository);
 
   if (!mappedPath) {
     $done({});
