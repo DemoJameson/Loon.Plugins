@@ -93,7 +93,7 @@ http-response ^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/\d+\/sentiments(\?.
 http-response ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/mir(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Month in Review
 
 [MITM]
-hostname = apiz.trakt.tv, api.trakt.tv, api.themoviedb.org, api.tmdb.org, image.tmdb.org, streaming-availability.p.rapidapi.com, loon-plugins.demojameson.de5.net
+hostname = apiz.trakt.tv, api.trakt.tv, api.themoviedb.org, image.tmdb.org, streaming-availability.p.rapidapi.com, loon-plugins.demojameson.de5.net
 
 
 

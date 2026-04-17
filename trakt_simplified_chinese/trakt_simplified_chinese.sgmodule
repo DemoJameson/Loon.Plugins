@@ -87,5 +87,5 @@ Trakt Sentiments = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/(?:s
 Trakt Month in Review = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/mir(\?.*)?$, requires-body=true, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{commentTranslationEnabled}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 
 [MITM]
-hostname = %APPEND% apiz.trakt.tv, api.trakt.tv, api.themoviedb.org, api.tmdb.org, image.tmdb.org, streaming-availability.p.rapidapi.com, loon-plugins.demojameson.de5.net
+hostname = %APPEND% apiz.trakt.tv, api.trakt.tv, api.themoviedb.org, image.tmdb.org, streaming-availability.p.rapidapi.com, loon-plugins.demojameson.de5.net
 

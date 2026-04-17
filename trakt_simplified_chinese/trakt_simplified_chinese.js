@@ -3128,7 +3128,7 @@ async function handleRequestRoute(url) {
             return;
         }
 
-        if (/^https:\/\/api\.(?:themoviedb|tmdb)\.org\/3\/watch\/providers\/(?:movie|tv)(?:\?.*)?$/i.test(String(requestUrl ?? ""))) {
+        if (/^https:\/\/api\.themoviedb\.org\/3\/watch\/providers\/(?:movie|tv)(?:\?.*)?$/i.test(String(requestUrl ?? ""))) {
             handleTmdbProviderCatalog();
             return;
         }
