@@ -1067,6 +1067,18 @@ function escapeQueryComponent(value) {
     return encodeURIComponent(String(value ?? ""));
 }
 
+function computeStringHash(value) {
+    const text = String(value ?? "");
+    let hash = 2166136261;
+
+    for (let i = 0; i < text.length; i += 1) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+
+    return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 function decodeBase64Value(value) {
     const normalizedValue = String(value ?? "");
     if (!normalizedValue) {
@@ -1195,13 +1207,13 @@ function buildSentimentTranslationPayload(payload) {
     return {
         bad: ensureArray(payload?.bad).map((item) => {
             return {
-                sourceText: String(item?.sourceSentiment ?? item?.sentiment ?? ""),
+                sourceTextHash: computeStringHash(item?.sourceSentiment ?? item?.sentiment ?? ""),
                 translatedText: String(item?.translatedSentiment ?? item?.sentiment ?? "")
             };
         }),
         good: ensureArray(payload?.good).map((item) => {
             return {
-                sourceText: String(item?.sourceSentiment ?? item?.sentiment ?? ""),
+                sourceTextHash: computeStringHash(item?.sourceSentiment ?? item?.sentiment ?? ""),
                 translatedText: String(item?.translatedSentiment ?? item?.sentiment ?? "")
             };
         })
@@ -1214,18 +1226,18 @@ function applySentimentTranslationPayload(target, translation) {
 
     ensureArray(payload.bad).forEach((item, index) => {
         const entry = ensureObject(ensureArray(translated.bad)[index]);
-        const sourceText = String(item?.sentiment ?? "");
+        const sourceTextHash = computeStringHash(item?.sentiment ?? "");
         const translatedText = String(entry.translatedText ?? "").trim();
-        if (translatedText && String(entry.sourceText ?? "") === sourceText) {
+        if (translatedText && String(entry.sourceTextHash ?? "") === sourceTextHash) {
             item.sentiment = translatedText;
         }
     });
 
     ensureArray(payload.good).forEach((item, index) => {
         const entry = ensureObject(ensureArray(translated.good)[index]);
-        const sourceText = String(item?.sentiment ?? "");
+        const sourceTextHash = computeStringHash(item?.sentiment ?? "");
         const translatedText = String(entry.translatedText ?? "").trim();
-        if (translatedText && String(entry.sourceText ?? "") === sourceText) {
+        if (translatedText && String(entry.sourceTextHash ?? "") === sourceTextHash) {
             item.sentiment = translatedText;
         }
     });
@@ -1246,7 +1258,7 @@ function hasMatchingSentimentTranslationPayload(target, translation) {
         }
 
         return currentItems.every((item, index) => {
-            return String(item?.sentiment ?? "") === String(cachedItems[index]?.sourceText ?? "");
+            return computeStringHash(item?.sentiment ?? "") === String(cachedItems[index]?.sourceTextHash ?? "");
         });
     });
 }
@@ -1365,14 +1377,14 @@ function setCommentTranslationCacheEntry(cache, commentId, sourceText, translate
 
     const key = String(commentId);
     const nextEntry = {
-        sourceText: String(sourceText ?? ""),
+        sourceTextHash: computeStringHash(sourceText),
         translatedText: String(translatedText ?? "")
     };
     const currentEntry = getCommentTranslationCacheEntry(cache, key);
 
     if (
         currentEntry &&
-        currentEntry.sourceText === nextEntry.sourceText &&
+        currentEntry.sourceTextHash === nextEntry.sourceTextHash &&
         currentEntry.translatedText === nextEntry.translatedText
     ) {
         return false;
@@ -1388,8 +1400,8 @@ function getCachedCommentTranslation(cache, comment) {
         return null;
     }
 
-    const sourceText = String(comment?.comment ?? "");
-    if (entry.sourceText !== sourceText) {
+    const sourceTextHash = computeStringHash(comment?.comment ?? "");
+    if (entry.sourceTextHash !== sourceTextHash) {
         return null;
     }
 
