@@ -25,20 +25,16 @@ http-response ^https:\/\/apiz?\.trakt\.tv\/.+\/translations\/zh(\?.*)?$ script-p
 http-response ^https:\/\/apiz?\.trakt\.tv\/sync\/progress\/up_next_nitro(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Up Next
 # 拦截 playback/movies，批量获取简体中文信息
 http-response ^https:\/\/apiz?\.trakt\.tv\/sync\/playback\/movies(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Playback Movies
-# 拦截 watchlist/shows，批量获取简体中文信息
-http-response ^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/shows\/released\/desc(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Watchlist Shows
-# 拦截 watchlist/movies，批量获取简体中文信息
-http-response ^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/movies\/released\/desc(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Watchlist Movies
+# 拦截 watchlist/shows|movies/released，批量获取简体中文信息
+http-response ^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/(?:shows|movies)\/released(?:\/desc)?(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Watchlist Released
 # 仅拦截 Sofa Time 的 TMDB provider 列表，注入播放器
 http-response ^https:\/\/api\.(?:themoviedb|tmdb)\.org\/3\/watch\/providers\/(?:movie|tv)(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=TMDB Provider Catalog
 # 仅拦截 Sofa Time 的 streaming-availability shows 详情，注入播放器
 http-response ^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/tt\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Sofa Time Streaming Availability
 # 仅拦截 Sofa Time 的 streaming-availability 国家服务列表，注入播放器
 http-response ^https:\/\/streaming-availability\.p\.rapidapi\.com\/countries\/[a-z]{2}(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Sofa Time Country Services
-# 拦截 calendars/my/shows，批量获取简体中文信息
-http-response ^https:\/\/apiz?\.trakt\.tv\/calendars\/my\/shows\/\d{4}-\d{2}-\d{2}\/\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Calendar Shows
-# 拦截 calendars/my/movies，批量获取简体中文信息
-http-response ^https:\/\/apiz?\.trakt\.tv\/calendars\/my\/movies\/\d{4}-\d{2}-\d{2}\/\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Calendar Movies
+# 拦截 calendars/my/shows|movies，批量获取简体中文信息
+http-response ^https:\/\/apiz?\.trakt\.tv\/calendars\/my\/(?:shows|movies)\/\d{4}-\d{2}-\d{2}\/\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Calendar
 # 拦截 history，批量获取简体中文信息
 http-response ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/?(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt History
 # 拦截 sync/history，批量获取简体中文信息
@@ -71,18 +67,14 @@ http-response ^https:\/\/apiz?\.trakt\.tv\/media\/anticipated(\?.*)?$ script-pat
 http-response ^https:\/\/apiz?\.trakt\.tv\/media\/popular\/next(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Media Popular Next
 # 拦截 watchlist，批量获取简体中文信息
 http-response ^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Watchlist
-# 拦截 watchlist/shows，批量获取简体中文信息
-http-response ^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/shows(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Watchlist Shows Flat
-# 拦截 watchlist/movies，批量获取简体中文信息
-http-response ^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/movies(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Watchlist Movies Flat
+# 拦截 watchlist/shows|movies，批量获取简体中文信息
+http-response ^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/(?:shows|movies)(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Watchlist Typed
 # 拦截带季号的请求，记录当前浏览季
 http-request ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+(?:\/.*|\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, timeout=10, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Current Season Request
 # 拦截季列表，批量获取简体中文信息
 http-response ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Seasons List
-# 拦截 shows 详情
-http-response ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Show Detail
-# 拦截 movies 详情
-http-response ^https:\/\/apiz?\.trakt\.tv\/movies\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Movie Detail
+# 拦截 shows|movies 详情
+http-response ^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Media Detail
 # 拦截 watchnow/sources，注入播放器作为服务商
 http-response ^https:\/\/apiz?\.trakt\.tv\/watchnow\/sources(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Watchnow Sources
 # 拦截 movie/show/episode watchnow，注入播放器跳转链接

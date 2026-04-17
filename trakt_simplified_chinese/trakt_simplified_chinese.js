@@ -2826,8 +2826,17 @@ function isHistoryEpisodesListUrl(url) {
     return /\/(?:users\/[^\/]+?\/history\/episodes|sync\/history\/episodes)\/?(?:\?|$)/.test(String(url ?? ""));
 }
 
+function isBrowserUserAgent() {
+    const userAgent = String(getRequestHeaderValue("user-agent") ?? "").trim();
+    if (!userAgent) {
+        return false;
+    }
+
+    return /(mozilla\/5\.0|applewebkit\/|chrome\/|safari\/|firefox\/|edg\/)/i.test(userAgent);
+}
+
 function shouldApplyLatestHistoryEpisodeOnly(url) {
-    return latestHistoryEpisodeOnly && isHistoryEpisodesListUrl(url);
+    return latestHistoryEpisodeOnly && !isBrowserUserAgent() && isHistoryEpisodesListUrl(url);
 }
 
 function parseUrlParts(url) {
@@ -3072,10 +3081,8 @@ async function handleRequestRoute(url) {
     const routes = [
         { pattern: /\/sync\/progress\/up_next_nitro(?:\?|$)/, handler: () => handleMediaList("up_next") },
         { pattern: /\/sync\/playback\/movies(?:\?|$)/, handler: () => handleMediaList("playback") },
-        { pattern: /\/users\/me\/watchlist\/shows\/released\/desc(?:\?|$)/, handler: () => handleMediaList("watchlist show") },
-        { pattern: /\/users\/me\/watchlist\/movies\/released\/desc(?:\?|$)/, handler: () => handleMediaList("watchlist movie") },
-        { pattern: /\/calendars\/my\/shows\/\d{4}-\d{2}-\d{2}\/\d+(?:\?|$)/, handler: () => handleMediaList("calendar show") },
-        { pattern: /\/calendars\/my\/movies\/\d{4}-\d{2}-\d{2}\/\d+(?:\?|$)/, handler: () => handleMediaList("calendar movie") },
+        { pattern: /\/users\/me\/watchlist\/(?:shows|movies)\/released(?:\/desc)?(?:\?|$)/, handler: () => handleMediaList("watchlist released") },
+        { pattern: /\/calendars\/my\/(?:shows|movies)\/\d{4}-\d{2}-\d{2}\/\d+(?:\?|$)/, handler: () => handleMediaList("calendar") },
         { pattern: /\/users\/[^\/]+?\/history\/episodes(?:\/\d+)?\/?(?:\?|$)/, handler: () => handleHistoryEpisodeList() },
         { pattern: /\/users\/[^\/]+?\/history\/movies\/?(?:\?|$)/, handler: () => handleMediaList("history movie") },
         { pattern: /\/sync\/history\/episodes\/?(?:\?|$)/, handler: () => handleHistoryEpisodeList() },
@@ -3092,8 +3099,7 @@ async function handleRequestRoute(url) {
         { pattern: /\/media\/anticipated(?:\?|$)/, handler: () => handleMediaList("media anticipated") },
         { pattern: /\/media\/popular\/next(?:\?|$)/, handler: () => handleMediaList("media popular next") },
         { pattern: /\/users\/me\/watchlist(?:\?|$)/, handler: () => handleMediaList("watchlist") },
-        { pattern: /\/users\/me\/watchlist\/shows(?:\?|$)/, handler: () => handleMediaList("watchlist show") },
-        { pattern: /\/users\/me\/watchlist\/movies(?:\?|$)/, handler: () => handleMediaList("watchlist movie") }
+        { pattern: /\/users\/me\/watchlist\/(?:shows|movies)(?:\?|$)/, handler: () => handleMediaList("watchlist typed") }
     ];
 
     for (let i = 0; i < routes.length; i += 1) {
@@ -3164,13 +3170,9 @@ async function handleRequestRoute(url) {
             return;
         }
 
-        if (/\/shows\/[^\/]+(?:\?.*)?$/.test(requestUrl)) {
-            await handleMediaDetail(MEDIA_TYPE.SHOW);
-            return;
-        }
-
-        if (/\/movies\/[^\/]+(?:\?.*)?$/.test(requestUrl)) {
-            await handleMediaDetail(MEDIA_TYPE.MOVIE);
+        const mediaDetailMatch = String(requestUrl ?? "").match(/\/(shows|movies)\/[^\/]+(?:\?.*)?$/);
+        if (mediaDetailMatch) {
+            await handleMediaDetail(mediaDetailMatch[1] === "shows" ? MEDIA_TYPE.SHOW : MEDIA_TYPE.MOVIE);
             return;
         }
 
