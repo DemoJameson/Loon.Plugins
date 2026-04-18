@@ -1181,30 +1181,24 @@ function buildSentimentCacheKey(mediaType, traktId) {
 }
 
 function resolveSentimentRequestTarget(url) {
-    let match = String(url ?? "").match(/\/shows\/(\d+)\/sentiments(?:\?|$)/i);
+    const match = String(url ?? "").match(/\/media\/(movie|show)\/(\d+)\/info\/(\d+)\/version\/(\d+)(?:\?|$)/i);
     if (match) {
         return {
-            mediaType: MEDIA_TYPE.SHOW,
-            traktId: match[1]
-        };
-    }
-
-    match = String(url ?? "").match(/\/movies\/(\d+)\/sentiments(?:\?|$)/i);
-    if (match) {
-        return {
-            mediaType: MEDIA_TYPE.MOVIE,
-            traktId: match[1]
+            mediaType: String(match[1]).toLowerCase() === "show" ? MEDIA_TYPE.SHOW : MEDIA_TYPE.MOVIE,
+            traktId: match[2],
+            infoId: match[3],
+            version: match[4]
         };
     }
 
     return null;
 }
 
-function normalizeSentimentItem(item) {
+function normalizeSentimentAspectItem(item) {
     const normalized = ensureObject(item);
     return {
         ...normalized,
-        sentiment: String(normalized.sentiment ?? "")
+        theme: String(normalized.theme ?? "")
     };
 }
 
@@ -1212,53 +1206,84 @@ function cloneSentimentsPayload(payload) {
     const normalized = ensureObject(payload);
     return {
         ...normalized,
-        bad: ensureArray(normalized.bad).map(normalizeSentimentItem),
-        good: ensureArray(normalized.good).map(normalizeSentimentItem)
+        aspect: {
+            ...ensureObject(normalized.aspect),
+            pros: ensureArray(normalized.aspect?.pros).map(normalizeSentimentAspectItem),
+            cons: ensureArray(normalized.aspect?.cons).map(normalizeSentimentAspectItem)
+        },
+        summary: ensureArray(normalized.summary).map((item) => String(item ?? "")),
+        text: String(normalized.text ?? "")
     };
 }
 
-function extractSentimentTexts(items) {
-    return ensureArray(items).map((item) => String(item?.sentiment ?? ""));
-}
-
 function buildSentimentTranslationPayload(payload) {
+    const aspect = ensureObject(payload?.aspect);
     return {
-        bad: ensureArray(payload?.bad).map((item) => {
+        aspect: {
+            pros: ensureArray(aspect.pros).map((item) => {
+                return {
+                    sourceTextHash: computeStringHash(item?.sourceTheme ?? item?.theme ?? ""),
+                    translatedText: String(item?.translatedTheme ?? item?.theme ?? "")
+                };
+            }),
+            cons: ensureArray(aspect.cons).map((item) => {
+                return {
+                    sourceTextHash: computeStringHash(item?.sourceTheme ?? item?.theme ?? ""),
+                    translatedText: String(item?.translatedTheme ?? item?.theme ?? "")
+                };
+            })
+        },
+        summary: ensureArray(payload?.summary).map((item) => {
             return {
-                sourceTextHash: computeStringHash(item?.sourceSentiment ?? item?.sentiment ?? ""),
-                translatedText: String(item?.translatedSentiment ?? item?.sentiment ?? "")
+                sourceTextHash: computeStringHash(item?.sourceText ?? item?.text ?? item ?? ""),
+                translatedText: String(item?.translatedText ?? item?.text ?? item ?? "")
             };
         }),
-        good: ensureArray(payload?.good).map((item) => {
-            return {
-                sourceTextHash: computeStringHash(item?.sourceSentiment ?? item?.sentiment ?? ""),
-                translatedText: String(item?.translatedSentiment ?? item?.sentiment ?? "")
-            };
-        })
+        text: {
+            sourceTextHash: computeStringHash(payload?.sourceText ?? payload?.text ?? ""),
+            translatedText: String(payload?.translatedText ?? payload?.text ?? "")
+        }
     };
 }
 
 function applySentimentTranslationPayload(target, translation) {
     const payload = cloneSentimentsPayload(target);
     const translated = ensureObject(translation);
+    const translatedAspect = ensureObject(translated.aspect);
 
-    ensureArray(payload.bad).forEach((item, index) => {
-        const entry = ensureObject(ensureArray(translated.bad)[index]);
-        const sourceTextHash = computeStringHash(item?.sentiment ?? "");
+    ensureArray(payload.aspect?.pros).forEach((item, index) => {
+        const entry = ensureObject(ensureArray(translatedAspect.pros)[index]);
+        const sourceTextHash = computeStringHash(item?.theme ?? "");
         const translatedText = String(entry.translatedText ?? "").trim();
         if (translatedText && String(entry.sourceTextHash ?? "") === sourceTextHash) {
-            item.sentiment = translatedText;
+            item.theme = translatedText;
         }
     });
 
-    ensureArray(payload.good).forEach((item, index) => {
-        const entry = ensureObject(ensureArray(translated.good)[index]);
-        const sourceTextHash = computeStringHash(item?.sentiment ?? "");
+    ensureArray(payload.aspect?.cons).forEach((item, index) => {
+        const entry = ensureObject(ensureArray(translatedAspect.cons)[index]);
+        const sourceTextHash = computeStringHash(item?.theme ?? "");
         const translatedText = String(entry.translatedText ?? "").trim();
         if (translatedText && String(entry.sourceTextHash ?? "") === sourceTextHash) {
-            item.sentiment = translatedText;
+            item.theme = translatedText;
         }
     });
+
+    ensureArray(payload.summary).forEach((item, index) => {
+        const entry = ensureObject(ensureArray(translated.summary)[index]);
+        const sourceTextHash = computeStringHash(item ?? "");
+        const translatedText = String(entry.translatedText ?? "").trim();
+        if (translatedText && String(entry.sourceTextHash ?? "") === sourceTextHash) {
+            payload.summary[index] = translatedText;
+        }
+    });
+
+    const textTranslation = ensureObject(translated.text);
+    const textSourceHash = computeStringHash(payload.text ?? "");
+    const translatedText = String(textTranslation.translatedText ?? "").trim();
+    if (translatedText && String(textTranslation.sourceTextHash ?? "") === textSourceHash) {
+        payload.text = translatedText;
+    }
 
     return payload;
 }
@@ -1266,19 +1291,38 @@ function applySentimentTranslationPayload(target, translation) {
 function hasMatchingSentimentTranslationPayload(target, translation) {
     const payload = cloneSentimentsPayload(target);
     const translated = ensureObject(translation);
-    const groups = ["bad", "good"];
-
-    return groups.every((group) => {
-        const currentItems = ensureArray(payload[group]);
-        const cachedItems = ensureArray(translated[group]);
+    const currentAspect = ensureObject(payload.aspect);
+    const cachedAspect = ensureObject(translated.aspect);
+    const aspectGroups = ["pros", "cons"];
+    const aspectMatches = aspectGroups.every((group) => {
+        const currentItems = ensureArray(currentAspect[group]);
+        const cachedItems = ensureArray(cachedAspect[group]);
         if (currentItems.length !== cachedItems.length) {
             return false;
         }
 
         return currentItems.every((item, index) => {
-            return computeStringHash(item?.sentiment ?? "") === String(cachedItems[index]?.sourceTextHash ?? "");
+            return computeStringHash(item?.theme ?? "") === String(cachedItems[index]?.sourceTextHash ?? "");
         });
     });
+    if (!aspectMatches) {
+        return false;
+    }
+
+    const currentSummary = ensureArray(payload.summary);
+    const cachedSummary = ensureArray(translated.summary);
+    if (currentSummary.length !== cachedSummary.length) {
+        return false;
+    }
+
+    const summaryMatches = currentSummary.every((item, index) => {
+        return computeStringHash(item ?? "") === String(cachedSummary[index]?.sourceTextHash ?? "");
+    });
+    if (!summaryMatches) {
+        return false;
+    }
+
+    return computeStringHash(payload.text ?? "") === String(translated.text?.sourceTextHash ?? "");
 }
 
 function getSentimentTranslationCacheEntry(cache, mediaType, traktId) {
@@ -1299,23 +1343,23 @@ function storeSentimentTranslationCacheEntry(cache, mediaType, traktId, payload)
 }
 
 async function translateSentimentItems(items) {
-    const sentimentItems = ensureArray(items).filter((item) => {
-        return String(item?.sentiment ?? "").trim();
+    const translationTargets = ensureArray(items).filter((item) => {
+        return String(item?.text ?? "").trim();
     });
-    if (sentimentItems.length === 0) {
+    if (translationTargets.length === 0) {
         return;
     }
 
     const translatedTexts = await translateTextsWithGoogle(
-        sentimentItems.map((item) => String(item.sentiment).trim()),
+        translationTargets.map((item) => String(item.text).trim()),
         "en"
     );
 
-    sentimentItems.forEach((item, index) => {
+    translationTargets.forEach((item, index) => {
         const translatedText = String(translatedTexts[index] ?? "").trim();
         if (translatedText) {
-            item.sourceSentiment = String(item.sentiment).trim();
-            item.translatedSentiment = translatedText;
+            item.sourceText = String(item.text).trim();
+            item.translatedText = translatedText;
         }
     });
 }
@@ -1346,34 +1390,100 @@ async function handleSentiments() {
     }
 
     const translatedData = cloneSentimentsPayload(data);
-    const sentimentItems = [
-        ...ensureArray(translatedData.bad),
-        ...ensureArray(translatedData.good)
-    ];
+    const translationTargets = [];
+
+    ensureArray(translatedData.aspect?.pros).forEach((item) => {
+        translationTargets.push({
+            target: item,
+            field: "theme",
+            text: String(item?.theme ?? "")
+        });
+    });
+    ensureArray(translatedData.aspect?.cons).forEach((item) => {
+        translationTargets.push({
+            target: item,
+            field: "theme",
+            text: String(item?.theme ?? "")
+        });
+    });
+    ensureArray(translatedData.summary).forEach((item, index) => {
+        translationTargets.push({
+            target: translatedData.summary,
+            field: index,
+            text: String(item ?? "")
+        });
+    });
+    translationTargets.push({
+        target: translatedData,
+        field: "text",
+        text: String(translatedData.text ?? "")
+    });
 
     try {
-        await translateSentimentItems(sentimentItems);
-        sentimentItems.forEach((item) => {
-            if (String(item?.translatedSentiment ?? "").trim()) {
-                item.sentiment = String(item.translatedSentiment);
+        await translateSentimentItems(translationTargets);
+        translationTargets.forEach((item) => {
+            if (String(item?.translatedText ?? "").trim()) {
+                item.target[item.field] = String(item.translatedText);
             }
-            delete item.sourceSentiment;
-            delete item.translatedSentiment;
+            delete item.sourceText;
+            delete item.translatedText;
         });
+
         const cachePayload = cloneSentimentsPayload(data);
-        const cacheItems = [
-            ...ensureArray(cachePayload.bad),
-            ...ensureArray(cachePayload.good)
-        ];
-        cacheItems.forEach((item, index) => {
-            const translatedItem = sentimentItems[index];
-            item.sourceSentiment = String(item?.sentiment ?? "");
-            item.translatedSentiment = String(translatedItem?.sentiment ?? item?.sentiment ?? "");
+        const cacheTargets = [];
+
+        ensureArray(cachePayload.aspect?.pros).forEach((item) => {
+            cacheTargets.push({
+                target: item,
+                sourceField: "theme"
+            });
         });
+        ensureArray(cachePayload.aspect?.cons).forEach((item) => {
+            cacheTargets.push({
+                target: item,
+                sourceField: "theme"
+            });
+        });
+        ensureArray(cachePayload.summary).forEach((item, index) => {
+            cacheTargets.push({
+                target: cachePayload.summary,
+                sourceField: index
+            });
+        });
+        cacheTargets.push({
+            target: cachePayload,
+            sourceField: "text",
+            type: "text"
+        });
+
+        cacheTargets.forEach((item, index) => {
+            const translatedItem = translationTargets[index];
+            const originalText = String(item.target?.[item.sourceField] ?? "");
+            const nextTranslatedText = String(translatedItem?.target?.[translatedItem.field] ?? originalText);
+
+            if (item.target === cachePayload.summary) {
+                item.target[item.sourceField] = {
+                    text: originalText,
+                    sourceText: originalText,
+                    translatedText: nextTranslatedText
+                };
+                return;
+            }
+
+            if (item.type === "text") {
+                item.target.sourceText = originalText;
+                item.target.translatedText = nextTranslatedText;
+                return;
+            }
+
+            item.target.sourceTheme = originalText;
+            item.target.translatedTheme = nextTranslatedText;
+        });
+
         storeSentimentTranslationCacheEntry(cache, target.mediaType, target.traktId, cachePayload);
         saveSentimentTranslationCache(cache);
     } catch (e) {
-        $.log(`Trakt sentiments translation failed for ${target.mediaType}:${target.traktId}: ${e}`);
+        $.log(`Trakt sentiment translation failed for ${target.mediaType}:${target.traktId}:${target.infoId}:${target.version}: ${e}`);
     }
 
     $.done({ body: JSON.stringify(translatedData) });
@@ -3346,7 +3456,7 @@ async function handleRequestRoute(url) {
             return;
         }
 
-        if (/\/(?:movies|shows)\/\d+\/sentiments(?:\?.*)?$/i.test(requestUrl)) {
+        if (/\/media\/(?:movie|show)\/\d+\/info\/\d+\/version\/\d+(?:\?.*)?$/i.test(requestUrl)) {
             await handleSentiments();
             return;
         }

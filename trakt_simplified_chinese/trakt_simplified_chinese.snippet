@@ -81,8 +81,8 @@
 ^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/[^\/]+\/comments\/[^\/?]+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截评论 replies，翻译评论
 ^https:\/\/apiz?\.trakt\.tv\/comments\/\d+\/replies(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 show/movie sentiments，翻译情感标签
-^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/\d+\/sentiments(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 media info sentiment，翻译 aspect/summary/text
+^https:\/\/apiz?\.trakt\.tv\/v3\/media\/(?:movie|show)\/\d+\/info\/\d+\/version\/\d+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 month in review
 ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/mir(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # [mitm]

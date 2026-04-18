@@ -89,8 +89,8 @@ http-response ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes
 http-response ^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/[^\/]+\/comments\/[^\/?]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Comments
 # 拦截评论 replies，翻译评论
 http-response ^https:\/\/apiz?\.trakt\.tv\/comments\/\d+\/replies(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Comment Replies
-# 拦截 show/movie sentiments，翻译情感标签
-http-response ^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/\d+\/sentiments(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Sentiments
+# 拦截 media info sentiment，翻译 aspect/summary/text
+http-response ^https:\/\/apiz?\.trakt\.tv\/v3\/media\/(?:movie|show)\/\d+\/info\/\d+\/version\/\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Sentiments
 # 拦截 month in review
 http-response ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/mir(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Month in Review
 
