@@ -5,6 +5,7 @@ const HISTORY_EPISODE_CACHE_KEY = "trakt_history_episode_cache";
 const LINK_IDS_CACHE_KEY = "trakt_watchnow_ids_cache";
 const COMMENT_TRANSLATION_CACHE_KEY = "trakt_comment_translation_cache";
 const SENTIMENT_TRANSLATION_CACHE_KEY = "trakt_sentiment_translation_cache";
+const PEOPLE_TRANSLATION_CACHE_KEY = "trakt_people_translation_cache";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTIAL_FOUND_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;
@@ -360,6 +361,23 @@ function saveSentimentTranslationCache(cache) {
         $.setjson(cache, SENTIMENT_TRANSLATION_CACHE_KEY);
     } catch (e) {
         $.log(`Trakt sentiment translation cache save failed: ${e}`);
+    }
+}
+
+function loadPeopleTranslationCache() {
+    try {
+        return ensureObject($.getjson(PEOPLE_TRANSLATION_CACHE_KEY, {}));
+    } catch (e) {
+        $.log(`Trakt people translation cache load failed: ${e}`);
+        return {};
+    }
+}
+
+function savePeopleTranslationCache(cache) {
+    try {
+        $.setjson(cache, PEOPLE_TRANSLATION_CACHE_KEY);
+    } catch (e) {
+        $.log(`Trakt people translation cache save failed: ${e}`);
     }
 }
 
@@ -1368,6 +1386,93 @@ function getCommentTranslationCacheEntry(cache, commentId) {
 
     const entry = cache[String(commentId)];
     return isPlainObject(entry) ? entry : null;
+}
+
+function getPeopleTranslationCacheEntry(cache, personId) {
+    if (!cache || isNullish(personId)) {
+        return null;
+    }
+
+    const entry = cache[String(personId)];
+    return isPlainObject(entry) ? entry : null;
+}
+
+function setPeopleTranslationCacheEntry(cache, personId, payload) {
+    if (!cache || isNullish(personId) || !isPlainObject(payload)) {
+        return false;
+    }
+
+    const key = String(personId);
+    const currentEntry = getPeopleTranslationCacheEntry(cache, key);
+    const nextEntry = isPlainObject(currentEntry) ? { ...currentEntry } : {};
+
+    if (isPlainObject(payload.name)) {
+        nextEntry.name = {
+            sourceText: String(payload.name.sourceText ?? ""),
+            translatedText: String(payload.name.translatedText ?? "")
+        };
+    }
+
+    if (isPlainObject(payload.biography)) {
+        nextEntry.biography = {
+            sourceTextHash: String(payload.biography.sourceTextHash ?? ""),
+            translatedText: String(payload.biography.translatedText ?? "")
+        };
+    }
+
+    if (currentEntry && JSON.stringify(currentEntry) === JSON.stringify(nextEntry)) {
+        return false;
+    }
+
+    cache[key] = nextEntry;
+    return true;
+}
+
+function resolvePeopleDetailTarget(url, data) {
+    const traktId = data?.ids?.trakt;
+    if (isNonNullish(traktId)) {
+        return String(traktId);
+    }
+
+    const match = String(url ?? "").match(/\/people\/([^/?#]+)(?:\?|$)/i);
+    return match?.[1] ? String(match[1]) : "";
+}
+
+function getCachedPersonNameTranslation(entry, sourceText) {
+    const cachedName = ensureObject(entry?.name);
+    if (!cachedName.translatedText) {
+        return "";
+    }
+
+    return String(cachedName.sourceText ?? "") === String(sourceText ?? "")
+        ? String(cachedName.translatedText)
+        : "";
+}
+
+function buildPersonNameDisplay(sourceText, translatedText) {
+    const original = String(sourceText ?? "").trim();
+    const translated = String(translatedText ?? "").trim();
+
+    if (!original) {
+        return translated;
+    }
+
+    if (!translated || translated === original) {
+        return original;
+    }
+
+    return `${original}\n${translated}`;
+}
+
+function getCachedPersonBiographyTranslation(entry, sourceText) {
+    const cachedBiography = ensureObject(entry?.biography);
+    if (!cachedBiography.translatedText) {
+        return "";
+    }
+
+    return String(cachedBiography.sourceTextHash ?? "") === computeStringHash(sourceText)
+        ? String(cachedBiography.translatedText)
+        : "";
 }
 
 function setCommentTranslationCacheEntry(cache, commentId, sourceText, translatedText) {
@@ -2605,6 +2710,80 @@ async function handleMediaDetail(mediaType) {
     $.done({ body: JSON.stringify(data) });
 }
 
+async function handlePeopleDetail() {
+    const data = JSON.parse(body);
+    if (!isPlainObject(data)) {
+        $.done({ body: body });
+        return;
+    }
+
+    const personId = resolvePeopleDetailTarget(requestUrl, data);
+    if (!personId) {
+        $.done({ body: body });
+        return;
+    }
+
+    const cache = loadPeopleTranslationCache();
+    const cacheEntry = getPeopleTranslationCacheEntry(cache, personId);
+    const nextCacheEntry = {};
+    const originalName = String(data.name ?? "").trim();
+    const originalBiography = String(data.biography ?? "").trim();
+
+    if (originalName) {
+        const cachedName = getCachedPersonNameTranslation(cacheEntry, originalName);
+        if (cachedName) {
+            data.name = buildPersonNameDisplay(originalName, cachedName);
+            nextCacheEntry.name = {
+                sourceText: originalName,
+                translatedText: cachedName
+            };
+        } else {
+            try {
+                const translatedName = String((await translateTextsWithGoogle([originalName], "en"))[0] ?? "").trim();
+                if (translatedName) {
+                    data.name = buildPersonNameDisplay(originalName, translatedName);
+                    nextCacheEntry.name = {
+                        sourceText: originalName,
+                        translatedText: translatedName
+                    };
+                }
+            } catch (e) {
+                $.log(`Trakt people name translation failed for ${personId}: ${e}`);
+            }
+        }
+    }
+
+    if (originalBiography) {
+        const cachedBiography = getCachedPersonBiographyTranslation(cacheEntry, originalBiography);
+        if (cachedBiography) {
+            data.biography = cachedBiography;
+            nextCacheEntry.biography = {
+                sourceTextHash: computeStringHash(originalBiography),
+                translatedText: cachedBiography
+            };
+        } else {
+            try {
+                const translatedBiography = String((await translateTextsWithGoogle([originalBiography], "en"))[0] ?? "").trim();
+                if (translatedBiography) {
+                    data.biography = translatedBiography;
+                    nextCacheEntry.biography = {
+                        sourceTextHash: computeStringHash(originalBiography),
+                        translatedText: translatedBiography
+                    };
+                }
+            } catch (e) {
+                $.log(`Trakt people biography translation failed for ${personId}: ${e}`);
+            }
+        }
+    }
+
+    if (Object.keys(nextCacheEntry).length > 0 && setPeopleTranslationCacheEntry(cache, personId, nextCacheEntry)) {
+        savePeopleTranslationCache(cache);
+    }
+
+    $.done({ body: JSON.stringify(data) });
+}
+
 function handleTranslations() {
     const arr = JSON.parse(body);
     if (isNotArray(arr) || arr.length === 0) {
@@ -3190,6 +3369,11 @@ async function handleRequestRoute(url) {
 
         if (/\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(?:\?.*)?$/.test(requestUrl)) {
             await handleMediaDetail(MEDIA_TYPE.EPISODE);
+            return;
+        }
+
+        if (/\/people\/[^\/]+(?:\?.*)?$/i.test(requestUrl)) {
+            await handlePeopleDetail();
             return;
         }
 
