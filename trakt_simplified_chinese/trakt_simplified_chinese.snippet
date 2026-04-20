@@ -69,6 +69,10 @@
 ^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/[^\/]+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 people 详情，翻译 name 和 biography
 ^https:\/\/apiz?\.trakt\.tv\/people\/[^\/]+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 show/movie people 列表，翻译演员姓名
+^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/[^\/]+\/people(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 episode people 列表，翻译演员姓名
+^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+\/people(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 watchnow/sources，注入播放器作为服务商
 ^https:\/\/apiz?\.trakt\.tv\/watchnow\/sources(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 movie/show/episode watchnow，注入播放器跳转链接

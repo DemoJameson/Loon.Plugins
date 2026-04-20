@@ -14,6 +14,7 @@ const BACKEND_FETCH_MIN_REFS = 3;
 const HISTORY_EPISODES_LIMIT = 500;
 const GOOGLE_TRANSLATE_API_KEY = "QUl6YVN5QmNRak1SQTYyVGFYSm4xOXdiZExHNXJWUkJCaDJqbnVzQ2tzNzY=";
 const GOOGLE_TRANSLATE_API_URL = "https://translation.googleapis.com/language/translate/v2";
+const GOOGLE_TRANSLATE_BATCH_SIZE = 128;
 const FILM_SHOW_RATINGS_API_BASE_URL = "https://film-show-ratings.p.rapidapi.com";
 const FILM_SHOW_RATINGS_RAPIDAPI_HOST = "film-show-ratings.p.rapidapi.com";
 const CACHE_STATUS = {
@@ -30,6 +31,8 @@ const WATCHNOW_DEFAULT_REGION = "us";
 const WATCHNOW_DEFAULT_CURRENCY = "usd";
 const WATCHNOW_REDIRECT_URL = "https://loon-plugins.demojameson.de5.net/api/redirect";
 const TMDB_LOGO_TARGET_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images";
+const TMDB_API_BASE_URL = "https://api.tmdb.org/3";
+const TMDB_API_KEY = "a0a4d50000eeb10604c5f9342c8b3f62";
 const REGION_CODES = [
     "AD", "AE", "AG", "AL", "AO", "AR", "AT", "AU", "AZ", "BA", "BB", "BE", "BF", "BG", "BH", "BM",
     "BO", "BR", "BS", "BY", "BZ", "CA", "CD", "CH", "CI", "CL", "CM", "CO", "CR", "CU", "CV", "CY",
@@ -1135,19 +1138,14 @@ function buildGoogleTranslateFormBody(texts, sourceLanguage) {
     ].join("&");
 }
 
-async function translateTextsWithGoogle(texts, sourceLanguage) {
-    const normalizedTexts = ensureArray(texts).map((item) => String(item ?? ""));
-    if (normalizedTexts.length === 0) {
-        return [];
-    }
-
+async function translateTextBatchWithGoogle(texts, sourceLanguage) {
     const response = await $.http.post({
         url: GOOGLE_TRANSLATE_API_URL,
         headers: {
             accept: "application/json",
             "content-type": "application/x-www-form-urlencoded;charset=UTF-8"
         },
-        body: buildGoogleTranslateFormBody(normalizedTexts, sourceLanguage)
+        body: buildGoogleTranslateFormBody(texts, sourceLanguage)
     });
     const statusCode = getResponseStatusCode(response);
     if (statusCode < 200 || statusCode >= 300) {
@@ -1162,14 +1160,36 @@ async function translateTextsWithGoogle(texts, sourceLanguage) {
     }
     const translations = ensureArray(payload?.data?.translations);
 
-    return normalizedTexts.map((_, index) => {
+    return texts.map((_, index) => {
         return String(translations[index]?.translatedText ?? "");
     });
+}
+
+async function translateTextsWithGoogle(texts, sourceLanguage) {
+    const normalizedTexts = ensureArray(texts).map((item) => String(item ?? ""));
+    if (normalizedTexts.length === 0) {
+        return [];
+    }
+
+    const batches = [];
+    for (let index = 0; index < normalizedTexts.length; index += GOOGLE_TRANSLATE_BATCH_SIZE) {
+        batches.push(normalizedTexts.slice(index, index + GOOGLE_TRANSLATE_BATCH_SIZE));
+    }
+
+    const translatedBatches = await Promise.all(
+        batches.map((batch) => translateTextBatchWithGoogle(batch, sourceLanguage))
+    );
+
+    return translatedBatches.reduce((items, batch) => items.concat(batch), []);
 }
 
 function isChineseLanguage(language) {
     const normalized = String(language ?? "").trim().toLowerCase();
     return normalized === "zh" || normalized.startsWith("zh-");
+}
+
+function containsChineseCharacter(value) {
+    return /[\u3400-\u9fff\uf900-\ufaff]/.test(String(value ?? ""));
 }
 
 function buildSentimentCacheKey(mediaType, traktId) {
@@ -1538,14 +1558,56 @@ function setPeopleTranslationCacheEntry(cache, personId, payload) {
     return true;
 }
 
+function getPersonTranslationCacheKeys(person) {
+    const ids = ensureObject(person?.ids);
+    const keys = [];
+
+    if (isNonNullish(ids.trakt)) {
+        keys.push(String(ids.trakt));
+    }
+
+    return keys;
+}
+
 function resolvePeopleDetailTarget(url, data) {
     const traktId = data?.ids?.trakt;
     if (isNonNullish(traktId)) {
         return String(traktId);
     }
 
-    const match = String(url ?? "").match(/\/people\/([^/?#]+)(?:\?|$)/i);
+    const match = String(url ?? "").match(/\/people\/(\d+)(?:\?|$)/i);
     return match?.[1] ? String(match[1]) : "";
+}
+
+function resolvePeopleListTarget(url) {
+    const normalizedUrl = String(url ?? "");
+    let match = normalizedUrl.match(/\/movies\/(\d+)\/people(?:\?|$)/);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.MOVIE,
+            traktId: match[1]
+        };
+    }
+
+    match = normalizedUrl.match(/\/shows\/(\d+)\/people(?:\?|$)/);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.SHOW,
+            traktId: match[1]
+        };
+    }
+
+    match = normalizedUrl.match(/\/shows\/(\d+)\/seasons\/(\d+)\/episodes\/(\d+)\/people(?:\?|$)/);
+    if (match) {
+        return {
+            mediaType: MEDIA_TYPE.EPISODE,
+            showTraktId: match[1],
+            seasonNumber: Number(match[2]),
+            episodeNumber: Number(match[3])
+        };
+    }
+
+    return null;
 }
 
 function getCachedPersonNameTranslation(entry, sourceText) {
@@ -1571,7 +1633,7 @@ function buildPersonNameDisplay(sourceText, translatedText) {
         return original;
     }
 
-    return `${original}\n${translated}`;
+    return `${translated}\n${original}`;
 }
 
 function getCachedPersonBiographyTranslation(entry, sourceText) {
@@ -1903,6 +1965,254 @@ async function ensureEpisodeShowIds(linkCache, episodeTraktId, episodeEntry) {
     });
     saveLinkIdsCache(linkCache);
     return showEntry.ids;
+}
+
+function buildTmdbCreditsLookupUrl(mediaType, tmdbId) {
+    if (isNullish(tmdbId)) {
+        return "";
+    }
+
+    const normalizedMediaType = mediaType === MEDIA_TYPE.MOVIE ? "movie" : "tv";
+    const appendField = mediaType === MEDIA_TYPE.MOVIE ? "credits" : "aggregate_credits";
+    return `${TMDB_API_BASE_URL}/${normalizedMediaType}/${tmdbId}?language=zh-CN&append_to_response=${appendField}&api_key=${TMDB_API_KEY}`;
+}
+
+async function fetchTmdbCredits(mediaType, tmdbId) {
+    const url = buildTmdbCreditsLookupUrl(mediaType, tmdbId);
+    if (!url) {
+        return null;
+    }
+
+    return fetchJson(url, null, false);
+}
+
+function buildTmdbPersonLookupUrl(tmdbPersonId) {
+    if (isNullish(tmdbPersonId)) {
+        return "";
+    }
+
+    return `${TMDB_API_BASE_URL}/person/${tmdbPersonId}?language=zh-CN&api_key=${TMDB_API_KEY}`;
+}
+
+async function fetchTmdbPerson(tmdbPersonId) {
+    const url = buildTmdbPersonLookupUrl(tmdbPersonId);
+    if (!url) {
+        return null;
+    }
+
+    return fetchJson(url, null, false);
+}
+
+function buildTmdbCastNameMap(tmdbPayload) {
+    const nameMap = {};
+    const cast = ensureArray(tmdbPayload?.credits?.cast).length > 0
+        ? ensureArray(tmdbPayload?.credits?.cast)
+        : ensureArray(tmdbPayload?.aggregate_credits?.cast);
+    const crew = ensureArray(tmdbPayload?.credits?.crew).length > 0
+        ? ensureArray(tmdbPayload?.credits?.crew)
+        : ensureArray(tmdbPayload?.aggregate_credits?.crew);
+
+    cast.concat(crew).forEach((item) => {
+        const personId = item?.id;
+        const name = String(item?.name ?? "").trim();
+        if (isNullish(personId) || !name) {
+            return;
+        }
+
+        nameMap[String(personId)] = name;
+    });
+    return nameMap;
+}
+
+function collectPeopleListPersonItems(data) {
+    if (!isPlainObject(data)) {
+        return [];
+    }
+
+    const crewItems = isPlainObject(data.crew)
+        ? Object.keys(data.crew).reduce((items, key) => items.concat(ensureArray(data.crew[key])), [])
+        : [];
+
+    return ensureArray(data.cast).concat(crewItems);
+}
+
+function applyPeopleListCachedNameTranslations(data, cache) {
+    if (!isPlainObject(data) || !isPlainObject(cache)) {
+        return {
+            changed: false,
+            hasMissing: false
+        };
+    }
+
+    let changed = false;
+    let hasMissing = false;
+    collectPeopleListPersonItems(data).forEach((item) => {
+        const person = item?.person;
+        if (!isPlainObject(person)) {
+            return;
+        }
+
+        const originalName = String(person.name ?? "").trim();
+        if (!originalName) {
+            return;
+        }
+
+        const cachedName = getPersonTranslationCacheKeys(person)
+            .map((personKey) => getCachedPersonNameTranslation(getPeopleTranslationCacheEntry(cache, personKey), originalName))
+            .find((value) => !!value);
+
+        if (cachedName) {
+            if (cachedName !== originalName) {
+                person.name = cachedName;
+                changed = true;
+            }
+            return;
+        }
+
+        if (isNonNullish(person?.ids?.tmdb)) {
+            hasMissing = true;
+        }
+    });
+
+    return {
+        changed,
+        hasMissing
+    };
+}
+
+function applyPeopleListCastNameTranslations(data, tmdbCastNameMap, cache) {
+    if (!isPlainObject(data) || !isPlainObject(tmdbCastNameMap)) {
+        return false;
+    }
+
+    let changed = false;
+    collectPeopleListPersonItems(data).forEach((item) => {
+        const person = item?.person;
+        const personTmdbId = person?.ids?.tmdb;
+        if (!isPlainObject(person) || isNullish(personTmdbId)) {
+            return;
+        }
+
+        const translatedName = String(tmdbCastNameMap[String(personTmdbId)] ?? "").trim();
+        if (!translatedName || !containsChineseCharacter(translatedName)) {
+            return;
+        }
+
+        const originalName = String(person.name ?? "").trim();
+        if (originalName && originalName !== translatedName) {
+            person.name = translatedName;
+            changed = true;
+
+            if (cache) {
+                getPersonTranslationCacheKeys(person).forEach((personKey) => {
+                    setPeopleTranslationCacheEntry(cache, personKey, {
+                        name: {
+                            sourceText: originalName,
+                            translatedText: translatedName
+                        }
+                    });
+                });
+            }
+        }
+    });
+
+    return changed;
+}
+
+function collectPeopleListGoogleNameTranslationTargets(data, cache) {
+    if (!isPlainObject(data) || !isPlainObject(cache)) {
+        return [];
+    }
+
+    return collectPeopleListPersonItems(data).reduce((targets, item) => {
+        const person = item?.person;
+        if (!isPlainObject(person)) {
+            return targets;
+        }
+
+        const originalName = String(person.name ?? "").trim();
+        if (!originalName) {
+            return targets;
+        }
+
+        const cachedName = getPersonTranslationCacheKeys(person)
+            .map((personKey) => getCachedPersonNameTranslation(getPeopleTranslationCacheEntry(cache, personKey), originalName))
+            .find((value) => !!value);
+
+        if (!cachedName) {
+            targets.push({
+                person,
+                originalName
+            });
+        }
+
+        return targets;
+    }, []);
+}
+
+function applyPeopleListGoogleNameTranslations(translationTargets, translatedTexts, cache) {
+    let changed = false;
+    const normalizedTranslatedTexts = ensureArray(translatedTexts);
+    ensureArray(translationTargets).forEach((target, index) => {
+        const person = target?.person;
+        const originalName = String(target?.originalName ?? "").trim();
+        const translatedName = String(normalizedTranslatedTexts[index] ?? "").trim();
+        if (
+            !isPlainObject(person) ||
+            !originalName ||
+            !translatedName ||
+            translatedName === originalName ||
+            !containsChineseCharacter(translatedName)
+        ) {
+            return;
+        }
+
+        if (String(person.name ?? "").trim() !== originalName) {
+            return;
+        }
+
+        person.name = translatedName;
+        changed = true;
+
+        if (cache) {
+            getPersonTranslationCacheKeys(person).forEach((personKey) => {
+                setPeopleTranslationCacheEntry(cache, personKey, {
+                    name: {
+                        sourceText: originalName,
+                        translatedText: translatedName
+                    }
+                });
+            });
+        }
+    });
+
+    return changed;
+}
+
+async function resolvePeopleListTmdbId(target, linkCache) {
+    if (!target || !linkCache) {
+        return null;
+    }
+
+    if (target.mediaType === MEDIA_TYPE.MOVIE || target.mediaType === MEDIA_TYPE.SHOW) {
+        const entry = await ensureMediaIdsCacheEntry(linkCache, target.mediaType, target.traktId);
+        return isNonNullish(entry?.ids?.tmdb) ? entry.ids.tmdb : null;
+    }
+
+    if (target.mediaType === MEDIA_TYPE.EPISODE) {
+        const showEntry = await ensureMediaIdsCacheEntry(linkCache, MEDIA_TYPE.SHOW, target.showTraktId);
+        return isNonNullish(showEntry?.ids?.tmdb) ? showEntry.ids.tmdb : null;
+    }
+
+    return null;
+}
+
+function buildPeopleListTmdbMediaType(target) {
+    if (!target) {
+        return null;
+    }
+
+    return target.mediaType === MEDIA_TYPE.MOVIE ? MEDIA_TYPE.MOVIE : MEDIA_TYPE.SHOW;
 }
 
 function buildWatchnowRedirectLink(deeplink) {
@@ -2608,6 +2918,69 @@ async function handleWatchnow() {
     $.done({ body: JSON.stringify(injectCustomWatchnowEntriesIntoPayload(payload, customEntries)) });
 }
 
+async function handleMediaPeopleList() {
+    const data = JSON.parse(body);
+    if (!isPlainObject(data)) {
+        $.done({ body: body });
+        return;
+    }
+
+    const target = resolvePeopleListTarget(requestUrl);
+    if (!target) {
+        $.done({ body: body });
+        return;
+    }
+
+    const cache = loadPeopleTranslationCache();
+    const cachedResult = applyPeopleListCachedNameTranslations(data, cache);
+
+    try {
+        if (!cachedResult.hasMissing) {
+            $.done({ body: JSON.stringify(data) });
+            return;
+        }
+
+        const googleTargets = collectPeopleListGoogleNameTranslationTargets(data, cache);
+        const googlePromise = googleTargets.length > 0
+            ? translateTextsWithGoogle(googleTargets.map((item) => item.originalName), "en")
+            : Promise.resolve([]);
+        const tmdbPromise = (async () => {
+            const linkCache = loadLinkIdsCache();
+            const tmdbId = await resolvePeopleListTmdbId(target, linkCache);
+            const tmdbMediaType = buildPeopleListTmdbMediaType(target);
+            if (isNullish(tmdbId) || !tmdbMediaType) {
+                return null;
+            }
+
+            return fetchTmdbCredits(tmdbMediaType, tmdbId);
+        })();
+
+        const [tmdbResult, googleResult] = await Promise.allSettled([tmdbPromise, googlePromise]);
+        let changed = false;
+
+        if (tmdbResult.status === "fulfilled" && tmdbResult.value) {
+            const tmdbCastNameMap = buildTmdbCastNameMap(tmdbResult.value);
+            changed = applyPeopleListCastNameTranslations(data, tmdbCastNameMap, cache) || changed;
+        } else if (tmdbResult.status === "rejected") {
+            $.log(`Trakt media people TMDb translation failed: ${tmdbResult.reason}`);
+        }
+
+        if (googleResult.status === "fulfilled") {
+            changed = applyPeopleListGoogleNameTranslations(googleTargets, googleResult.value, cache) || changed;
+        } else {
+            $.log(`Trakt media people Google translation failed: ${googleResult.reason}`);
+        }
+
+        if (changed) {
+            savePeopleTranslationCache(cache);
+        }
+        $.done({ body: JSON.stringify(data) });
+    } catch (e) {
+        $.log(`Trakt media people translation failed: ${e}`);
+        $.done({ body: JSON.stringify(data) });
+    }
+}
+
 function createMediaCollection() {
     const collection = {};
     Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
@@ -2838,52 +3211,77 @@ async function handlePeopleDetail() {
     const nextCacheEntry = {};
     const originalName = String(data.name ?? "").trim();
     const originalBiography = String(data.biography ?? "").trim();
+    const cachedName = originalName ? getCachedPersonNameTranslation(cacheEntry, originalName) : "";
+    const cachedBiography = originalBiography ? getCachedPersonBiographyTranslation(cacheEntry, originalBiography) : "";
 
-    if (originalName) {
-        const cachedName = getCachedPersonNameTranslation(cacheEntry, originalName);
-        if (cachedName) {
-            data.name = buildPersonNameDisplay(originalName, cachedName);
-            nextCacheEntry.name = {
-                sourceText: originalName,
-                translatedText: cachedName
-            };
-        } else {
-            try {
-                const translatedName = String((await translateTextsWithGoogle([originalName], "en"))[0] ?? "").trim();
-                if (translatedName) {
-                    data.name = buildPersonNameDisplay(originalName, translatedName);
-                    nextCacheEntry.name = {
-                        sourceText: originalName,
-                        translatedText: translatedName
-                    };
-                }
-            } catch (e) {
-                $.log(`Trakt people name translation failed for ${personId}: ${e}`);
+    if (cachedName) {
+        data.name = buildPersonNameDisplay(originalName, cachedName);
+        nextCacheEntry.name = {
+            sourceText: originalName,
+            translatedText: cachedName
+        };
+    }
+
+    if (cachedBiography) {
+        data.biography = cachedBiography;
+        nextCacheEntry.biography = {
+            sourceTextHash: computeStringHash(originalBiography),
+            translatedText: cachedBiography
+        };
+    }
+
+    const namePromise = originalName && !cachedName && isNonNullish(data?.ids?.tmdb)
+        ? fetchTmdbPerson(data.ids.tmdb)
+        : null;
+    const googlePromise = originalName || originalBiography
+        ? translateTextsWithGoogle([originalName, originalBiography], "en")
+        : null;
+
+    const [nameResult, googleResult] = await Promise.allSettled([
+        namePromise ?? Promise.resolve(null),
+        googlePromise ?? Promise.resolve(null)
+    ]);
+
+    let hasTranslatedName = !!cachedName;
+    if (namePromise) {
+        if (nameResult.status === "fulfilled") {
+            const translatedName = String(nameResult.value?.name ?? "").trim();
+            if (translatedName && containsChineseCharacter(translatedName)) {
+                data.name = buildPersonNameDisplay(originalName, translatedName);
+                nextCacheEntry.name = {
+                    sourceText: originalName,
+                    translatedText: translatedName
+                };
+                hasTranslatedName = true;
             }
+        } else {
+            $.log(`Trakt people name translation failed for ${personId}: ${nameResult.reason}`);
         }
     }
 
-    if (originalBiography) {
-        const cachedBiography = getCachedPersonBiographyTranslation(cacheEntry, originalBiography);
-        if (cachedBiography) {
-            data.biography = cachedBiography;
-            nextCacheEntry.biography = {
-                sourceTextHash: computeStringHash(originalBiography),
-                translatedText: cachedBiography
-            };
-        } else {
-            try {
-                const translatedBiography = String((await translateTextsWithGoogle([originalBiography], "en"))[0] ?? "").trim();
-                if (translatedBiography) {
-                    data.biography = translatedBiography;
-                    nextCacheEntry.biography = {
-                        sourceTextHash: computeStringHash(originalBiography),
-                        translatedText: translatedBiography
-                    };
-                }
-            } catch (e) {
-                $.log(`Trakt people biography translation failed for ${personId}: ${e}`);
+    if (googlePromise) {
+        if (googleResult.status === "fulfilled") {
+            const googleTranslations = ensureArray(googleResult.value);
+            const translatedName = String(googleTranslations[0] ?? "").trim();
+            if (!cachedName && !hasTranslatedName && translatedName && containsChineseCharacter(translatedName)) {
+                data.name = buildPersonNameDisplay(originalName, translatedName);
+                nextCacheEntry.name = {
+                    sourceText: originalName,
+                    translatedText: translatedName
+                };
+                hasTranslatedName = true;
             }
+
+            const translatedBiography = String(googleTranslations[1] ?? "").trim();
+            if (!cachedBiography && translatedBiography) {
+                data.biography = translatedBiography;
+                nextCacheEntry.biography = {
+                    sourceTextHash: computeStringHash(originalBiography),
+                    translatedText: translatedBiography
+                };
+            }
+        } else {
+            $.log(`Trakt people Google translation failed for ${personId}: ${googleResult.reason}`);
         }
     }
 
@@ -3446,6 +3844,12 @@ async function handleRequestRoute(url) {
 
         if (/\/watchnow\/sources(?:\?|$)/.test(requestUrl)) {
             handleWatchnowSources();
+            return;
+        }
+
+        if (/\/(?:shows|movies)\/[^\/]+\/people(?:\?.*)?$/i.test(requestUrl) ||
+            /\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+\/people(?:\?.*)?$/i.test(requestUrl)) {
+            await handleMediaPeopleList();
             return;
         }
 

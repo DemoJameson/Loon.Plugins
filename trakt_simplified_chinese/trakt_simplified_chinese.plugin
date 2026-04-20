@@ -77,6 +77,10 @@ http-response ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons(\?.*)?$ script
 http-response ^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Media Detail
 # 拦截 people 详情，翻译 name 和 biography
 http-response ^https:\/\/apiz?\.trakt\.tv\/people\/[^\/]+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt People Detail
+# 拦截 show/movie people 列表，翻译演员姓名
+http-response ^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/[^\/]+\/people(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Media People
+# 拦截 episode people 列表，翻译演员姓名
+http-response ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+\/people(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Episode People
 # 拦截 watchnow/sources，注入播放器作为服务商
 http-response ^https:\/\/apiz?\.trakt\.tv\/watchnow\/sources(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Watchnow Sources
 # 拦截 movie/show/episode watchnow，注入播放器跳转链接
