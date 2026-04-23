@@ -30,6 +30,7 @@ const MEDIA_TYPE = {
 const WATCHNOW_DEFAULT_REGION = "us";
 const WATCHNOW_DEFAULT_CURRENCY = "usd";
 const WATCHNOW_REDIRECT_URL = "https://loon-plugins.demojameson.de5.net/api/redirect";
+const SHORTCUTS_OPENLINK_URL = "shortcuts://run-shortcut?name=Open%20Player&input=text&text=";
 const DEFAULT_BACKEND_BASE_URL = "https://loon-plugins.demojameson.de5.net";
 const TMDB_LOGO_TARGET_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images";
 const TMDB_API_BASE_URL = "https://api.tmdb.org/3";
@@ -59,8 +60,7 @@ const PLAYER_DEFINITIONS = {
         color: "#33c1c0",
         tmdbProviderId: 1,
         tmdbDisplayPriority: 1,
-        buildDeeplink: buildEplayerXDeeplink,
-        useRedirectLink: true
+        buildDeeplink: buildEplayerXDeeplink
     },
     [PLAYER_TYPE.FORWARD]: {
         type: PLAYER_TYPE.FORWARD,
@@ -70,8 +70,7 @@ const PLAYER_DEFINITIONS = {
         color: "#000000",
         tmdbProviderId: 2,
         tmdbDisplayPriority: 2,
-        buildDeeplink: buildForwardDeeplink,
-        useRedirectLink: true
+        buildDeeplink: buildForwardDeeplink
     },
     [PLAYER_TYPE.INFUSE]: {
         type: PLAYER_TYPE.INFUSE,
@@ -81,8 +80,7 @@ const PLAYER_DEFINITIONS = {
         color: "#ff8000",
         tmdbProviderId: 3,
         tmdbDisplayPriority: 3,
-        buildDeeplink: buildInfuseDeeplink,
-        useRedirectLink: false
+        buildDeeplink: buildInfuseDeeplink
     }
 };
 const PLAYER_ARGUMENT_KEYS = {
@@ -240,6 +238,7 @@ function parseArgumentConfig() {
         latestHistoryEpisodeOnly: true,
         commentTranslationEnabled: true,
         playerButtonEnabled: createDefaultPlayerButtonEnabledConfig(),
+        useShortcutsJumpEnabled: false,
         backendBaseUrl: DEFAULT_BACKEND_BASE_URL
     };
 
@@ -253,6 +252,10 @@ function parseArgumentConfig() {
             config.commentTranslationEnabled
         );
         config.playerButtonEnabled = parsePlayerButtonEnabledObject($argument, config.playerButtonEnabled);
+        config.useShortcutsJumpEnabled = parseBooleanArgument(
+            $argument.useShortcutsJumpEnabled,
+            config.useShortcutsJumpEnabled
+        );
         config.backendBaseUrl = $argument.backendBaseUrl?.trim() || config.backendBaseUrl;
         return config;
     }
@@ -272,7 +275,13 @@ function parseArgumentConfig() {
         }
         config.playerButtonEnabled = parsePlayerButtonEnabledParts(parts, 2, config.playerButtonEnabled);
         if (parts.length > 5) {
-            config.backendBaseUrl = parts[5] || config.backendBaseUrl;
+            config.useShortcutsJumpEnabled = parseBooleanArgument(
+                parts[5],
+                config.useShortcutsJumpEnabled
+            );
+        }
+        if (parts.length > 6) {
+            config.backendBaseUrl = parts[6] || config.backendBaseUrl;
         }
     }
 
@@ -283,6 +292,7 @@ const argumentConfig = parseArgumentConfig();
 const latestHistoryEpisodeOnly = argumentConfig.latestHistoryEpisodeOnly;
 const commentTranslationEnabled = argumentConfig.commentTranslationEnabled;
 const enabledPlayerTypes = Object.values(PLAYER_TYPE).filter((source) => argumentConfig.playerButtonEnabled[source]);
+const useShortcutsJumpEnabled = argumentConfig.useShortcutsJumpEnabled;
 const backendBaseUrl = (() => {
     let value = argumentConfig.backendBaseUrl;
 
@@ -2262,6 +2272,42 @@ function buildWatchnowRedirectLink(deeplink) {
     return `${WATCHNOW_REDIRECT_URL}?deeplink=${encodeURIComponent(deeplink)}`;
 }
 
+function buildShortcutsJumpLink(deeplink) {
+    if (!deeplink) {
+        return "";
+    }
+
+    return `${SHORTCUTS_OPENLINK_URL}${encodeURIComponent(deeplink)}`;
+}
+
+function buildRedirectableLaunchLink(deeplink) {
+    if (!deeplink) {
+        return "";
+    }
+
+    return buildWatchnowRedirectLink(deeplink);
+}
+
+function buildTraktPlayerLaunchLink(deeplink) {
+    if (!deeplink) {
+        return "";
+    }
+
+    return buildRedirectableLaunchLink(deeplink);
+}
+
+function buildSofaTimePlayerLaunchLink(source, deeplink) {
+    if (!deeplink) {
+        return "";
+    }
+
+    if (source === PLAYER_TYPE.INFUSE) {
+        return deeplink;
+    }
+
+    return buildRedirectableLaunchLink(deeplink);
+}
+
 function doneRedirect(location) {
     const targetLocation = String(location ?? "").trim();
     if (!targetLocation) {
@@ -2295,7 +2341,17 @@ function resolveDirectRedirectLocation(url) {
 }
 
 function handleDirectRedirectRequest() {
-    doneRedirect(resolveDirectRedirectLocation(requestUrl));
+    const location = resolveDirectRedirectLocation(requestUrl);
+    if (
+        location &&
+        useShortcutsJumpEnabled &&
+        /^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?/i.test(String(requestUrl ?? ""))
+    ) {
+        doneRedirect(buildShortcutsJumpLink(location));
+        return;
+    }
+
+    doneRedirect(location);
 }
 
 function isSofaTimeRequest() {
@@ -2436,7 +2492,7 @@ function createSofaTimeStreamingOption(source, target) {
         showTmdbId: isNonNullish(target.showTmdbId) ? target.showTmdbId : null
     };
     const deeplink = definition.buildDeeplink(target, context);
-    const link = definition.useRedirectLink ? buildWatchnowRedirectLink(deeplink) : deeplink;
+    const link = buildSofaTimePlayerLaunchLink(source, deeplink);
 
     if (!deeplink || !link) {
         return null;
@@ -2883,7 +2939,7 @@ function buildCustomWatchnowEntries(target, context) {
             return null;
         }
 
-        const link = buildWatchnowRedirectLink(deeplink);
+        const link = buildTraktPlayerLaunchLink(deeplink);
         if (!link) {
             return null;
         }
