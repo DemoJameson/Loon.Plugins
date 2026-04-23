@@ -8,6 +8,9 @@
 [Argument]
 latestHistoryEpisodeOnly = switch, "true", tag=历史剧集类别只展示最新一集, desc=启用后会将 history/episodes 和 sync/history/episodes 请求的 limit 提升到 1000，并在响应中同一个剧集只保留集序最新的一集数据
 commentTranslationEnabled = switch, "true", tag=翻译评论, desc=启用后会翻译评论，并按评论 id 缓存到本地
+eplayerxEnabled = switch, "true", tag=EplayerX 跳转按钮, desc=启用后在 Trakt Watchnow 和 Sofa Time 中注入 EplayerX 跳转按钮
+forwardEnabled = switch, "true", tag=Forward 跳转按钮, desc=启用后在 Trakt Watchnow 和 Sofa Time 中注入 Forward 跳转按钮
+infuseEnabled = switch, "true", tag=Infuse 跳转按钮, desc=启用后在 Trakt Watchnow 和 Sofa Time 中注入 Infuse 跳转按钮
 backendBaseUrl = input, "https://loon-plugins.demojameson.de5.net", tag=翻译缓存API, desc=填写你部署的 Vercel 项目 URL
 
 [Script]
@@ -30,7 +33,7 @@ http-response ^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/(?:shows|movies
 # 仅拦截 Sofa Time 的 TMDB provider 列表，注入播放器
 http-response ^https:\/\/api\.(?:themoviedb|tmdb)\.org\/3\/watch\/providers\/(?:movie|tv)(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=TMDB Provider Catalog
 # 仅拦截 Sofa Time 的 streaming-availability shows 详情，注入播放器
-http-response ^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/tt\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Sofa Time Streaming Availability
+http-response ^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/tt\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{eplayerxEnabled},{forwardEnabled},{infuseEnabled},{backendBaseUrl}], tag=Sofa Time Streaming Availability
 # 仅拦截 Sofa Time 的 streaming-availability 国家服务列表，注入播放器
 http-response ^https:\/\/streaming-availability\.p\.rapidapi\.com\/countries\/[a-z]{2}(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Sofa Time Country Services
 # 拦截 calendars/my/shows|movies，批量获取简体中文信息
@@ -84,7 +87,7 @@ http-response ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes
 # 拦截 watchnow/sources，注入播放器作为服务商
 http-response ^https:\/\/apiz?\.trakt\.tv\/watchnow\/sources(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Watchnow Sources
 # 拦截 movie/show/episode watchnow，注入播放器跳转链接
-http-response ^https:\/\/apiz?\.trakt\.tv\/(?:movies|shows|episodes)\/[^\/]+\/watchnow(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Watchnow
+http-response ^https:\/\/apiz?\.trakt\.tv\/(?:movies|shows|episodes)\/[^\/]+\/watchnow(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{eplayerxEnabled},{forwardEnabled},{infuseEnabled},{backendBaseUrl}], tag=Trakt Watchnow
 # 拦截 episodes 详情
 http-response ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=20, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{backendBaseUrl}], tag=Trakt Episode Detail
 # 拦截 episode comments/*，翻译评论

@@ -3,8 +3,8 @@
 #!icon=https://app.trakt.tv/pwa/android/icon_192.png
 #!homepage=https://github.com/DemoJameson/Loon.Plugins
 #!author=DemoJameson
-#!arguments=latestHistoryEpisodeOnly:"true", commentTranslationEnabled:"true", backendBaseUrl:"https://loon-plugins.demojameson.de5.net"
-#!arguments-desc=latestHistoryEpisodeOnly: 是否只保留历史剧集分类中的最新一集，作用于 history/episodes 和 sync/history/episodes，填入 true 或 false。\ncommentTranslationEnabled: 是否翻译评论，填入 true 或 false。\nbackendBaseUrl: 翻译缓存 API 地址，填入你部署的 Vercel 项目 URL。
+#!arguments=latestHistoryEpisodeOnly:"true", commentTranslationEnabled:"true", eplayerxEnabled:"true", forwardEnabled:"true", infuseEnabled:"true", backendBaseUrl:"https://loon-plugins.demojameson.de5.net"
+#!arguments-desc=latestHistoryEpisodeOnly: 是否只保留历史剧集分类中的最新一集，作用于 history/episodes 和 sync/history/episodes，填入 true 或 false。\ncommentTranslationEnabled: 是否翻译评论，填入 true 或 false。\neplayerxEnabled: 是否注入 EplayerX 跳转按钮，填入 true 或 false。\nforwardEnabled: 是否注入 Forward 跳转按钮，填入 true 或 false。\ninfuseEnabled: 是否注入 Infuse 跳转按钮，填入 true 或 false。\nbackendBaseUrl: 翻译缓存 API 地址，填入你部署的 Vercel 项目 URL。
 
 [Script]
 # 处理播放器 deeplink 跳转
@@ -24,7 +24,7 @@ Trakt Watchlist Released = type=http-response, pattern=^https:\/\/apiz?\.trakt\.
 # 仅拦截 Sofa Time 的 TMDB provider 列表，注入播放器
 TMDB Provider Catalog = type=http-response, pattern=^https:\/\/api\.(?:themoviedb|tmdb)\.org\/3\/watch\/providers\/(?:movie|tv)(\?.*)?$, requires-body=true, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{commentTranslationEnabled}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 仅拦截 Sofa Time 的 streaming-availability shows 详情，注入播放器
-Sofa Time Streaming Availability = type=http-response, pattern=^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/tt\d+(\?.*)?$, requires-body=true, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{commentTranslationEnabled}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+Sofa Time Streaming Availability = type=http-response, pattern=^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/tt\d+(\?.*)?$, requires-body=true, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{commentTranslationEnabled}}},{{{eplayerxEnabled}}},{{{forwardEnabled}}},{{{infuseEnabled}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 仅拦截 Sofa Time 的 streaming-availability 国家服务列表，注入播放器
 Sofa Time Country Services = type=http-response, pattern=^https:\/\/streaming-availability\.p\.rapidapi\.com\/countries\/[a-z]{2}(\?.*)?$, requires-body=true, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{commentTranslationEnabled}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 calendars/my/shows|movies，批量获取简体中文信息
@@ -78,7 +78,7 @@ Trakt Episode People = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/
 # 拦截 watchnow/sources，注入播放器作为服务商
 Trakt Watchnow Sources = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/watchnow\/sources(\?.*)?$, requires-body=true, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{commentTranslationEnabled}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 movie/show/episode watchnow，注入播放器跳转链接
-Trakt Watchnow = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/(?:movies|shows|episodes)\/[^\/]+\/watchnow(\?.*)?$, requires-body=true, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{commentTranslationEnabled}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+Trakt Watchnow = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/(?:movies|shows|episodes)\/[^\/]+\/watchnow(\?.*)?$, requires-body=true, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{commentTranslationEnabled}}},{{{eplayerxEnabled}}},{{{forwardEnabled}}},{{{infuseEnabled}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 episodes 详情
 Trakt Episode Detail = type=http-response, pattern=^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(\?.*)?$, requires-body=true, max-size=0, timeout=20, argument={{{latestHistoryEpisodeOnly}}},{{{commentTranslationEnabled}}},{{{backendBaseUrl}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 episode comments/*，翻译评论

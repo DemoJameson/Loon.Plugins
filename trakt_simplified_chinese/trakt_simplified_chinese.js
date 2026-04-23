@@ -30,6 +30,7 @@ const MEDIA_TYPE = {
 const WATCHNOW_DEFAULT_REGION = "us";
 const WATCHNOW_DEFAULT_CURRENCY = "usd";
 const WATCHNOW_REDIRECT_URL = "https://loon-plugins.demojameson.de5.net/api/redirect";
+const DEFAULT_BACKEND_BASE_URL = "https://loon-plugins.demojameson.de5.net";
 const TMDB_LOGO_TARGET_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images";
 const TMDB_API_BASE_URL = "https://api.tmdb.org/3";
 const TMDB_API_KEY = "a0a4d50000eeb10604c5f9342c8b3f62";
@@ -83,6 +84,11 @@ const PLAYER_DEFINITIONS = {
         buildDeeplink: buildInfuseDeeplink,
         useRedirectLink: false
     }
+};
+const PLAYER_ARGUMENT_KEYS = {
+    [PLAYER_TYPE.EPLAYERX]: "eplayerxEnabled",
+    [PLAYER_TYPE.FORWARD]: "forwardEnabled",
+    [PLAYER_TYPE.INFUSE]: "infuseEnabled"
 };
 const SOFA_TIME_COUNTRY_SERVICE_TYPES = {
     addon: true,
@@ -150,6 +156,35 @@ function parseBooleanArgument(value, fallbackValue) {
     return fallbackValue;
 }
 
+function createDefaultPlayerButtonEnabledConfig() {
+    return Object.values(PLAYER_TYPE).reduce((acc, source) => {
+        acc[source] = true;
+        return acc;
+    }, {});
+}
+
+function parsePlayerButtonEnabledObject(argument, fallbackConfig) {
+    const nextConfig = { ...fallbackConfig };
+    Object.values(PLAYER_TYPE).forEach((source) => {
+        const key = PLAYER_ARGUMENT_KEYS[source];
+        if (Object.prototype.hasOwnProperty.call(argument, key)) {
+            nextConfig[source] = parseBooleanArgument(argument[key], nextConfig[source]);
+        }
+    });
+    return nextConfig;
+}
+
+function parsePlayerButtonEnabledParts(parts, startIndex, fallbackConfig) {
+    const nextConfig = { ...fallbackConfig };
+    Object.values(PLAYER_TYPE).forEach((source, index) => {
+        const valueIndex = startIndex + index;
+        if (parts.length > valueIndex) {
+            nextConfig[source] = parseBooleanArgument(parts[valueIndex], nextConfig[source]);
+        }
+    });
+    return nextConfig;
+}
+
 function createZeroPriorityMap(regionCodes) {
     return ensureArray(regionCodes).reduce((acc, regionCode) => {
         const code = String(regionCode ?? "").trim().toUpperCase();
@@ -204,7 +239,8 @@ function parseArgumentConfig() {
     const config = {
         latestHistoryEpisodeOnly: true,
         commentTranslationEnabled: true,
-        backendBaseUrl: "https://loon-plugins.demojameson.de5.net"
+        playerButtonEnabled: createDefaultPlayerButtonEnabledConfig(),
+        backendBaseUrl: DEFAULT_BACKEND_BASE_URL
     };
 
     if (typeof $argument === "object" && $argument !== null) {
@@ -216,6 +252,7 @@ function parseArgumentConfig() {
             $argument.commentTranslationEnabled,
             config.commentTranslationEnabled
         );
+        config.playerButtonEnabled = parsePlayerButtonEnabledObject($argument, config.playerButtonEnabled);
         config.backendBaseUrl = $argument.backendBaseUrl?.trim() || config.backendBaseUrl;
         return config;
     }
@@ -233,8 +270,9 @@ function parseArgumentConfig() {
         if (parts.length > 1) {
             config.commentTranslationEnabled = parseBooleanArgument(parts[1], config.commentTranslationEnabled);
         }
-        if (parts.length > 2) {
-            config.backendBaseUrl = parts[2] || config.backendBaseUrl;
+        config.playerButtonEnabled = parsePlayerButtonEnabledParts(parts, 2, config.playerButtonEnabled);
+        if (parts.length > 5) {
+            config.backendBaseUrl = parts[5] || config.backendBaseUrl;
         }
     }
 
@@ -244,6 +282,7 @@ function parseArgumentConfig() {
 const argumentConfig = parseArgumentConfig();
 const latestHistoryEpisodeOnly = argumentConfig.latestHistoryEpisodeOnly;
 const commentTranslationEnabled = argumentConfig.commentTranslationEnabled;
+const enabledPlayerTypes = Object.values(PLAYER_TYPE).filter((source) => argumentConfig.playerButtonEnabled[source]);
 const backendBaseUrl = (() => {
     let value = argumentConfig.backendBaseUrl;
 
@@ -2440,7 +2479,7 @@ function injectSofaTimeStreamingOptions(payload, target) {
 }
 
 function createSofaTimeStreamingOptionsByRegion(regionCode, target) {
-    return Object.values(PLAYER_TYPE).map((source) => createSofaTimeStreamingOption(source, target)).filter(Boolean);
+    return enabledPlayerTypes.map((source) => createSofaTimeStreamingOption(source, target)).filter(Boolean);
 }
 
 function doneJsonResponse(payload) {
@@ -2833,7 +2872,7 @@ function buildCustomWatchnowEntries(target, context) {
         return [];
     }
 
-    return Object.values(PLAYER_TYPE).map((source) => {
+    return enabledPlayerTypes.map((source) => {
         const definition = PLAYER_DEFINITIONS[source];
         if (!definition || typeof definition.buildDeeplink !== "function") {
             return null;
