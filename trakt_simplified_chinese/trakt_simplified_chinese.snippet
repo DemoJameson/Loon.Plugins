@@ -9,86 +9,22 @@
 ^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?.*$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 处理 TMDB logo 跳转
 ^https:\/\/image\.tmdb\.org\/t\/p\/w342\/[a-z0-9_-]+_logo\.webp(?:\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 users/settings，修改 VIP 和广告显示状态
-^https:\/\/apiz?\.trakt\.tv\/users\/settings(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 translations/zh 接口，按 zh-CN 优先级排序
-^https:\/\/apiz?\.trakt\.tv\/.+\/translations\/zh(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 up_next_nitro，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/sync\/progress\/up_next_nitro(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 playback/movies，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/sync\/playback\/movies(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 watchlist/shows|movies/released，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/(?:shows|movies)\/released(?:\/desc)?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 sync/history/episodes 请求，放大 limit
+^https:\/\/apiz?\.trakt\.tv\/sync\/history\/episodes\/?(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 history/episodes 请求，放大 limit
+^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/episodes\/?(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截 Rippple 的 history 请求，确保 limit 至少为 100
+^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/?(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 拦截带季号的请求，记录当前浏览季
+^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+(?:\/.*|\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
+# 统一拦截 Trakt 响应，由脚本内部分流处理
+^https:\/\/apiz?\.trakt\.tv\/.*$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 仅拦截 Sofa Time 的 TMDB provider 列表，注入播放器
 ^https:\/\/api\.(?:themoviedb|tmdb)\.org\/3\/watch\/providers\/(?:movie|tv)(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 仅拦截 Sofa Time 的 streaming-availability shows 详情，注入播放器
 ^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/tt\d+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 仅拦截 Sofa Time 的 streaming-availability 国家服务列表，注入播放器
 ^https:\/\/streaming-availability\.p\.rapidapi\.com\/countries\/[a-z]{2}(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 calendars/my/shows|movies，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/calendars\/my\/(?:shows|movies)\/\d{4}-\d{2}-\d{2}\/\d+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 history，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 sync/history，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/sync\/history(?:\/(?:movies|shows|episodes))?\/?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 sync/history/episodes 请求，放大 limit
-^https:\/\/apiz?\.trakt\.tv\/sync\/history\/episodes\/?(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 history/episodes 请求，放大 limit
-^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/episodes\/?(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 history/episodes 响应，按剧集只保留最新一条
-^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/episodes(?:\/\d+)?\/?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 history/movies，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/movies\/?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 collection/media，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/collection\/media(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 following/activities，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/users\/me\/following\/activities(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 list/items，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/lists\/\d+\/items(?:\/(?:show|movie|episode)s?)?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截公共 list/items，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/lists\/\d+\/items(?:\/(?:show|movie|episode)s?)?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 favorites，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/favorites(?:\/(?:shows|movies))?\/?(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 media/trending，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/media\/trending(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 media/recommendations，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/media\/recommendations(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 media/anticipated，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/media\/anticipated(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 media/popular/next，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/media\/popular\/next(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 watchlist，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 watchlist/shows|movies，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/users\/me\/watchlist\/(?:shows|movies)(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截带季号的请求，记录当前浏览季
-^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+(?:\/.*|\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截季列表，批量获取简体中文信息
-^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 shows|movies 详情
-^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/[^\/]+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 people 详情，翻译 name 和 biography
-^https:\/\/apiz?\.trakt\.tv\/people\/[^\/]+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 show/movie people 列表，翻译演员姓名
-^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/[^\/]+\/people(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 episode people 列表，翻译演员姓名
-^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+\/people(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 watchnow/sources，注入播放器作为服务商
-^https:\/\/apiz?\.trakt\.tv\/watchnow\/sources(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 movie/show/episode watchnow，注入播放器跳转链接
-^https:\/\/apiz?\.trakt\.tv\/(?:movies|shows|episodes)\/[^\/]+\/watchnow(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 episodes 详情
-^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 episode comments/*，翻译评论
-^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+\/episodes\/\d+\/comments\/[^\/?]+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 show/movie comments/*，翻译评论
-^https:\/\/apiz?\.trakt\.tv\/(?:shows|movies)\/[^\/]+\/comments\/[^\/?]+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截评论 replies，翻译评论
-^https:\/\/apiz?\.trakt\.tv\/comments\/\d+\/replies(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 media info sentiment，翻译 aspect/summary/text
-^https:\/\/apiz?\.trakt\.tv\/v3\/media\/(?:movie|show)\/\d+\/info\/\d+\/version\/\d+(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 month in review
-^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/mir(\?.*)?$ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # [mitm]
 hostname = apiz.trakt.tv, api.trakt.tv, api.themoviedb.org, image.tmdb.org, streaming-availability.p.rapidapi.com, loon-plugins.demojameson.de5.net
 

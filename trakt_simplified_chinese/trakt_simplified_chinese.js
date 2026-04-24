@@ -6,12 +6,15 @@ const LINK_IDS_CACHE_KEY = "trakt_watchnow_ids_cache";
 const COMMENT_TRANSLATION_CACHE_KEY = "trakt_comment_translation_cache";
 const SENTIMENT_TRANSLATION_CACHE_KEY = "trakt_sentiment_translation_cache";
 const PEOPLE_TRANSLATION_CACHE_KEY = "trakt_people_translation_cache";
+const LIST_DESCRIPTION_TRANSLATION_CACHE_KEY = "trakt_list_description_translation_cache";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTIAL_FOUND_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;
+const BACKEND_WRITE_BATCH_SIZE = 100;
 const SEASON_EPISODE_TRANSLATION_LIMIT = 10;
 const BACKEND_FETCH_MIN_REFS = 3;
 const HISTORY_EPISODES_LIMIT = 500;
+const RIPPPLE_HISTORY_MIN_LIMIT = 100;
 const GOOGLE_TRANSLATE_API_KEY = "QUl6YVN5QmNRak1SQTYyVGFYSm4xOXdiZExHNXJWUkJCaDJqbnVzQ2tzNzY=";
 const GOOGLE_TRANSLATE_API_URL = "https://translation.googleapis.com/language/translate/v2";
 const GOOGLE_TRANSLATE_BATCH_SIZE = 128;
@@ -430,6 +433,23 @@ function savePeopleTranslationCache(cache) {
         $.setjson(cache, PEOPLE_TRANSLATION_CACHE_KEY);
     } catch (e) {
         $.log(`Trakt people translation cache save failed: ${e}`);
+    }
+}
+
+function loadListDescriptionTranslationCache() {
+    try {
+        return ensureObject($.getjson(LIST_DESCRIPTION_TRANSLATION_CACHE_KEY, {}));
+    } catch (e) {
+        $.log(`Trakt list description translation cache load failed: ${e}`);
+        return {};
+    }
+}
+
+function saveListDescriptionTranslationCache(cache) {
+    try {
+        $.setjson(cache, LIST_DESCRIPTION_TRANSLATION_CACHE_KEY);
+    } catch (e) {
+        $.log(`Trakt list description translation cache save failed: ${e}`);
     }
 }
 
@@ -978,6 +998,10 @@ function queueBackendWrite(mediaType, ref, entry) {
     }
 
     pendingBackendWrites[mediaType][lookupKey] = entry;
+
+    if (getPendingBackendWriteCount() >= BACKEND_WRITE_BATCH_SIZE) {
+        flushBackendWriteBatch(BACKEND_WRITE_BATCH_SIZE);
+    }
 }
 
 function buildBackendWritePayload() {
@@ -988,25 +1012,96 @@ function buildBackendWritePayload() {
     return payload;
 }
 
-function flushBackendWrites() {
-    if (!backendBaseUrl) {
-        return;
+function buildBackendWritePayloads(maxBatchSize) {
+    const batchSize = Number(maxBatchSize) > 0 ? Number(maxBatchSize) : BACKEND_WRITE_BATCH_SIZE;
+    const records = [];
+
+    Object.keys(pendingBackendWrites).forEach((mediaType) => {
+        const entries = ensureObject(pendingBackendWrites[mediaType]);
+        Object.keys(entries).forEach((lookupKey) => {
+            records.push({
+                mediaType: mediaType,
+                lookupKey: lookupKey,
+                entry: entries[lookupKey]
+            });
+        });
+    });
+
+    if (records.length === 0) {
+        return [];
     }
 
-    if (Object.values(pendingBackendWrites).every((entries) => Object.keys(entries).length === 0)) {
-        return;
+    const payloads = [];
+    for (let index = 0; index < records.length; index += batchSize) {
+        const payload = {};
+        Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
+            payload[getMediaBackendField(mediaType)] = {};
+        });
+
+        records.slice(index, index + batchSize).forEach((record) => {
+            payload[getMediaBackendField(record.mediaType)][record.lookupKey] = record.entry;
+        });
+
+        payloads.push(payload);
+    }
+
+    return payloads;
+}
+
+function getPendingBackendWriteCount() {
+    return Object.keys(pendingBackendWrites).reduce((count, mediaType) => {
+        return count + Object.keys(ensureObject(pendingBackendWrites[mediaType])).length;
+    }, 0);
+}
+
+function extractBackendWritePayload(maxBatchSize) {
+    const batchSize = Number(maxBatchSize) > 0 ? Number(maxBatchSize) : BACKEND_WRITE_BATCH_SIZE;
+    const payload = {};
+    let count = 0;
+
+    Object.keys(MEDIA_CONFIG).forEach((mediaType) => {
+        payload[getMediaBackendField(mediaType)] = {};
+    });
+
+    for (const mediaType of Object.keys(MEDIA_CONFIG)) {
+        const entries = ensureObject(pendingBackendWrites[mediaType]);
+        for (const lookupKey of Object.keys(entries)) {
+            if (count >= batchSize) {
+                return payload;
+            }
+
+            payload[getMediaBackendField(mediaType)][lookupKey] = entries[lookupKey];
+            delete pendingBackendWrites[mediaType][lookupKey];
+            count += 1;
+        }
+    }
+
+    return payload;
+}
+
+function flushBackendWriteBatch(maxBatchSize) {
+    if (!backendBaseUrl) {
+        return false;
+    }
+
+    if (getPendingBackendWriteCount() === 0) {
+        return false;
     }
 
     const url = `${backendBaseUrl}/api/trakt/translations`;
-    postJson(url, buildBackendWritePayload(), {
+    const payload = extractBackendWritePayload(maxBatchSize);
+
+    postJson(url, payload, {
         "content-type": "application/json"
     }, false).catch(e => {
-        $.log(`Trakt backend cache write failed during flush: ${e}`);
+        $.log(`Trakt backend cache write failed during batch flush: ${e}`);
     });
 
-    Object.keys(pendingBackendWrites).forEach((field) => {
-        pendingBackendWrites[field] = {};
-    });
+    return true;
+}
+
+function flushBackendWrites() {
+    flushBackendWriteBatch(getPendingBackendWriteCount());
 }
 
 function buildTranslationUrl(mediaType, ref) {
@@ -1120,6 +1215,9 @@ function applyTranslation(target, entry) {
 
     if (entry.translation.title) {
         target.title = entry.translation.title;
+        if (/^Rippple/i.test(String(getRequestHeaderValue("user-agent") ?? "").trim())) {
+            target.original_title = entry.translation.title;
+        }
     }
     if (entry.translation.overview) {
         target.overview = entry.translation.overview;
@@ -1250,13 +1348,23 @@ function buildSentimentCacheKey(mediaType, traktId) {
 }
 
 function resolveSentimentRequestTarget(url) {
-    const match = String(url ?? "").match(/\/media\/(movie|show)\/(\d+)\/info\/(\d+)\/version\/(\d+)(?:\?|$)/i);
+    let match = String(url ?? "").match(/\/media\/(movie|show)\/(\d+)\/info\/(\d+)\/version\/(\d+)(?:\?|$)/i);
     if (match) {
         return {
             mediaType: String(match[1]).toLowerCase() === "show" ? MEDIA_TYPE.SHOW : MEDIA_TYPE.MOVIE,
             traktId: match[2],
             infoId: match[3],
             version: match[4]
+        };
+    }
+
+    match = String(url ?? "").match(/\/(shows|movies)\/(\d+)\/sentiments(?:\?|$)/i);
+    if (match) {
+        return {
+            mediaType: String(match[1]).toLowerCase() === "shows" ? MEDIA_TYPE.SHOW : MEDIA_TYPE.MOVIE,
+            traktId: match[2],
+            infoId: null,
+            version: null
         };
     }
 
@@ -1271,6 +1379,15 @@ function normalizeSentimentAspectItem(item) {
     };
 }
 
+function normalizeSentimentGroupItem(item) {
+    const normalized = ensureObject(item);
+    return {
+        ...normalized,
+        sentiment: String(normalized.sentiment ?? ""),
+        comment_ids: ensureArray(normalized.comment_ids)
+    };
+}
+
 function cloneSentimentsPayload(payload) {
     const normalized = ensureObject(payload);
     return {
@@ -1280,6 +1397,8 @@ function cloneSentimentsPayload(payload) {
             pros: ensureArray(normalized.aspect?.pros).map(normalizeSentimentAspectItem),
             cons: ensureArray(normalized.aspect?.cons).map(normalizeSentimentAspectItem)
         },
+        good: ensureArray(normalized.good).map(normalizeSentimentGroupItem),
+        bad: ensureArray(normalized.bad).map(normalizeSentimentGroupItem),
         summary: ensureArray(normalized.summary).map((item) => String(item ?? "")),
         text: String(normalized.text ?? "")
     };
@@ -1302,6 +1421,18 @@ function buildSentimentTranslationPayload(payload) {
                 };
             })
         },
+        good: ensureArray(payload?.good).map((item) => {
+            return {
+                sourceTextHash: computeStringHash(item?.sourceSentiment ?? item?.sentiment ?? ""),
+                translatedText: String(item?.translatedSentiment ?? item?.sentiment ?? "")
+            };
+        }),
+        bad: ensureArray(payload?.bad).map((item) => {
+            return {
+                sourceTextHash: computeStringHash(item?.sourceSentiment ?? item?.sentiment ?? ""),
+                translatedText: String(item?.translatedSentiment ?? item?.sentiment ?? "")
+            };
+        }),
         summary: ensureArray(payload?.summary).map((item) => {
             return {
                 sourceTextHash: computeStringHash(item?.sourceText ?? item?.text ?? item ?? ""),
@@ -1354,6 +1485,24 @@ function applySentimentTranslationPayload(target, translation) {
         payload.text = translatedText;
     }
 
+    ensureArray(payload.good).forEach((item, index) => {
+        const entry = ensureObject(ensureArray(translated.good)[index]);
+        const sourceTextHash = computeStringHash(item?.sentiment ?? "");
+        const translatedText = String(entry.translatedText ?? "").trim();
+        if (translatedText && String(entry.sourceTextHash ?? "") === sourceTextHash) {
+            item.sentiment = translatedText;
+        }
+    });
+
+    ensureArray(payload.bad).forEach((item, index) => {
+        const entry = ensureObject(ensureArray(translated.bad)[index]);
+        const sourceTextHash = computeStringHash(item?.sentiment ?? "");
+        const translatedText = String(entry.translatedText ?? "").trim();
+        if (translatedText && String(entry.sourceTextHash ?? "") === sourceTextHash) {
+            item.sentiment = translatedText;
+        }
+    });
+
     return payload;
 }
 
@@ -1375,6 +1524,32 @@ function hasMatchingSentimentTranslationPayload(target, translation) {
         });
     });
     if (!aspectMatches) {
+        return false;
+    }
+
+    const goodItems = ensureArray(payload.good);
+    const cachedGoodItems = ensureArray(translated.good);
+    if (goodItems.length !== cachedGoodItems.length) {
+        return false;
+    }
+
+    const goodMatches = goodItems.every((item, index) => {
+        return computeStringHash(item?.sentiment ?? "") === String(cachedGoodItems[index]?.sourceTextHash ?? "");
+    });
+    if (!goodMatches) {
+        return false;
+    }
+
+    const badItems = ensureArray(payload.bad);
+    const cachedBadItems = ensureArray(translated.bad);
+    if (badItems.length !== cachedBadItems.length) {
+        return false;
+    }
+
+    const badMatches = badItems.every((item, index) => {
+        return computeStringHash(item?.sentiment ?? "") === String(cachedBadItems[index]?.sourceTextHash ?? "");
+    });
+    if (!badMatches) {
         return false;
     }
 
@@ -1475,6 +1650,20 @@ async function handleSentiments() {
             text: String(item?.theme ?? "")
         });
     });
+    ensureArray(translatedData.good).forEach((item) => {
+        translationTargets.push({
+            target: item,
+            field: "sentiment",
+            text: String(item?.sentiment ?? "")
+        });
+    });
+    ensureArray(translatedData.bad).forEach((item) => {
+        translationTargets.push({
+            target: item,
+            field: "sentiment",
+            text: String(item?.sentiment ?? "")
+        });
+    });
     ensureArray(translatedData.summary).forEach((item, index) => {
         translationTargets.push({
             target: translatedData.summary,
@@ -1513,6 +1702,20 @@ async function handleSentiments() {
                 sourceField: "theme"
             });
         });
+        ensureArray(cachePayload.good).forEach((item) => {
+            cacheTargets.push({
+                target: item,
+                sourceField: "sentiment",
+                type: "sentiment"
+            });
+        });
+        ensureArray(cachePayload.bad).forEach((item) => {
+            cacheTargets.push({
+                target: item,
+                sourceField: "sentiment",
+                type: "sentiment"
+            });
+        });
         ensureArray(cachePayload.summary).forEach((item, index) => {
             cacheTargets.push({
                 target: cachePayload.summary,
@@ -1545,6 +1748,12 @@ async function handleSentiments() {
                 return;
             }
 
+            if (item.type === "sentiment") {
+                item.target.sourceSentiment = originalText;
+                item.target.translatedSentiment = nextTranslatedText;
+                return;
+            }
+
             item.target.sourceTheme = originalText;
             item.target.translatedTheme = nextTranslatedText;
         });
@@ -1552,7 +1761,7 @@ async function handleSentiments() {
         storeSentimentTranslationCacheEntry(cache, target.mediaType, target.traktId, cachePayload);
         saveSentimentTranslationCache(cache);
     } catch (e) {
-        $.log(`Trakt sentiment translation failed for ${target.mediaType}:${target.traktId}:${target.infoId}:${target.version}: ${e}`);
+        $.log(`Trakt sentiment translation failed for ${target.mediaType}:${target.traktId}:${target.infoId ?? "-"}:${target.version ?? "-"}: ${e}`);
     }
 
     $.done({ body: JSON.stringify(translatedData) });
@@ -1768,6 +1977,26 @@ function collectCommentTranslationGroups(comments, cache) {
     return groups;
 }
 
+function collectCommentTargets(payload) {
+    if (isNotArray(payload) || payload.length === 0) {
+        return [];
+    }
+
+    const commentTargets = [];
+    payload.forEach((item) => {
+        if (isPlainObject(item?.comment)) {
+            commentTargets.push(item.comment);
+            return;
+        }
+
+        if (isPlainObject(item) && isNonNullish(item.id) && typeof item.comment === "string") {
+            commentTargets.push(item);
+        }
+    });
+
+    return commentTargets;
+}
+
 async function translateCommentGroup(comments, sourceLanguage, cache) {
     const sourceTexts = comments.map((item) => item.comment);
     const translatedTexts = await translateTextsWithGoogle(sourceTexts, sourceLanguage);
@@ -1788,16 +2017,14 @@ async function translateCommentGroup(comments, sourceLanguage, cache) {
     });
 }
 
-async function handleComments() {
+async function translateCommentsInPlace(payload) {
     if (!commentTranslationEnabled) {
-        $.done({ body: body });
-        return;
+        return payload;
     }
 
-    const comments = JSON.parse(body);
-    if (isNotArray(comments) || comments.length === 0) {
-        $.done({ body: body });
-        return;
+    const comments = collectCommentTargets(payload);
+    if (comments.length === 0) {
+        return payload;
     }
 
     const cache = loadCommentTranslationCache();
@@ -1813,7 +2040,149 @@ async function handleComments() {
     }
 
     saveCommentTranslationCache(cache);
+    return payload;
+}
+
+async function handleRecentCommentsList() {
+    const data = JSON.parse(body);
+    if (isNotArray(data) || data.length === 0) {
+        $.done({ body: body });
+        return;
+    }
+
+    await Promise.all([
+        translateMediaItemsInPlace(data, "recent comments"),
+        translateCommentsInPlace(data)
+    ]);
+    $.done({ body: JSON.stringify(data) });
+}
+
+async function handleComments() {
+    if (!commentTranslationEnabled) {
+        $.done({ body: body });
+        return;
+    }
+
+    const comments = JSON.parse(body);
+    if (isNotArray(comments) || comments.length === 0) {
+        $.done({ body: body });
+        return;
+    }
+
+    await translateCommentsInPlace(comments);
     $.done({ body: JSON.stringify(comments) });
+}
+
+function buildListDescriptionCacheKey(listId) {
+    if (isNullish(listId)) {
+        return "";
+    }
+
+    return String(listId);
+}
+
+function getCachedListDescriptionTranslation(cache, listId, sourceText) {
+    const cacheKey = buildListDescriptionCacheKey(listId);
+    if (!cacheKey) {
+        return "";
+    }
+
+    const entry = cache[cacheKey];
+    if (!isPlainObject(entry)) {
+        return "";
+    }
+
+    if (String(entry.sourceTextHash ?? "") !== computeStringHash(sourceText)) {
+        return "";
+    }
+
+    return String(entry.translatedText ?? "").trim();
+}
+
+function setListDescriptionTranslationCacheEntry(cache, listId, sourceText, translatedText) {
+    const cacheKey = buildListDescriptionCacheKey(listId);
+    if (!cacheKey || !translatedText) {
+        return;
+    }
+
+    cache[cacheKey] = {
+        sourceTextHash: computeStringHash(sourceText),
+        translatedText: translatedText
+    };
+}
+
+function collectListDescriptionTranslationGroups(lists, cache) {
+    const groups = {};
+
+    ensureArray(lists).forEach((item) => {
+        const description = String(item?.description ?? "").trim();
+        if (!description || containsChineseCharacter(description)) {
+            return;
+        }
+
+        const listId = item?.ids?.trakt ?? null;
+        const cachedTranslation = getCachedListDescriptionTranslation(cache, listId, description);
+        if (cachedTranslation) {
+            item.description = cachedTranslation;
+            return;
+        }
+
+        const language = "en";
+        if (!groups[language]) {
+            groups[language] = [];
+        }
+
+        groups[language].push({
+            target: item,
+            listId: listId,
+            description: description
+        });
+    });
+
+    return groups;
+}
+
+async function translateListDescriptionGroup(items, sourceLanguage, cache) {
+    const sourceTexts = items.map((item) => item.description);
+    const translatedTexts = await translateTextsWithGoogle(sourceTexts, sourceLanguage);
+
+    items.forEach((item, index) => {
+        const translatedText = String(translatedTexts[index] ?? "").trim();
+        if (!translatedText) {
+            return;
+        }
+
+        setListDescriptionTranslationCacheEntry(
+            cache,
+            item.listId,
+            sourceTexts[index],
+            translatedText
+        );
+        item.target.description = translatedText;
+    });
+}
+
+async function handleListDescriptions() {
+    const lists = JSON.parse(body);
+    if (isNotArray(lists) || lists.length === 0) {
+        $.done({ body: body });
+        return;
+    }
+
+    const cache = loadListDescriptionTranslationCache();
+    const groups = collectListDescriptionTranslationGroups(lists, cache);
+    const languages = Object.keys(groups);
+
+    for (const language of languages) {
+        try {
+            await translateListDescriptionGroup(groups[language], language, cache);
+        } catch (e) {
+            $.log(`Trakt list description translation failed for language=${language}: ${e}`);
+        }
+    }
+
+    saveListDescriptionTranslationCache(cache);
+    $.done({ body: JSON.stringify(lists) });
 }
 
 function getLinkIdsCacheEntry(cache, traktId) {
@@ -3180,6 +3549,27 @@ function applyTranslationsToItems(arr, cache) {
     });
 }
 
+async function translateMediaItemsInPlace(arr, logLabel) {
+    if (isNotArray(arr) || arr.length === 0) {
+        return arr;
+    }
+
+    const cache = loadCache();
+    const refsByType = collectMediaRefs(arr);
+
+    await hydrateFromBackend(cache, refsByType);
+
+    for (const mediaType of Object.keys(MEDIA_CONFIG)) {
+        await fetchAndPersistMissing(cache, mediaType, refsByType[mediaType], `${logLabel} ${mediaType}`);
+    }
+
+    saveCache(cache);
+    flushBackendWrites();
+
+    applyTranslationsToItems(arr, cache);
+    return arr;
+}
+
 async function hydrateFromBackend(cache, refsByType) {
     try {
         const missingRefsByType = createMediaCollection();
@@ -3204,31 +3594,79 @@ async function fetchAndPersistMissing(cache, mediaType, refs, logLabel) {
     });
 }
 
+function resolveForcedDirectMediaType(url) {
+    const normalizedUrl = String(url ?? "");
+    if (/\/recommendations\/shows(?:\?.*)?$/i.test(normalizedUrl)) {
+        return MEDIA_TYPE.SHOW;
+    }
+    if (/\/recommendations\/movies(?:\?.*)?$/i.test(normalizedUrl)) {
+        return MEDIA_TYPE.MOVIE;
+    }
+    return null;
+}
+
+function wrapDirectMediaItems(arr, mediaType) {
+    if (!mediaType) {
+        return null;
+    }
+
+    const wrapped = [];
+    for (let i = 0; i < arr.length; i += 1) {
+        const item = arr[i];
+        if (!isPlainObject(item) || isNullish(item?.ids?.trakt)) {
+            return null;
+        }
+        wrapped.push({ [mediaType]: item });
+    }
+
+    return wrapped;
+}
+
+function unwrapDirectMediaItems(arr, mediaType) {
+    if (!mediaType) {
+        return arr;
+    }
+
+    return arr.map((item) => item?.[mediaType] ?? item);
+}
+
 async function processMediaList(logLabel, sourceBody) {
-    const arr = JSON.parse(sourceBody);
-    if (isNotArray(arr) || arr.length === 0) {
+    const parsed = JSON.parse(sourceBody);
+    if (isNotArray(parsed) || parsed.length === 0) {
         return sourceBody;
     }
 
-    const cache = loadCache();
-    const refsByType = collectMediaRefs(arr);
+    const directMediaType = resolveForcedDirectMediaType(requestUrl);
+    const arr = wrapDirectMediaItems(parsed, directMediaType) ?? parsed;
 
-    await hydrateFromBackend(cache, refsByType);
-
-    for (const mediaType of Object.keys(MEDIA_CONFIG)) {
-        await fetchAndPersistMissing(cache, mediaType, refsByType[mediaType], `${logLabel} ${mediaType}`);
-    }
-
-    saveCache(cache);
-    flushBackendWrites();
-
-    applyTranslationsToItems(arr, cache);
-    return JSON.stringify(arr);
+    await translateMediaItemsInPlace(arr, logLabel);
+    return JSON.stringify(unwrapDirectMediaItems(arr, directMediaType));
 }
 
 async function handleMediaList(logLabel, bodyOverride) {
     const sourceBody = isNonNullish(bodyOverride) ? bodyOverride : body;
     $.done({ body: await processMediaList(logLabel, sourceBody) });
+}
+
+async function handlePersonMediaCreditsList(logLabel) {
+    const data = JSON.parse(body);
+    if (!isPlainObject(data)) {
+        $.done({ body: body });
+        return;
+    }
+
+    const crewItems = isPlainObject(data.crew)
+        ? Object.keys(data.crew).reduce((items, key) => items.concat(ensureArray(data.crew[key])), [])
+        : [];
+    const items = ensureArray(data.cast).concat(crewItems);
+
+    if (items.length === 0) {
+        $.done({ body: body });
+        return;
+    }
+
+    await translateMediaItemsInPlace(items, logLabel);
+    $.done({ body: JSON.stringify(data) });
 }
 
 async function handleMir() {
@@ -3580,40 +4018,34 @@ function buildHistoryEpisodesRequestUrl(url) {
         return url;
     }
 
-    const match = String(url ?? "").match(/^([^?]+)(\?.*)?$/);
-    if (!match) {
+    return buildMinimumLimitRequestUrl(url, HISTORY_EPISODES_LIMIT);
+}
+
+function buildRipppleHistoryRequestUrl(url) {
+    if (!shouldApplyRipppleHistoryLimit(url)) {
         return url;
     }
 
-    const path = match[1];
-    const query = match[2] ?? "";
-    const params = {};
-    const queryWithoutPrefix = query.replace(/^\?/, "");
+    return buildMinimumLimitRequestUrl(url, RIPPPLE_HISTORY_MIN_LIMIT);
+}
 
-    if (queryWithoutPrefix) {
-        queryWithoutPrefix.split("&").forEach((part) => {
-            if (!part) {
-                return;
-            }
-
-            const pieces = part.split("=");
-            const key = decodeURIComponent(pieces[0] ?? "");
-            if (!key) {
-                return;
-            }
-
-            const value = pieces.length > 1 ? decodeURIComponent(pieces.slice(1).join("=")) : "";
-            params[key] = value;
-        });
+function buildMinimumLimitRequestUrl(url, minimumLimit) {
+    const normalizedMinimumLimit = Number(minimumLimit);
+    if (!Number.isFinite(normalizedMinimumLimit) || normalizedMinimumLimit <= 0) {
+        return url;
     }
 
-    params.limit = String(HISTORY_EPISODES_LIMIT);
+    try {
+        const parsedUrl = new URL(String(url ?? ""));
+        const currentLimit = Number(parsedUrl.searchParams.get("limit"));
+        if (!Number.isFinite(currentLimit) || currentLimit < normalizedMinimumLimit) {
+            parsedUrl.searchParams.set("limit", String(normalizedMinimumLimit));
+        }
 
-    const nextQuery = Object.keys(params).map((key) => {
-        return `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`;
-    }).join("&");
-
-    return `${path}${nextQuery ? `?${nextQuery}` : ""}`;
+        return parsedUrl.toString();
+    } catch (e) {
+        return url;
+    }
 }
 
 function isHistoryEpisodesListUrl(url) {
@@ -3629,8 +4061,20 @@ function isBrowserUserAgent() {
     return /(mozilla\/5\.0|applewebkit\/|chrome\/|safari\/|firefox\/|edg\/)/i.test(userAgent);
 }
 
+function isRipppleUserAgent() {
+    return /^Rippple/i.test(String(getRequestHeaderValue("user-agent") ?? "").trim());
+}
+
 function shouldApplyLatestHistoryEpisodeOnly(url) {
     return latestHistoryEpisodeOnly && !isBrowserUserAgent() && isHistoryEpisodesListUrl(url);
+}
+
+function isRipppleHistoryListUrl(url) {
+    return /\/users\/[^\/]+?\/history(?:\?|$)/.test(String(url ?? ""));
+}
+
+function shouldApplyRipppleHistoryLimit(url) {
+    return isRipppleUserAgent() && isRipppleHistoryListUrl(url);
 }
 
 function parseUrlParts(url) {
@@ -3856,6 +4300,11 @@ function handleRequestWithoutResponse(url) {
             pattern: null,
             condition: () => shouldApplyLatestHistoryEpisodeOnly(url),
             handler: () => $.done({ url: buildHistoryEpisodesRequestUrl(url) })
+        },
+        {
+            pattern: null,
+            condition: () => shouldApplyRipppleHistoryLimit(url),
+            handler: () => $.done({ url: buildRipppleHistoryRequestUrl(url) })
         }
     ];
 
@@ -3873,27 +4322,38 @@ function handleRequestWithoutResponse(url) {
 
 async function handleRequestRoute(url) {
     const routes = [
+        { pattern: /\/(?:movies|shows)\/[^\/]+\/lists\/[^\/?#]+(?:\/[^\/?#]+)?(?:\?.*)?$/i, handler: () => handleListDescriptions() },
+        { pattern: /\/recommendations\/(?:shows|movies)(?:\?.*)?$/i, handler: () => handleMediaList("typed recommendations") },
+        { pattern: /\/(?:shows|movies)\/trending(?:\?.*)?$/i, handler: () => handleMediaList("typed trending") },
+        { pattern: /\/(?:shows|movies)\/watched\/monthly(?:\?.*)?$/i, handler: () => handleMediaList("typed watched monthly") },
+        { pattern: /\/(?:shows|movies)\/anticipated(?:\?.*)?$/i, handler: () => handleMediaList("typed anticipated") },
         { pattern: /\/sync\/progress\/up_next_nitro(?:\?|$)/, handler: () => handleMediaList("up_next") },
         { pattern: /\/sync\/playback\/movies(?:\?|$)/, handler: () => handleMediaList("playback") },
-        { pattern: /\/users\/me\/watchlist\/(?:shows|movies)\/released(?:\/desc)?(?:\?|$)/, handler: () => handleMediaList("watchlist released") },
-        { pattern: /\/calendars\/my\/(?:shows|movies)\/\d{4}-\d{2}-\d{2}\/\d+(?:\?|$)/, handler: () => handleMediaList("calendar") },
+        { pattern: /\/users\/[^\/]+?\/watchlist\/(?:shows|movies)\/released(?:\/desc)?(?:\?|$)/, handler: () => handleMediaList("watchlist released") },
+        { pattern: /\/calendars\/(?:my\/(?:shows|movies)|all\/(?:movies|dvd|shows(?:\/(?:new|premieres|finales))?))\/\d{4}-\d{2}-\d{2}\/\d+(?:\?.*)?$/i, handler: () => handleMediaList("calendar") },
         { pattern: /\/users\/[^\/]+?\/history\/episodes(?:\/\d+)?\/?(?:\?|$)/, handler: () => handleHistoryEpisodeList() },
         { pattern: /\/users\/[^\/]+?\/history\/movies\/?(?:\?|$)/, handler: () => handleMediaList("history movie") },
         { pattern: /\/sync\/history\/episodes\/?(?:\?|$)/, handler: () => handleHistoryEpisodeList() },
         { pattern: /\/sync\/history(?:\/(?:movies|shows|episodes))?\/?(?:\?.*)?$/, handler: () => handleMediaList("sync history") },
+        { pattern: /\/sync\/watched\/(?:shows|movies)\/?(?:\?.*)?$/i, handler: () => handleMediaList("sync watched") },
+        { pattern: /\/users\/[^\/]+?\/watched\/(?:shows|movies)\/?(?:\?.*)?$/i, handler: () => handleMediaList("user watched") },
         { pattern: /\/users\/[^\/]+?\/history\/?(?:\?|$)/, handler: () => handleMediaList("history") },
-        { pattern: /\/users\/[^\/]+?\/collection\/media(?:\?|$)/, handler: () => handleMediaList("collection media") },
+        { pattern: /\/users\/[^\/]+?\/collection\/(?:shows|movies|episodes|media)\/?(?:\?.*)?$/i, handler: () => handleMediaList("collection typed") },
+        { pattern: /\/people\/[^\/]+\/known_for(?:\?.*)?$/i, handler: () => handleMediaList("people known for") },
+        { pattern: /\/people\/[^\/]+\/(?:shows|movies)(?:\?.*)?$/i, handler: () => handlePersonMediaCreditsList("people media credits") },
         { pattern: /\/users\/[^\/]+?\/mir(?:\?|$)/, handler: () => handleMir() },
-        { pattern: /\/users\/me\/following\/activities(?:\?|$)/, handler: () => handleMediaList("following activities") },
-        { pattern: /\/users\/[^\/]+?\/lists\/\d+\/items(?:\/(?:show|movie|episode)s?)?(?:\?|$)/, handler: () => handleMediaList("list items") },
-        { pattern: /\/lists\/\d+\/items(?:\/(?:show|movie|episode)s?)?(?:\?|$)/, handler: () => handleMediaList("public list items") },
+        { pattern: /\/users\/[^\/]+?\/following\/activities(?:\?|$)/, handler: () => handleMediaList("following activities") },
+        { pattern: /\/users\/[^\/]+?\/lists\/\d+\/items(?:\/[^\/?]+)?(?:\?|$)/, handler: () => handleMediaList("list items") },
+        { pattern: /\/lists\/\d+\/items(?:\/[^\/?]+)?(?:\?|$)/, handler: () => handleMediaList("public list items") },
+        { pattern: /\/users\/[^\/]+?\/ratings\/all\/?(?:\?.*)?$/i, handler: () => handleMediaList("ratings all") },
         { pattern: /\/users\/[^\/]+?\/favorites(?:\/(?:shows|movies))?\/?(?:\?.*)?$/, handler: () => handleMediaList("favorites") },
+        { pattern: /\/comments\/recent\/(?:all|shows|movies|episodes)\/(?:all|weekly|monthly|yearly)(?:\?.*)?$/i, handler: () => handleRecentCommentsList() },
         { pattern: /\/media\/trending(?:\?|$)/, handler: () => handleMediaList("media trending") },
         { pattern: /\/media\/recommendations(?:\?|$)/, handler: () => handleMediaList("media recommendations") },
         { pattern: /\/media\/anticipated(?:\?|$)/, handler: () => handleMediaList("media anticipated") },
         { pattern: /\/media\/popular\/next(?:\?|$)/, handler: () => handleMediaList("media popular next") },
-        { pattern: /\/users\/me\/watchlist(?:\?|$)/, handler: () => handleMediaList("watchlist") },
-        { pattern: /\/users\/me\/watchlist\/(?:shows|movies)(?:\?|$)/, handler: () => handleMediaList("watchlist typed") }
+        { pattern: /\/users\/[^\/]+?\/watchlist(?:\?|$)/, handler: () => handleMediaList("watchlist") },
+        { pattern: /\/users\/[^\/]+?\/watchlist\/(?:shows|movies)(?:\?|$)/, handler: () => handleMediaList("watchlist typed") }
     ];
 
     for (let i = 0; i < routes.length; i += 1) {
@@ -3955,7 +4415,8 @@ async function handleRequestRoute(url) {
             return;
         }
 
-        if (/\/media\/(?:movie|show)\/\d+\/info\/\d+\/version\/\d+(?:\?.*)?$/i.test(requestUrl)) {
+        if (/\/media\/(?:movie|show)\/\d+\/info\/\d+\/version\/\d+(?:\?.*)?$/i.test(requestUrl) ||
+            /\/(?:shows|movies)\/\d+\/sentiments(?:\?.*)?$/i.test(requestUrl)) {
             await handleSentiments();
             return;
         }
