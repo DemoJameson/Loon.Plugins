@@ -33,7 +33,8 @@ const MEDIA_TYPE = {
 const WATCHNOW_DEFAULT_REGION = "us";
 const WATCHNOW_DEFAULT_CURRENCY = "usd";
 const WATCHNOW_REDIRECT_URL = "https://loon-plugins.demojameson.de5.net/api/redirect";
-const SHORTCUTS_OPENLINK_URL = "shortcuts://run-shortcut?name=Open%20Player&input=text&text=";
+const SHORTCUTS_OPENLINK_URL = `shortcuts://run-shortcut?name=${encodeURIComponent("打开链接")}&input=text&text=`;
+// 配套快捷指令 https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d
 const DEFAULT_BACKEND_BASE_URL = "https://loon-plugins.demojameson.de5.net";
 const TMDB_LOGO_TARGET_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images";
 const TMDB_API_BASE_URL = "https://api.tmdb.org/3";
