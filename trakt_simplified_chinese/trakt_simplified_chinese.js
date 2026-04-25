@@ -2674,6 +2674,10 @@ function buildSofaTimePlayerLaunchLink(source, deeplink) {
         return deeplink;
     }
 
+    if (useShortcutsJumpEnabled) {
+        return buildShortcutsJumpLink(deeplink);
+    }
+
     return buildRedirectableLaunchLink(deeplink);
 }
 
