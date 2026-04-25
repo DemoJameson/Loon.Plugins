@@ -4,6 +4,7 @@ const TRANSLATION_CACHE_KEYS = Array.from({ length: 9 }, (_, index) => "trakt_zh
 const CURRENT_SEASON_CACHE_KEY = "trakt_current_season";
 const HISTORY_EPISODE_CACHE_KEY = "trakt_history_episode_cache";
 const LINK_IDS_CACHE_KEY = "trakt_watchnow_ids_cache";
+const SENTIMENT_TRANSLATION_CACHE_KEY = "trakt_sentiment_translation_cache";
 
 function clearPersistentValue(key) {
     try {
@@ -19,7 +20,8 @@ function clearPersistentValue(key) {
         ...TRANSLATION_CACHE_KEYS.map((key) => clearPersistentValue(key)),
         clearPersistentValue(HISTORY_EPISODE_CACHE_KEY),
         clearPersistentValue(CURRENT_SEASON_CACHE_KEY),
-        clearPersistentValue(LINK_IDS_CACHE_KEY)
+        clearPersistentValue(LINK_IDS_CACHE_KEY),
+        clearPersistentValue(SENTIMENT_TRANSLATION_CACHE_KEY)
     ].every(Boolean);
 
     if (cleared) {

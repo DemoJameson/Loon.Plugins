@@ -1388,6 +1388,14 @@ function normalizeSentimentGroupItem(item) {
     };
 }
 
+function normalizeSentimentInfoItem(item) {
+    const normalized = ensureObject(item);
+    return {
+        ...normalized,
+        text: String(normalized.text ?? "")
+    };
+}
+
 function cloneSentimentsPayload(payload) {
     const normalized = ensureObject(payload);
     return {
@@ -1400,7 +1408,10 @@ function cloneSentimentsPayload(payload) {
         good: ensureArray(normalized.good).map(normalizeSentimentGroupItem),
         bad: ensureArray(normalized.bad).map(normalizeSentimentGroupItem),
         summary: ensureArray(normalized.summary).map((item) => String(item ?? "")),
-        text: String(normalized.text ?? "")
+        text: String(normalized.text ?? ""),
+        analysis: String(normalized.analysis ?? ""),
+        highlight: String(normalized.highlight ?? ""),
+        items: ensureArray(normalized.items).map(normalizeSentimentInfoItem)
     };
 }
 
@@ -1439,6 +1450,20 @@ function buildSentimentTranslationPayload(payload) {
                 translatedText: String(item?.translatedText ?? item?.text ?? item ?? "")
             };
         }),
+        analysis: {
+            sourceTextHash: computeStringHash(payload?.sourceAnalysis ?? payload?.analysis ?? ""),
+            translatedText: String(payload?.translatedAnalysis ?? payload?.analysis ?? "")
+        },
+        highlight: {
+            sourceTextHash: computeStringHash(payload?.sourceHighlight ?? payload?.highlight ?? ""),
+            translatedText: String(payload?.translatedHighlight ?? payload?.highlight ?? "")
+        },
+        items: ensureArray(payload?.items).map((item) => {
+            return {
+                sourceTextHash: computeStringHash(item?.sourceText ?? item?.text ?? ""),
+                translatedText: String(item?.translatedText ?? item?.text ?? "")
+            };
+        }),
         text: {
             sourceTextHash: computeStringHash(payload?.sourceText ?? payload?.text ?? ""),
             translatedText: String(payload?.translatedText ?? payload?.text ?? "")
@@ -1475,6 +1500,29 @@ function applySentimentTranslationPayload(target, translation) {
         const translatedText = String(entry.translatedText ?? "").trim();
         if (translatedText && String(entry.sourceTextHash ?? "") === sourceTextHash) {
             payload.summary[index] = translatedText;
+        }
+    });
+
+    const analysisTranslation = ensureObject(translated.analysis);
+    const analysisSourceHash = computeStringHash(payload.analysis ?? "");
+    const translatedAnalysis = String(analysisTranslation.translatedText ?? "").trim();
+    if (translatedAnalysis && String(analysisTranslation.sourceTextHash ?? "") === analysisSourceHash) {
+        payload.analysis = translatedAnalysis;
+    }
+
+    const highlightTranslation = ensureObject(translated.highlight);
+    const highlightSourceHash = computeStringHash(payload.highlight ?? "");
+    const translatedHighlight = String(highlightTranslation.translatedText ?? "").trim();
+    if (translatedHighlight && String(highlightTranslation.sourceTextHash ?? "") === highlightSourceHash) {
+        payload.highlight = translatedHighlight;
+    }
+
+    ensureArray(payload.items).forEach((item, index) => {
+        const entry = ensureObject(ensureArray(translated.items)[index]);
+        const sourceTextHash = computeStringHash(item?.text ?? "");
+        const translatedText = String(entry.translatedText ?? "").trim();
+        if (translatedText && String(entry.sourceTextHash ?? "") === sourceTextHash) {
+            item.text = translatedText;
         }
     });
 
@@ -1563,6 +1611,27 @@ function hasMatchingSentimentTranslationPayload(target, translation) {
         return computeStringHash(item ?? "") === String(cachedSummary[index]?.sourceTextHash ?? "");
     });
     if (!summaryMatches) {
+        return false;
+    }
+
+    if (computeStringHash(payload.analysis ?? "") !== String(translated.analysis?.sourceTextHash ?? "")) {
+        return false;
+    }
+
+    if (computeStringHash(payload.highlight ?? "") !== String(translated.highlight?.sourceTextHash ?? "")) {
+        return false;
+    }
+
+    const currentItems = ensureArray(payload.items);
+    const cachedItems = ensureArray(translated.items);
+    if (currentItems.length !== cachedItems.length) {
+        return false;
+    }
+
+    const itemsMatch = currentItems.every((item, index) => {
+        return computeStringHash(item?.text ?? "") === String(cachedItems[index]?.sourceTextHash ?? "");
+    });
+    if (!itemsMatch) {
         return false;
     }
 
@@ -1673,6 +1742,23 @@ async function handleSentiments() {
     });
     translationTargets.push({
         target: translatedData,
+        field: "analysis",
+        text: String(translatedData.analysis ?? "")
+    });
+    translationTargets.push({
+        target: translatedData,
+        field: "highlight",
+        text: String(translatedData.highlight ?? "")
+    });
+    ensureArray(translatedData.items).forEach((item) => {
+        translationTargets.push({
+            target: item,
+            field: "text",
+            text: String(item?.text ?? "")
+        });
+    });
+    translationTargets.push({
+        target: translatedData,
         field: "text",
         text: String(translatedData.text ?? "")
     });
@@ -1724,6 +1810,23 @@ async function handleSentiments() {
         });
         cacheTargets.push({
             target: cachePayload,
+            sourceField: "analysis",
+            type: "analysis"
+        });
+        cacheTargets.push({
+            target: cachePayload,
+            sourceField: "highlight",
+            type: "highlight"
+        });
+        ensureArray(cachePayload.items).forEach((item) => {
+            cacheTargets.push({
+                target: item,
+                sourceField: "text",
+                type: "itemText"
+            });
+        });
+        cacheTargets.push({
+            target: cachePayload,
             sourceField: "text",
             type: "text"
         });
@@ -1743,6 +1846,24 @@ async function handleSentiments() {
             }
 
             if (item.type === "text") {
+                item.target.sourceText = originalText;
+                item.target.translatedText = nextTranslatedText;
+                return;
+            }
+
+            if (item.type === "analysis") {
+                item.target.sourceAnalysis = originalText;
+                item.target.translatedAnalysis = nextTranslatedText;
+                return;
+            }
+
+            if (item.type === "highlight") {
+                item.target.sourceHighlight = originalText;
+                item.target.translatedHighlight = nextTranslatedText;
+                return;
+            }
+
+            if (item.type === "itemText") {
                 item.target.sourceText = originalText;
                 item.target.translatedText = nextTranslatedText;
                 return;
