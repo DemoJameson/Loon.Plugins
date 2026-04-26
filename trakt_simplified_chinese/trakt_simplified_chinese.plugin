@@ -1,19 +1,17 @@
 #!name=优化Trakt简体中文体验
-#!desc=翻译Trakt App首页和各种列表，并且优先使用简体中文；历史页面剧集类别只展示最新的一集；Trakt 和 Sofa Time 的影片详情页添加 EplayerX、Forward、Infuse 跳转按钮
+#!desc=Trakt App各页面从英文改为简体中文；历史页面剧集类别只展示最新的一集，方便以电视剧为单位查看；Trakt 和 Sofa Time 的影片详情页添加 EplayerX、Forward、Infuse 跳转按钮；部分兼容其它使用了 Trakt API 的应用。
 #!icon=https://app.trakt.tv/pwa/android/icon_192.png
 #!homepage=https://github.com/DemoJameson/Loon.Plugins
 #!openUrl=https://apps.apple.com/app/id1514873602
 #!author=DemoJameson
 
-#借助快捷指令跳转选项的配套快捷指令: https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d
-
 [Argument]
-latestHistoryEpisodeOnly = switch, "true", tag=历史剧集类别只展示最新一集, desc=启用后会将 history/episodes 和 sync/history/episodes 请求的 limit 提升到 1000，并在响应中同一个剧集只保留集序最新的一集数据
+latestHistoryEpisodeOnly = switch, "true", tag=历史剧集类别只展示最新一集, desc=启用后会将历史页面电视剧类别的已观看记录按电视剧合并
 commentTranslationEnabled = switch, "true", tag=翻译评论, desc=启用后会翻译评论，并按评论 id 缓存到本地
 eplayerxEnabled = switch, "true", tag=EplayerX 跳转按钮, desc=启用后在 Trakt Watchnow 和 Sofa Time 中注入 EplayerX 跳转按钮
 forwardEnabled = switch, "true", tag=Forward 跳转按钮, desc=启用后在 Trakt Watchnow 和 Sofa Time 中注入 Forward 跳转按钮
 infuseEnabled = switch, "true", tag=Infuse 跳转按钮, desc=启用后在 Trakt Watchnow 和 Sofa Time 中注入 Infuse 跳转按钮
-useShortcutsJumpEnabled = switch, "false", tag=借助快捷指令跳转, desc=启用后播放器跳转链接改为通过快捷指令打开 DeepLink，用于规避弹框确认，Safari浏览器需处于非无痕模式
+useShortcutsJumpEnabled = switch, "false", tag=借助快捷指令跳转, desc=启用后播放器跳转链接改为通过快捷指令打开 DeepLink，用于规避弹框确认，Safari浏览器需处于非无痕模式，配置快捷指令 https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d
 backendBaseUrl = input, "https://loon-plugins.demojameson.de5.net", tag=翻译缓存API, desc=填写你部署的 Vercel 项目 URL
 
 [Script]

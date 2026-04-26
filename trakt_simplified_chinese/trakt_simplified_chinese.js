@@ -36,6 +36,7 @@ const WATCHNOW_REDIRECT_URL = "https://loon-plugins.demojameson.de5.net/api/redi
 const SHORTCUTS_OPENLINK_URL = `shortcuts://run-shortcut?name=${encodeURIComponent("打开链接")}&input=text&text=`;
 // 配套快捷指令 https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d
 const DEFAULT_BACKEND_BASE_URL = "https://loon-plugins.demojameson.de5.net";
+const BOXJS_CONFIG_KEY = "dj_trakt_simplified_chinese_configs";
 const TMDB_LOGO_TARGET_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images";
 const TMDB_API_BASE_URL = "https://api.tmdb.org/3";
 const TMDB_API_KEY = "a0a4d50000eeb10604c5f9342c8b3f62";
@@ -87,11 +88,15 @@ const PLAYER_DEFINITIONS = {
         buildDeeplink: buildInfuseDeeplink
     }
 };
-const PLAYER_ARGUMENT_KEYS = {
-    [PLAYER_TYPE.EPLAYERX]: "eplayerxEnabled",
-    [PLAYER_TYPE.FORWARD]: "forwardEnabled",
-    [PLAYER_TYPE.INFUSE]: "infuseEnabled"
-};
+const ARGUMENT_FIELDS = [
+    { key: "latestHistoryEpisodeOnly", defaultValue: true },
+    { key: "commentTranslationEnabled", defaultValue: true },
+    { key: "eplayerxEnabled", defaultValue: true, group: "playerButtonEnabled", groupKey: PLAYER_TYPE.EPLAYERX },
+    { key: "forwardEnabled", defaultValue: true, group: "playerButtonEnabled", groupKey: PLAYER_TYPE.FORWARD },
+    { key: "infuseEnabled", defaultValue: true, group: "playerButtonEnabled", groupKey: PLAYER_TYPE.INFUSE },
+    { key: "useShortcutsJumpEnabled", defaultValue: false },
+    { key: "backendBaseUrl", defaultValue: DEFAULT_BACKEND_BASE_URL }
+];
 const SOFA_TIME_COUNTRY_SERVICE_TYPES = {
     addon: true,
     buy: true,
@@ -165,26 +170,83 @@ function createDefaultPlayerButtonEnabledConfig() {
     }, {});
 }
 
-function parsePlayerButtonEnabledObject(argument, fallbackConfig) {
-    const nextConfig = { ...fallbackConfig };
-    Object.values(PLAYER_TYPE).forEach((source) => {
-        const key = PLAYER_ARGUMENT_KEYS[source];
-        if (Object.prototype.hasOwnProperty.call(argument, key)) {
-            nextConfig[source] = parseBooleanArgument(argument[key], nextConfig[source]);
-        }
-    });
-    return nextConfig;
+function readTextArgument(value, fallbackValue) {
+    if (typeof value !== "string") {
+        return fallbackValue;
+    }
+
+    const trimmedValue = value.trim();
+    return trimmedValue || fallbackValue;
 }
 
-function parsePlayerButtonEnabledParts(parts, startIndex, fallbackConfig) {
-    const nextConfig = { ...fallbackConfig };
-    Object.values(PLAYER_TYPE).forEach((source, index) => {
-        const valueIndex = startIndex + index;
-        if (parts.length > valueIndex) {
-            nextConfig[source] = parseBooleanArgument(parts[valueIndex], nextConfig[source]);
+function parseArgumentValue(value, fallbackValue) {
+    if (typeof fallbackValue === "boolean") {
+        return parseBooleanArgument(value, fallbackValue);
+    }
+
+    if (typeof fallbackValue === "string") {
+        return readTextArgument(value, fallbackValue);
+    }
+
+    return value ?? fallbackValue;
+}
+
+function createDefaultArgumentConfig() {
+    const config = {
+        playerButtonEnabled: createDefaultPlayerButtonEnabledConfig()
+    };
+
+    ARGUMENT_FIELDS.forEach(({ key, defaultValue, group, groupKey }) => {
+        if (group && groupKey) {
+            config[group][groupKey] = defaultValue;
+            return;
         }
+
+        config[key] = defaultValue;
     });
-    return nextConfig;
+
+    return config;
+}
+
+function applyArgumentObjectConfig(config, argument) {
+    ARGUMENT_FIELDS.forEach(({ key, group, groupKey }) => {
+        if (group && groupKey) {
+            config[group][groupKey] = parseArgumentValue(argument[key], config[group][groupKey]);
+            return;
+        }
+
+        config[key] = parseArgumentValue(argument[key], config[key]);
+    });
+    return config;
+}
+
+function applyArgumentStringConfig(config, argument) {
+    const raw = argument.replace(/^\[|\]$/g, "").trim();
+    if (!raw) {
+        return config;
+    }
+
+    const parts = raw.split(",").map((item) => item.trim()).filter(Boolean);
+    ARGUMENT_FIELDS.forEach(({ key, group, groupKey }, index) => {
+        if (parts.length <= index) {
+            return;
+        }
+
+        if (group && groupKey) {
+            config[group][groupKey] = parseArgumentValue(parts[index], config[group][groupKey]);
+            return;
+        }
+
+        config[key] = parseArgumentValue(parts[index], config[key]);
+    });
+
+    return config;
+}
+
+function readBoxJsConfig() {
+    const config = createDefaultArgumentConfig();
+    const boxJsConfig = ensureObject($.getjson(BOXJS_CONFIG_KEY, {}));
+    return applyArgumentObjectConfig(config, boxJsConfig);
 }
 
 function createZeroPriorityMap(regionCodes) {
@@ -238,55 +300,14 @@ function createSofaTimeCountryService(definition) {
 }
 
 function parseArgumentConfig() {
-    const config = {
-        latestHistoryEpisodeOnly: true,
-        commentTranslationEnabled: true,
-        playerButtonEnabled: createDefaultPlayerButtonEnabledConfig(),
-        useShortcutsJumpEnabled: false,
-        backendBaseUrl: DEFAULT_BACKEND_BASE_URL
-    };
+    const config = readBoxJsConfig();
 
     if (typeof $argument === "object" && $argument !== null) {
-        config.latestHistoryEpisodeOnly = parseBooleanArgument(
-            $argument.latestHistoryEpisodeOnly,
-            config.latestHistoryEpisodeOnly
-        );
-        config.commentTranslationEnabled = parseBooleanArgument(
-            $argument.commentTranslationEnabled,
-            config.commentTranslationEnabled
-        );
-        config.playerButtonEnabled = parsePlayerButtonEnabledObject($argument, config.playerButtonEnabled);
-        config.useShortcutsJumpEnabled = parseBooleanArgument(
-            $argument.useShortcutsJumpEnabled,
-            config.useShortcutsJumpEnabled
-        );
-        config.backendBaseUrl = $argument.backendBaseUrl?.trim() || config.backendBaseUrl;
-        return config;
+        return applyArgumentObjectConfig(config, $argument);
     }
 
     if (typeof $argument === "string") {
-        const raw = $argument.replace(/^\[|\]$/g, "").trim();
-        if (!raw) {
-            return config;
-        }
-
-        const parts = raw.split(",").map((item) => item.trim()).filter(Boolean);
-        if (parts.length > 0) {
-            config.latestHistoryEpisodeOnly = parseBooleanArgument(parts[0], config.latestHistoryEpisodeOnly);
-        }
-        if (parts.length > 1) {
-            config.commentTranslationEnabled = parseBooleanArgument(parts[1], config.commentTranslationEnabled);
-        }
-        config.playerButtonEnabled = parsePlayerButtonEnabledParts(parts, 2, config.playerButtonEnabled);
-        if (parts.length > 5) {
-            config.useShortcutsJumpEnabled = parseBooleanArgument(
-                parts[5],
-                config.useShortcutsJumpEnabled
-            );
-        }
-        if (parts.length > 6) {
-            config.backendBaseUrl = parts[6] || config.backendBaseUrl;
-        }
+        return applyArgumentStringConfig(config, $argument);
     }
 
     return config;

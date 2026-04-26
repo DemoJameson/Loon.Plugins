@@ -1,10 +1,10 @@
 #!name=优化Trakt简体中文体验
-#!desc=翻译Trakt App首页和各种列表，并且优先使用简体中文；历史页面剧集类别只展示最新的一集；Trakt 和 Sofa Time 的影片详情页添加 EplayerX、Forward、Infuse 跳转按钮
+#!desc=Trakt App各页面从英文改为简体中文；历史页面剧集类别只展示最新的一集，方便以电视剧为单位查看；Trakt 和 Sofa Time 的影片详情页添加 EplayerX、Forward、Infuse 跳转按钮；部分兼容其它使用了 Trakt API 的应用。
 #!icon=https://app.trakt.tv/pwa/android/icon_192.png
 #!homepage=https://github.com/DemoJameson/Loon.Plugins
 #!author=DemoJameson
 #!arguments=latestHistoryEpisodeOnly:"true", commentTranslationEnabled:"true", eplayerxEnabled:"true", forwardEnabled:"true", infuseEnabled:"true", useShortcutsJumpEnabled:"false", backendBaseUrl:"https://loon-plugins.demojameson.de5.net"
-#!arguments-desc=latestHistoryEpisodeOnly: 是否只保留历史剧集分类中的最新一集，作用于 history/episodes 和 sync/history/episodes，填入 true 或 false。\ncommentTranslationEnabled: 是否翻译评论，填入 true 或 false。\neplayerxEnabled: 是否注入 EplayerX 跳转按钮，填入 true 或 false。\nforwardEnabled: 是否注入 Forward 跳转按钮，填入 true 或 false。\ninfuseEnabled: 是否注入 Infuse 跳转按钮，填入 true 或 false。\nuseShortcutsJumpEnabled: 是否通过快捷指令打开 DeepLink，用于规避弹框确认，Safari浏览器需处于非无痕模式，填入 true 或 false。\nbackendBaseUrl: 翻译缓存 API 地址，填入你部署的 Vercel 项目 URL。
+#!arguments-desc=latestHistoryEpisodeOnly: 是否将历史页面电视剧类别的已观看记录按电视剧合并，填入 true 或 false。\ncommentTranslationEnabled: 是否翻译评论，填入 true 或 false。\neplayerxEnabled: 是否注入 EplayerX 跳转按钮，填入 true 或 false。\nforwardEnabled: 是否注入 Forward 跳转按钮，填入 true 或 false。\ninfuseEnabled: 是否注入 Infuse 跳转按钮，填入 true 或 false。\nuseShortcutsJumpEnabled: 是否通过快捷指令打开 DeepLink，用于规避弹框确认，Safari浏览器需处于非无痕模式，配套快捷指令 https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d，填入 true 或 false。\nbackendBaseUrl: 翻译缓存 API 地址，填入你部署的 Vercel 项目 URL。
 
 #借助快捷指令跳转选项的配套快捷指令: https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d
 

@@ -1,0 +1,89 @@
+{
+  "id": "demojameson.app.sub",
+  "name": "DemoJameson 应用订阅",
+  "description": "DemoJameson 的 Loon.Plugins BoxJs 订阅",
+  "author": "@DemoJameson",
+  "repo": "https://github.com/DemoJameson/Loon.Plugins",
+  "icon": "https://avatars.githubusercontent.com/u/181192?v=4",
+  "apps": [
+    {
+      "id": "demojameson_trakt_simplified_chinese",
+      "name": "优化Trakt简体中文体验",
+      "keys": [
+        "@dj_trakt_simplified_chinese_configs.latestHistoryEpisodeOnly",
+        "@dj_trakt_simplified_chinese_configs.commentTranslationEnabled",
+        "@dj_trakt_simplified_chinese_configs.eplayerxEnabled",
+        "@dj_trakt_simplified_chinese_configs.forwardEnabled",
+        "@dj_trakt_simplified_chinese_configs.infuseEnabled",
+        "@dj_trakt_simplified_chinese_configs.useShortcutsJumpEnabled",
+        "@dj_trakt_simplified_chinese_configs.backendBaseUrl"
+      ],
+      "author": "@DemoJameson",
+      "repo": "https://github.com/DemoJameson/Loon.Plugins/tree/main/trakt_simplified_chinese",
+      "icons": [
+        "https://play-lh.googleusercontent.com/QO403y5ms9nf7AS8n1rAc8K2k1dXqYjUBOyAaJMvR33a71vH6IYplZPdcJGw2YRRmo8=s188-rw",
+        "https://play-lh.googleusercontent.com/QO403y5ms9nf7AS8n1rAc8K2k1dXqYjUBOyAaJMvR33a71vH6IYplZPdcJGw2YRRmo8=s188-rw"
+      ],
+      "settings": [
+        {
+          "id": "@dj_trakt_simplified_chinese_configs.latestHistoryEpisodeOnly",
+          "name": "历史剧集只显示最新一集",
+          "val": true,
+          "type": "boolean",
+          "desc": "启用后会将历史页面电视剧类别的已观看记录按电视剧合并"
+        },
+        {
+          "id": "@dj_trakt_simplified_chinese_configs.commentTranslationEnabled",
+          "name": "翻译评论",
+          "val": true,
+          "type": "boolean",
+          "desc": "启用后会翻译评论，并按评论 id 缓存到本地"
+        },
+        {
+          "id": "@dj_trakt_simplified_chinese_configs.eplayerxEnabled",
+          "name": "EplayerX 跳转按钮",
+          "val": true,
+          "type": "boolean",
+          "desc": "启用后在 Trakt Watchnow 和 Sofa Time 中注入 EplayerX 跳转按钮"
+        },
+        {
+          "id": "@dj_trakt_simplified_chinese_configs.forwardEnabled",
+          "name": "Forward 跳转按钮",
+          "val": true,
+          "type": "boolean",
+          "desc": "启用后在 Trakt Watchnow 和 Sofa Time 中注入 Forward 跳转按钮"
+        },
+        {
+          "id": "@dj_trakt_simplified_chinese_configs.infuseEnabled",
+          "name": "Infuse 跳转按钮",
+          "val": true,
+          "type": "boolean",
+          "desc": "启用后在 Trakt Watchnow 和 Sofa Time 中注入 Infuse 跳转按钮"
+        },
+        {
+          "id": "@dj_trakt_simplified_chinese_configs.useShortcutsJumpEnabled",
+          "name": "借助快捷指令跳转",
+          "val": false,
+          "type": "boolean",
+          "desc": "启用后播放器跳转链接改为通过快捷指令打开 DeepLink，用于规避弹框确认，Safari 浏览器需处于非无痕模式，配套快捷指令 https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d"
+        },
+        {
+          "id": "@dj_trakt_simplified_chinese_configs.backendBaseUrl",
+          "name": "翻译缓存 API",
+          "val": "https://loon-plugins.demojameson.de5.net",
+          "type": "text",
+          "desc": "填写你部署的 Vercel 项目 URL"
+        }
+      ],
+      "descs_html": [
+        "Trakt App各页面从英文改为简体中文；历史页面剧集类别只展示最新的一集，方便以电视剧为单位查看；Trakt 和 Sofa Time 的影片详情页添加 EplayerX、Forward、Infuse 跳转按钮；部分兼容其它使用了 Trakt API 的应用。",
+        "点此直达 <a href=\"https://github.com/DemoJameson/Loon.Plugins/tree/main/trakt_simplified_chinese\">项目目录</a>",
+        "Loon 插件地址：<a href=\"https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.plugin\">trakt_simplified_chinese.plugin</a>",
+        "Surge 模块地址：<a href=\"https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.sgmodule\">trakt_simplified_chinese.sgmodule</a>",
+        "Quantumult X 片段地址：<a href=\"https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.snippet\">trakt_simplified_chinese.snippet</a>",
+        "配套快捷指令：<a href=\"https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d\">打开链接</a>",
+        "脚本读取优先级：默认值 < BoxJs < 插件参数。已经在插件参数里填写的值会覆盖 BoxJs。"
+      ]
+    }
+  ]
+}
