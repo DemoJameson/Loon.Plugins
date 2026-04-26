@@ -2787,22 +2787,6 @@ function buildTraktPlayerLaunchLink(deeplink) {
     return buildRedirectableLaunchLink(deeplink);
 }
 
-function buildSofaTimePlayerLaunchLink(source, deeplink) {
-    if (!deeplink) {
-        return "";
-    }
-
-    if (source === PLAYER_TYPE.INFUSE) {
-        return deeplink;
-    }
-
-    if (useShortcutsJumpEnabled) {
-        return buildShortcutsJumpLink(deeplink);
-    }
-
-    return buildRedirectableLaunchLink(deeplink);
-}
-
 function doneRedirect(location) {
     const targetLocation = String(location ?? "").trim();
     if (!targetLocation) {
@@ -2987,15 +2971,14 @@ function createSofaTimeStreamingOption(source, target) {
         showTmdbId: isNonNullish(target.showTmdbId) ? target.showTmdbId : null
     };
     const deeplink = definition.buildDeeplink(target, context);
-    const link = buildSofaTimePlayerLaunchLink(source, deeplink);
 
-    if (!deeplink || !link) {
+    if (!deeplink) {
         return null;
     }
 
     const option = createSofaTimeTemplate(definition);
-    option.link = link;
-    option.videoLink = link;
+    option.link = deeplink;
+    option.videoLink = deeplink;
     return option;
 }
 
