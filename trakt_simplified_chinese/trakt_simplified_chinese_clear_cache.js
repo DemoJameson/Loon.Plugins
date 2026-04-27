@@ -1,4 +1,4 @@
-const TITLE = "优化Trakt简体中文体验";
+const TITLE = "Trakt增强";
 const $ = new Env(TITLE);
 const TRANSLATION_CACHE_KEYS = Array.from({ length: 9 }, (_, index) => "trakt_zh_cn_cache_v" + (index + 1));
 const CURRENT_SEASON_CACHE_KEY = "trakt_current_season";

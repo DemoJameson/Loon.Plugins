@@ -1,4 +1,4 @@
-const $ = new Env("优化Trakt简体中文体验");
+const $ = new Env("Trakt增强");
 const CACHE_KEY = "trakt_zh_cn_cache_v2";
 const CURRENT_SEASON_CACHE_KEY = "trakt_current_season_cache";
 const HISTORY_EPISODE_CACHE_KEY = "trakt_history_episode_cache";

@@ -8,7 +8,7 @@
   "apps": [
     {
       "id": "demojameson_trakt_simplified_chinese",
-      "name": "优化Trakt简体中文体验",
+      "name": "Trakt增强",
       "keys": [
         "@dj_trakt_simplified_chinese_configs.latestHistoryEpisodeOnly",
         "@dj_trakt_simplified_chinese_configs.commentTranslationEnabled",
