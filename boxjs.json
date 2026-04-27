@@ -21,8 +21,8 @@
       "author": "@DemoJameson",
       "repo": "https://github.com/DemoJameson/Loon.Plugins/tree/main/trakt_simplified_chinese",
       "icons": [
-        "https://play-lh.googleusercontent.com/QO403y5ms9nf7AS8n1rAc8K2k1dXqYjUBOyAaJMvR33a71vH6IYplZPdcJGw2YRRmo8=s188-rw",
-        "https://play-lh.googleusercontent.com/QO403y5ms9nf7AS8n1rAc8K2k1dXqYjUBOyAaJMvR33a71vH6IYplZPdcJGw2YRRmo8=s188-rw"
+        "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/trakt.webp",
+        "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/trakt.webp"
       ],
       "settings": [
         {
@@ -78,9 +78,10 @@
       "descs_html": [
         "Trakt App各页面从英文改为简体中文；历史页面剧集类别只展示最新的一集，方便以电视剧为单位查看；Trakt 和 Sofa Time 的影片详情页添加 EplayerX、Forward、Infuse 跳转按钮；部分兼容其它使用了 Trakt API 的应用。",
         "点此直达 <a href=\"https://github.com/DemoJameson/Loon.Plugins/tree/main/trakt_simplified_chinese\">项目目录</a>",
-        "Loon 插件地址：<a href=\"https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.plugin\">trakt_simplified_chinese.plugin</a>",
-        "Surge 模块地址：<a href=\"https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.sgmodule\">trakt_simplified_chinese.sgmodule</a>",
-        "Quantumult X 片段地址：<a href=\"https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.snippet\">trakt_simplified_chinese.snippet</a>",
+        "Egern 安装：<a href=\"egern:/modules/new?name=%E4%BC%98%E5%8C%96%20Trakt%20%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87%E4%BD%93%E9%AA%8C&amp;url=https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FLoon.Plugins%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.plugin\">安装模块</a>",
+        "Loon 安装：<a href=\"https://www.nsloon.com/openloon/import?plugin=https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FLoon.Plugins%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.plugin\">安装插件</a>",
+        "Surge 安装：<a href=\"surge:///install-module?url=https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FLoon.Plugins%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.sgmodule\">安装模块</a>",
+        "QX 安装：<a href=\"https://quantumult.app/x/open-app/add-resource?remote-resource=%7B%22rewrite_remote%22%3A%5B%22https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FLoon.Plugins%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.snippet%2C%20tag%3DTrakt%20Simplified%20Chinese%2C%20enabled%3Dtrue%22%5D%7D\">安装片段</a>",
         "配套快捷指令：<a href=\"https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d\">打开链接</a>",
         "脚本读取优先级：默认值 < BoxJs < 插件参数。已经在插件参数里填写的值会覆盖 BoxJs。"
       ]

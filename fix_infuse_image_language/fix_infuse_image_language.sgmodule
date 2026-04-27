@@ -1,5 +1,5 @@
 #!name=修复Infuse图片语言地区错误
-#!desc=将TMDB响应中的图片按插件指定的语言排序
+#!desc=将TMDB响应中的图片按模块指定的语言排序
 #!icon=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Infuse.png
 #!homepage=https://github.com/DemoJameson/Loon.Plugins
 #!author=DemoJameson
