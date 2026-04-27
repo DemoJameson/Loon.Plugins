@@ -12,7 +12,7 @@ http-response ^https:\/\/api\.tmdb\.org\/3\/(tv|movie)\/\d+ script-path=https://
 
 [MITM]
 # 必须配置 MITM 才能解密 HTTPS 流量并执行脚本
-hostname = api.themoviedb.org
+hostname = api.themoviedb.org, api.tmdb.org
 
 [Argument]
 preferredLanguage = input, "zh-CN", tag=首选图片语言, desc=输入目标语言代码(如 zh-CN, zh-TW)。默认为 zh-CN。
