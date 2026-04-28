@@ -6,7 +6,7 @@ const LINK_IDS_CACHE_KEY = "trakt_watchnow_ids_cache";
 const COMMENT_TRANSLATION_CACHE_KEY = "trakt_comment_translation_cache";
 const SENTIMENT_TRANSLATION_CACHE_KEY = "trakt_sentiment_translation_cache";
 const PEOPLE_TRANSLATION_CACHE_KEY = "trakt_people_translation_cache";
-const LIST_DESCRIPTION_TRANSLATION_CACHE_KEY = "trakt_list_description_translation_cache";
+const LIST_TEXT_TRANSLATION_CACHE_KEY = "trakt_list_text_translation_cache";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTIAL_FOUND_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_BATCH_SIZE = 10;
@@ -458,20 +458,20 @@ function savePeopleTranslationCache(cache) {
     }
 }
 
-function loadListDescriptionTranslationCache() {
+function loadListTextTranslationCache() {
     try {
-        return ensureObject($.getjson(LIST_DESCRIPTION_TRANSLATION_CACHE_KEY, {}));
+        return ensureObject($.getjson(LIST_TEXT_TRANSLATION_CACHE_KEY, {}));
     } catch (e) {
-        $.log(`Trakt list description translation cache load failed: ${e}`);
+        $.log(`Trakt list text translation cache load failed: ${e}`);
         return {};
     }
 }
 
-function saveListDescriptionTranslationCache(cache) {
+function saveListTextTranslationCache(cache) {
     try {
-        $.setjson(cache, LIST_DESCRIPTION_TRANSLATION_CACHE_KEY);
+        $.setjson(cache, LIST_TEXT_TRANSLATION_CACHE_KEY);
     } catch (e) {
-        $.log(`Trakt list description translation cache save failed: ${e}`);
+        $.log(`Trakt list text translation cache save failed: ${e}`);
     }
 }
 
@@ -2224,7 +2224,7 @@ function buildListDescriptionCacheKey(listId) {
     return String(listId);
 }
 
-function getCachedListDescriptionTranslation(cache, listId, sourceText) {
+function getCachedListTextTranslation(cache, listId, field, sourceText) {
     const cacheKey = buildListDescriptionCacheKey(listId);
     if (!cacheKey) {
         return "";
@@ -2235,58 +2235,90 @@ function getCachedListDescriptionTranslation(cache, listId, sourceText) {
         return "";
     }
 
-    if (String(entry.sourceTextHash ?? "") !== computeStringHash(sourceText)) {
+    const cachedFieldEntry = isPlainObject(entry[field]) ? entry[field] : null;
+    if (!isPlainObject(cachedFieldEntry)) {
         return "";
     }
 
-    return String(entry.translatedText ?? "").trim();
+    if (String(cachedFieldEntry.sourceTextHash ?? "") !== computeStringHash(sourceText)) {
+        return "";
+    }
+
+    return String(cachedFieldEntry.translatedText ?? "").trim();
 }
 
-function setListDescriptionTranslationCacheEntry(cache, listId, sourceText, translatedText) {
+function setListTextTranslationCacheEntry(cache, listId, field, sourceText, translatedText) {
     const cacheKey = buildListDescriptionCacheKey(listId);
     if (!cacheKey || !translatedText) {
         return;
     }
 
-    cache[cacheKey] = {
+    const currentEntry = isPlainObject(cache[cacheKey]) ? cache[cacheKey] : {};
+    currentEntry[field] = {
         sourceTextHash: computeStringHash(sourceText),
         translatedText: translatedText
     };
+    cache[cacheKey] = currentEntry;
+}
+
+function collectListDescriptionTargets(data) {
+    if (isNotArray(data)) {
+        return [];
+    }
+
+    return data.reduce((targets, item) => {
+        if (isPlainObject(item?.list)) {
+            targets.push(item.list);
+            return targets;
+        }
+
+        if (isPlainObject(item)) {
+            targets.push(item);
+        }
+
+        return targets;
+    }, []);
 }
 
 function collectListDescriptionTranslationGroups(lists, cache) {
     const groups = {};
 
-    ensureArray(lists).forEach((item) => {
-        const description = String(item?.description ?? "").trim();
-        if (!description || containsChineseCharacter(description)) {
-            return;
-        }
-
+    collectListDescriptionTargets(lists).forEach((item) => {
         const listId = item?.ids?.trakt ?? null;
-        const cachedTranslation = getCachedListDescriptionTranslation(cache, listId, description);
-        if (cachedTranslation) {
-            item.description = cachedTranslation;
-            return;
-        }
-
         const language = "en";
-        if (!groups[language]) {
-            groups[language] = [];
-        }
+        const queueFieldTranslation = (field, sourceText) => {
+            const normalizedSourceText = String(sourceText ?? "").trim();
+            if (!normalizedSourceText || containsChineseCharacter(normalizedSourceText)) {
+                return;
+            }
 
-        groups[language].push({
-            target: item,
-            listId: listId,
-            description: description
-        });
+            const cachedTranslation = getCachedListTextTranslation(cache, listId, field, normalizedSourceText);
+            if (cachedTranslation) {
+                item[field] = cachedTranslation;
+                return;
+            }
+
+            if (!groups[language]) {
+                groups[language] = [];
+            }
+
+            groups[language].push({
+                target: item,
+                listId: listId,
+                field: field,
+                sourceText: normalizedSourceText
+            });
+        };
+
+        queueFieldTranslation("description", item?.description);
+        queueFieldTranslation("name", item?.name);
     });
 
     return groups;
 }
 
 async function translateListDescriptionGroup(items, sourceLanguage, cache) {
-    const sourceTexts = items.map((item) => item.description);
+    const sourceTexts = items.map((item) => item.sourceText);
     const translatedTexts = await translateTextsWithGoogle(sourceTexts, sourceLanguage);
 
     items.forEach((item, index) => {
@@ -2295,13 +2327,14 @@ async function translateListDescriptionGroup(items, sourceLanguage, cache) {
             return;
         }
 
-        setListDescriptionTranslationCacheEntry(
+        setListTextTranslationCacheEntry(
             cache,
             item.listId,
+            item.field,
             sourceTexts[index],
             translatedText
         );
-        item.target.description = translatedText;
+        item.target[item.field] = translatedText;
     });
 }
 
@@ -2312,7 +2345,7 @@ async function handleListDescriptions() {
         return;
     }
 
-    const cache = loadListDescriptionTranslationCache();
+    const cache = loadListTextTranslationCache();
     const groups = collectListDescriptionTranslationGroups(lists, cache);
     const languages = Object.keys(groups);
 
@@ -2324,7 +2357,7 @@ async function handleListDescriptions() {
         }
     }
 
-    saveListDescriptionTranslationCache(cache);
+    saveListTextTranslationCache(cache);
     $.done({ body: JSON.stringify(lists) });
 }
 
@@ -4453,6 +4486,8 @@ function handleRequestWithoutResponse(url) {
 async function handleRequestRoute(url) {
     const routes = [
         { pattern: /\/(movies|shows)\/[^\/]+\/lists\/[^\/?#]+(\/[^\/?#]+)?(\?.*)?$/i, handler: () => handleListDescriptions() },
+        { pattern: /\/users\/[^\/]+?\/(likes\/)?lists\/?(\?.*)?$/i, handler: () => handleListDescriptions() },
+        { pattern: /\/search\/list\/?(\?.*)?$/i, handler: () => handleListDescriptions() },
         { pattern: /\/recommendations\/(shows|movies)(\?.*)?$/i, handler: () => handleMediaList("typed recommendations") },
         { pattern: /\/(shows|movies)\/trending(\?.*)?$/i, handler: () => handleMediaList("typed trending") },
         { pattern: /\/(shows|movies)\/watched\/monthly(\?.*)?$/i, handler: () => handleMediaList("typed watched monthly") },
