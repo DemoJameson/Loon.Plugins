@@ -1,0 +1,38 @@
+[
+    {
+        "number": 1,
+        "first_aired": "2024-01-01T00:00:00.000Z",
+        "episodes": [
+            {
+                "season": 1,
+                "number": 1,
+                "title": "Episode One",
+                "overview": "Episode One Overview",
+                "first_aired": "2024-01-01T00:00:00.000Z",
+                "available_translations": [
+                    "en",
+                    "zh"
+                ],
+                "ids": {
+                    "trakt": 1001,
+                    "tmdb": 5001
+                }
+            },
+            {
+                "season": 1,
+                "number": 2,
+                "title": "Episode Two",
+                "overview": "Episode Two Overview",
+                "first_aired": "2024-01-08T00:00:00.000Z",
+                "available_translations": [
+                    "en",
+                    "zh"
+                ],
+                "ids": {
+                    "trakt": 1002,
+                    "tmdb": 5002
+                }
+            }
+        ]
+    }
+]

@@ -1,0 +1,10 @@
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.mjs text eol=lf
+*.html text eol=lf
+*.plugin text eol=lf
+*.sgmodule text eol=lf
+*.snippet text eol=lf
+*.yml text eol=lf
+*.webp binary

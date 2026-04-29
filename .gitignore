@@ -1,0 +1,8 @@
+node_modules/
+
+.idea/
+.ai/
+.claude/
+.sisyphus/
+
+.trakt-live-test.local.json

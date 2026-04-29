@@ -1,0 +1,271 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+    readFixture,
+    computeStringHash,
+    createMovieTranslationCache,
+    createPeopleTranslationCache,
+    createWatchnowIdsCache,
+    createUnifiedPersistentData,
+    parseUnifiedCache,
+    createGoogleTranslateResponse,
+    createHttpErrorMock,
+    createHttpStatusMock,
+    createInvalidJsonResponse,
+    createTmdbMovieCreditsResponse,
+    runResponseCase
+} from "./helpers/trakt-test-helpers.mjs";
+
+const GOOGLE_TRANSLATE_URL = "https://translation.googleapis.com/language/translate/v2";
+const TMDB_MOVIE_CREDITS_URL = "regex:^https://api\\.tmdb\\.org/3/movie/456\\?";
+
+const peopleDetailGoogleFailureCases = [
+    {
+        name: "people detail 在 Google 翻译失败时会保留原文且不写入缓存",
+        mock: createHttpErrorMock("google translate unavailable")
+    },
+    {
+        name: "people detail 在 Google 返回 HTTP 500 时会保留原文且不写入缓存",
+        mock: createHttpStatusMock(500)
+    },
+    {
+        name: "people detail 在 Google 返回非法 JSON 时会保留原文且不写入缓存",
+        mock: createInvalidJsonResponse()
+    }
+];
+
+const mediaPeopleTmdbFallbackCases = [
+    {
+        name: "media people 列表在 TMDb 返回非法 JSON 时仍可回退到 Google 翻译",
+        mock: createInvalidJsonResponse()
+    },
+    {
+        name: "media people 列表在 TMDb 返回 HTTP 500 时仍可回退到 Google 翻译",
+        mock: createHttpStatusMock(500)
+    }
+];
+
+test("/people/:id 会应用缓存中的中文姓名和 biography", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/people/42",
+        body: readFixture("people-detail.json"),
+        persistentData: createUnifiedPersistentData({
+            googlePeople: JSON.parse(createPeopleTranslationCache())
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.name, "汤姆·汉克斯\nTom Hanks");
+    assert.equal(payload.biography, "一位美国演员和电影制作人。");
+});
+
+test("people detail 会通过 Google 翻译未命中的姓名和 biography 并写回缓存", async () => {
+    const body = JSON.stringify({
+        name: "Tom Hanks",
+        biography: "An American actor and filmmaker.",
+        ids: {
+            trakt: 42
+        }
+    });
+
+    const { result, persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/people/42",
+        body,
+        httpPostMocks: {
+            "https://translation.googleapis.com/language/translate/v2": createGoogleTranslateResponse([
+                "汤姆·汉克斯",
+                "一位美国演员和电影制作人。"
+            ])
+        }
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.name, "汤姆·汉克斯\nTom Hanks");
+    assert.equal(payload.biography, "一位美国演员和电影制作人。");
+
+    const cache = parseUnifiedCache(persistentData).google.people;
+    assert.equal(cache["42"].name.translatedText, "汤姆·汉克斯");
+    assert.equal(cache["42"].name.sourceText, "Tom Hanks");
+    assert.equal(cache["42"].biography.translatedText, "一位美国演员和电影制作人。");
+    assert.equal(cache["42"].biography.sourceTextHash, computeStringHash("An American actor and filmmaker."));
+});
+
+test("people detail 遇到 sourceTextHash 不匹配的 biography 缓存时会忽略旧值并刷新缓存", async () => {
+    const { result, persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/people/42",
+        body: readFixture("people-detail.json"),
+        persistentData: createUnifiedPersistentData({
+            googlePeople: JSON.parse(createPeopleTranslationCache({
+                "42": {
+                    biography: {
+                        sourceTextHash: "deadbeef",
+                        translatedText: "旧简介"
+                    }
+                }
+            }))
+        }),
+        httpPostMocks: {
+            "https://translation.googleapis.com/language/translate/v2": createGoogleTranslateResponse([
+                "汤姆·汉克斯",
+                "一位美国演员和电影制作人。"
+            ])
+        }
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.name, "汤姆·汉克斯\nTom Hanks");
+    assert.equal(payload.biography, "一位美国演员和电影制作人。");
+
+    const cache = parseUnifiedCache(persistentData).google.people;
+    assert.equal(cache["42"].biography.translatedText, "一位美国演员和电影制作人。");
+    assert.equal(cache["42"].biography.sourceTextHash, computeStringHash("An American actor and filmmaker."));
+});
+
+peopleDetailGoogleFailureCases.forEach(({ name, mock }) => {
+    test(name, async () => {
+        const body = JSON.stringify({
+            name: "Tom Hanks",
+            biography: "An American actor and filmmaker.",
+            ids: {
+                trakt: 42
+            }
+        });
+
+        const { result, persistentData } = await runResponseCase({
+            url: "https://api.trakt.tv/people/42",
+            body,
+            httpPostMocks: {
+                [GOOGLE_TRANSLATE_URL]: mock
+            }
+        });
+
+        const payload = JSON.parse(result.body);
+        assert.equal(payload.name, "Tom Hanks");
+        assert.equal(payload.biography, "An American actor and filmmaker.");
+        assert.deepEqual(parseUnifiedCache(persistentData).google.people, {});
+    });
+});
+
+test("media people 列表会应用缓存中的中文姓名", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/people",
+        body: readFixture("media-people-list.json"),
+        persistentData: createUnifiedPersistentData({
+            googlePeople: JSON.parse(createPeopleTranslationCache({
+                "42": {
+                    biography: undefined
+                }
+            }))
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.cast[0].person.name, "汤姆·汉克斯");
+});
+
+test("media people 列表会从 TMDb credits 补出中文姓名并写回缓存", async () => {
+    const { result, persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/people",
+        body: readFixture("media-people-list.json"),
+        persistentData: createUnifiedPersistentData({
+            traktLinkIds: JSON.parse(createWatchnowIdsCache())
+        }),
+        httpGetMocks: {
+            [TMDB_MOVIE_CREDITS_URL]: createTmdbMovieCreditsResponse()
+        }
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.cast[0].person.name, "汤姆·汉克斯");
+
+    const cache = parseUnifiedCache(persistentData).google.people;
+    assert.equal(cache["42"].name.sourceText, "Tom Hanks");
+    assert.equal(cache["42"].name.translatedText, "汤姆·汉克斯");
+});
+
+mediaPeopleTmdbFallbackCases.forEach(({ name, mock }) => {
+    test(name, async () => {
+        const { result, persistentData } = await runResponseCase({
+            url: "https://api.trakt.tv/movies/123/people",
+            body: readFixture("media-people-list.json"),
+            persistentData: createUnifiedPersistentData({
+                traktLinkIds: JSON.parse(createWatchnowIdsCache())
+            }),
+            httpGetMocks: {
+                [TMDB_MOVIE_CREDITS_URL]: mock
+            },
+            httpPostMocks: {
+                [GOOGLE_TRANSLATE_URL]: createGoogleTranslateResponse([
+                    "汤姆·汉克斯"
+                ])
+            }
+        });
+
+        const payload = JSON.parse(result.body);
+        assert.equal(payload.cast[0].person.name, "汤姆·汉克斯");
+
+        const cache = parseUnifiedCache(persistentData).google.people;
+        assert.equal(cache["42"].name.translatedText, "汤姆·汉克斯");
+    });
+});
+
+test("media people 列表只更新姓名时会保留已有 biography 缓存", async () => {
+    const { persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/people",
+        body: readFixture("media-people-list.json"),
+        persistentData: createUnifiedPersistentData({
+            traktLinkIds: JSON.parse(createWatchnowIdsCache()),
+            googlePeople: JSON.parse(createPeopleTranslationCache({
+                "42": {
+                    biography: {
+                        sourceTextHash: computeStringHash("An American actor and filmmaker."),
+                        translatedText: "一位美国演员和电影制作人。"
+                    }
+                }
+            }))
+        }),
+        httpGetMocks: {
+            [TMDB_MOVIE_CREDITS_URL]: createTmdbMovieCreditsResponse()
+        }
+    });
+
+    const cache = parseUnifiedCache(persistentData).google.people;
+    assert.equal(cache["42"].name.translatedText, "汤姆·汉克斯");
+    assert.equal(cache["42"].biography.translatedText, "一位美国演员和电影制作人。");
+});
+
+test("media people 列表在 TMDb 和 Google 都失败时会保留原文且不写入缓存", async () => {
+    const { result, persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/people",
+        body: readFixture("media-people-list.json"),
+        persistentData: createUnifiedPersistentData({
+            traktLinkIds: JSON.parse(createWatchnowIdsCache())
+        }),
+        httpGetMocks: {
+            [TMDB_MOVIE_CREDITS_URL]: createHttpErrorMock("tmdb credits unavailable")
+        },
+        httpPostMocks: {
+            [GOOGLE_TRANSLATE_URL]: createHttpErrorMock("google translate unavailable")
+        }
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.cast[0].person.name, "Tom Hanks");
+    assert.deepEqual(parseUnifiedCache(persistentData).google.people, {});
+});
+
+test("person media credits 列表会应用缓存中的中文翻译", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/people/42/movies",
+        body: readFixture("people-credits.json"),
+        persistentData: createUnifiedPersistentData({
+            traktTranslation: JSON.parse(createMovieTranslationCache())
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.cast[0].movie.title, "中文电影");
+    assert.equal(payload.cast[0].movie.overview, "中文简介");
+    assert.equal(payload.cast[0].movie.tagline, "中文标语");
+});

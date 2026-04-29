@@ -1,0 +1,14 @@
+{
+    "title": "Original Title",
+    "original_title": "Original Title",
+    "overview": "Original Overview",
+    "tagline": "Original Tagline",
+    "ids": {
+        "trakt": 123,
+        "tmdb": 456
+    },
+    "available_translations": [
+        "en",
+        "zh"
+    ]
+}

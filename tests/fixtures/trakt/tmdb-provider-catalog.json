@@ -1,0 +1,12 @@
+{
+    "results": [
+        {
+            "provider_id": 8,
+            "provider_name": "Netflix"
+        },
+        {
+            "provider_id": 2,
+            "provider_name": "Forward"
+        }
+    ]
+}

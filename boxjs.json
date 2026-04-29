@@ -10,13 +10,13 @@
       "id": "demojameson_trakt_simplified_chinese",
       "name": "Trakt增强",
       "keys": [
-        "@dj_trakt_simplified_chinese_configs.latestHistoryEpisodeOnly",
-        "@dj_trakt_simplified_chinese_configs.commentTranslationEnabled",
-        "@dj_trakt_simplified_chinese_configs.eplayerxEnabled",
-        "@dj_trakt_simplified_chinese_configs.forwardEnabled",
-        "@dj_trakt_simplified_chinese_configs.infuseEnabled",
-        "@dj_trakt_simplified_chinese_configs.useShortcutsJumpEnabled",
-        "@dj_trakt_simplified_chinese_configs.backendBaseUrl"
+        "@dj_trakt_boxjs_configs.latestHistoryEpisodeOnly",
+        "@dj_trakt_boxjs_configs.commentTranslationEnabled",
+        "@dj_trakt_boxjs_configs.eplayerxEnabled",
+        "@dj_trakt_boxjs_configs.forwardEnabled",
+        "@dj_trakt_boxjs_configs.infuseEnabled",
+        "@dj_trakt_boxjs_configs.useShortcutsJumpEnabled",
+        "@dj_trakt_boxjs_configs.backendBaseUrl"
       ],
       "author": "@DemoJameson",
       "repo": "https://github.com/DemoJameson/Loon.Plugins/tree/main/trakt_simplified_chinese",
@@ -26,49 +26,49 @@
       ],
       "settings": [
         {
-          "id": "@dj_trakt_simplified_chinese_configs.latestHistoryEpisodeOnly",
+          "id": "@dj_trakt_boxjs_configs.latestHistoryEpisodeOnly",
           "name": "历史剧集只显示最新一集",
           "val": true,
           "type": "boolean",
           "desc": "启用后会将历史页面电视剧类别的已观看记录按电视剧合并"
         },
         {
-          "id": "@dj_trakt_simplified_chinese_configs.commentTranslationEnabled",
+          "id": "@dj_trakt_boxjs_configs.commentTranslationEnabled",
           "name": "翻译评论",
           "val": true,
           "type": "boolean",
           "desc": "启用后会翻译评论，并按评论 id 缓存到本地"
         },
         {
-          "id": "@dj_trakt_simplified_chinese_configs.eplayerxEnabled",
+          "id": "@dj_trakt_boxjs_configs.eplayerxEnabled",
           "name": "EplayerX 跳转按钮",
           "val": true,
           "type": "boolean",
           "desc": "启用后在 Trakt Watchnow 和 Sofa Time 中注入 EplayerX 跳转按钮"
         },
         {
-          "id": "@dj_trakt_simplified_chinese_configs.forwardEnabled",
+          "id": "@dj_trakt_boxjs_configs.forwardEnabled",
           "name": "Forward 跳转按钮",
           "val": true,
           "type": "boolean",
           "desc": "启用后在 Trakt Watchnow 和 Sofa Time 中注入 Forward 跳转按钮"
         },
         {
-          "id": "@dj_trakt_simplified_chinese_configs.infuseEnabled",
+          "id": "@dj_trakt_boxjs_configs.infuseEnabled",
           "name": "Infuse 跳转按钮",
           "val": true,
           "type": "boolean",
           "desc": "启用后在 Trakt Watchnow 和 Sofa Time 中注入 Infuse 跳转按钮"
         },
         {
-          "id": "@dj_trakt_simplified_chinese_configs.useShortcutsJumpEnabled",
+          "id": "@dj_trakt_boxjs_configs.useShortcutsJumpEnabled",
           "name": "借助快捷指令跳转",
           "val": false,
           "type": "boolean",
           "desc": "启用后播放器跳转链接改为通过快捷指令打开 DeepLink，用于规避弹框确认，Safari 浏览器需处于非无痕模式，配套快捷指令 https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d"
         },
         {
-          "id": "@dj_trakt_simplified_chinese_configs.backendBaseUrl",
+          "id": "@dj_trakt_boxjs_configs.backendBaseUrl",
           "name": "翻译缓存 API",
           "val": "https://loon-plugins.demojameson.de5.net",
           "type": "text",

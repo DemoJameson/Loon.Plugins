@@ -1,0 +1,10 @@
+{
+    "us": {
+        "free": [
+            {
+                "source": "hulu",
+                "link": "https://example.com/hulu"
+            }
+        ]
+    }
+}

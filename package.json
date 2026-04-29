@@ -1,0 +1,16 @@
+{
+    "name": "loon-plugins-tests",
+    "private": true,
+    "scripts": {
+        "build:trakt": "node scripts/build-trakt.mjs",
+        "sync:env.js": "node scripts/build-trakt.mjs --sync-env",
+        "check:trakt": "npm run build:trakt && node --check scripts/vendor/Env.js && node --check scripts/vendor/Env.module.mjs && node --check trakt_simplified_chinese/src/trakt_simplified_chinese.source.mjs && node --check trakt_simplified_chinese/src/trakt_simplified_chinese_clear_cache.source.mjs && node --check trakt_simplified_chinese/src/trakt_simplified_chinese_expand_cache.source.mjs && node --check trakt_simplified_chinese/src/utils.mjs && node --check trakt_simplified_chinese/trakt_simplified_chinese.js && node --check trakt_simplified_chinese/trakt_simplified_chinese_clear_cache.js && node --check trakt_simplified_chinese/trakt_simplified_chinese_expand_cache.js",
+        "test": "npm run build:trakt && node --test tests/trakt_core.test.mjs tests/trakt_script_watchnow.test.mjs tests/trakt_script_translations.test.mjs tests/trakt_script_people.test.mjs tests/trakt_script_routes.test.mjs",
+        "test:trakt:live": "node scripts/run-trakt-live-tests.mjs",
+        "test:trakt:all": "node scripts/run-all-trakt-tests.mjs"
+    },
+    "devDependencies": {
+        "@nsnanocat/url": "^1.2.5",
+        "esbuild": "^0.25.11"
+    }
+}

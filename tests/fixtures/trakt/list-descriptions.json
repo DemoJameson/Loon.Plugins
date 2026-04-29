@@ -1,0 +1,9 @@
+[
+    {
+        "name": "Favorites",
+        "description": "A good list",
+        "ids": {
+            "trakt": 321
+        }
+    }
+]

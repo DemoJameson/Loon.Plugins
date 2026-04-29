@@ -1,0 +1,59 @@
+[
+    {
+        "id": 1,
+        "watched_at": "2024-01-01T00:00:00Z",
+        "show": {
+            "ids": {
+                "trakt": 555
+            }
+        },
+        "episode": {
+            "season": 1,
+            "number": 1,
+            "title": "Old Episode",
+            "overview": "Old Overview",
+            "available_translations": [
+                "en",
+                "zh"
+            ]
+        }
+    },
+    {
+        "id": 2,
+        "watched_at": "2024-01-02T00:00:00Z",
+        "show": {
+            "ids": {
+                "trakt": 555
+            }
+        },
+        "episode": {
+            "season": 1,
+            "number": 2,
+            "title": "New Episode",
+            "overview": "New Overview",
+            "available_translations": [
+                "en",
+                "zh"
+            ]
+        }
+    },
+    {
+        "id": 3,
+        "watched_at": "2024-01-03T00:00:00Z",
+        "show": {
+            "ids": {
+                "trakt": 777
+            }
+        },
+        "episode": {
+            "season": 2,
+            "number": 1,
+            "title": "Other Show Episode",
+            "overview": "Other Show Overview",
+            "available_translations": [
+                "en",
+                "zh"
+            ]
+        }
+    }
+]

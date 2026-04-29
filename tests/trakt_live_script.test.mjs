@@ -1,0 +1,1172 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+    computeStringHash,
+    createMediaTranslationEntry,
+    createUnifiedPersistentData,
+    parseUnifiedCache
+} from "./helpers/trakt-test-helpers.mjs";
+
+import {
+    getLiveConfig,
+    hasOAuthToken,
+    fetchTraktJson,
+    fetchJson,
+    resolveMovieWithZhTranslation,
+    resolveMovieWithWatchnow,
+    resolvePopularMovieWithZhTranslation,
+    resolveMovieWithPeople,
+    resolveMovieWithComments,
+    resolveMovieWithSentiments,
+    resolvePopularShowWithZhTranslation,
+    resolveShowEpisodeSample,
+    createScriptRequestHeaders,
+    runLiveResponseCase,
+    runLiveRequestCase
+} from "./helpers/trakt-live-test-helpers.mjs";
+import { createResponsePhaseRoutes } from "../trakt_simplified_chinese/src/routes/response_phase.mjs";
+import { createRequestPhaseRoutes } from "../trakt_simplified_chinese/src/routes/request_phase.mjs";
+
+function createWrappedMovieItems(movie) {
+    return [
+        {
+            movie
+        }
+    ];
+}
+
+function createWrappedShowItems(show) {
+    return [
+        {
+            show
+        }
+    ];
+}
+
+function createRecentCommentsItems(movie, comment) {
+    return [
+        {
+            movie,
+            comment
+        }
+    ];
+}
+
+function createHistoryEpisodeItems(sample) {
+    return [
+        {
+            id: 1,
+            show: sample.show,
+            episode: sample.episode
+        }
+    ];
+}
+
+function createUpNextItems(sample) {
+    return [
+        {
+            show: sample.show,
+            progress: {
+                next_episode: sample.episode
+            }
+        }
+    ];
+}
+
+function createMirPayload(movie) {
+    return {
+        first_watched: {
+            movie
+        }
+    };
+}
+
+function createEpisodeTranslationCache(sample, title = "中文剧集标题") {
+    return {
+        [`episode:${sample.traktId}:${sample.seasonNumber}:${sample.episodeNumber}`]: {
+            status: 1,
+            translation: {
+                title,
+                overview: `${title}-简介`,
+                tagline: ""
+            }
+        }
+    };
+}
+
+function collectMatchedPatterns(routes, urls) {
+    const matched = new Set();
+    urls.forEach((url) => {
+        const pathname = new URL(url).pathname;
+        const route = routes.find((item) => item.pattern.test(pathname));
+        assert.ok(route, `No route pattern matched ${url}`);
+        matched.add(String(route.pattern));
+    });
+    return matched;
+}
+
+async function resolveListDescriptionSample(config) {
+    const response = await fetchTraktJson(config, "/users/trakt/lists?page=1&limit=50");
+    assert.equal(response.status, 200);
+
+    const list = (Array.isArray(response.json) ? response.json : []).find((item) => {
+        return String(item?.description ?? "").trim() && String(item?.ids?.trakt ?? "").trim();
+    });
+    assert.ok(list, "Could not find a live list sample with description");
+
+    return {
+        list,
+        body: JSON.stringify([list])
+    };
+}
+
+async function resolvePersonMovieCreditsSample(config) {
+    const peopleSample = await resolveMovieWithPeople(config);
+    const response = await fetchTraktJson(config, `/people/${peopleSample.personId}/movies?page=1&limit=10`);
+    assert.equal(response.status, 200);
+
+    const payload = response.json;
+    const castItem = Array.isArray(payload?.cast) ? payload.cast.find((item) => item?.movie?.ids?.trakt) : null;
+    assert.ok(castItem?.movie, "Could not find a live person movie credits sample");
+
+    return {
+        personId: peopleSample.personId,
+        movie: castItem.movie,
+        body: response.body
+    };
+}
+
+test("live script: /translations/zh 响应会被归一化并优先放置 zh-CN", async () => {
+    const config = getLiveConfig();
+    const sample = await resolveMovieWithZhTranslation(config);
+
+    const { result } = await runLiveResponseCase(config, {
+        url: `https://api.trakt.tv/movies/${sample.traktId}/translations/zh?extended=all`,
+        headers: createScriptRequestHeaders(config),
+        body: JSON.stringify(sample.translations)
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.ok(Array.isArray(payload));
+    assert.ok(payload.length > 0);
+    assert.equal(payload[0].language, "zh");
+
+    const firstCnIndex = payload.findIndex((item) => String(item?.country ?? "").toLowerCase() === "cn");
+    if (firstCnIndex !== -1) {
+        assert.equal(firstCnIndex, 0);
+    }
+});
+
+test("live script: /movies/:id 会在 /translations/zh 写入本地缓存后应用中文翻译", async () => {
+    const config = getLiveConfig();
+    const sample = await resolveMovieWithZhTranslation(config);
+    const detailResponse = await fetchTraktJson(config, `/movies/${sample.traktId}?extended=full`);
+
+    assert.equal(detailResponse.status, 200);
+
+    const translationRun = await runLiveResponseCase(config, {
+        url: `https://api.trakt.tv/movies/${sample.traktId}/translations/zh?extended=all`,
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: JSON.stringify(sample.translations)
+    });
+
+    const normalizedTranslations = JSON.parse(translationRun.result.body);
+    const cnTranslation = normalizedTranslations.find((item) => {
+        return String(item?.language ?? "").toLowerCase() === "zh" &&
+            String(item?.country ?? "").toLowerCase() === "cn";
+    }) ?? normalizedTranslations[0];
+
+    const { result, httpLogs } = await runLiveResponseCase(config, {
+        url: `https://api.trakt.tv/movies/${sample.traktId}`,
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config, {
+            "user-agent": "Rippple/1.0"
+        }),
+        body: detailResponse.body,
+        persistentData: createUnifiedPersistentData({
+            traktTranslation: parseUnifiedCache(translationRun.persistentData).trakt.translation
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(typeof payload.title, "string");
+    assert.equal(typeof payload.overview, "string");
+    assert.equal(typeof payload.tagline, "string");
+    assert.equal(payload.title, String(cnTranslation?.title ?? payload.title));
+    assert.equal(httpLogs.length, 0);
+});
+
+test("live script: /movies/:id/watchnow 响应会注入自定义播放器条目", async (t) => {
+    const config = getLiveConfig();
+    if (!hasOAuthToken(config)) {
+        t.skip("未配置 TRAKT_OAUTH_TOKEN，跳过登录态 watchnow 真请求测试");
+        return;
+    }
+    let sample;
+    try {
+        sample = await resolveMovieWithWatchnow(config);
+    } catch (error) {
+        if (/unauthorized for the current token/i.test(String(error?.message ?? error))) {
+            t.skip("当前 Trakt token 无法访问真实 watchnow 接口，跳过该 live case");
+            return;
+        }
+        throw error;
+    }
+
+    const { result, httpLogs } = await runLiveResponseCase(config, {
+        url: `https://api.trakt.tv/movies/${sample.traktId}/watchnow`,
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: JSON.stringify(sample.watchnow)
+    });
+
+    const payload = JSON.parse(result.body);
+    const regions = Object.values(payload).filter((entry) => entry && typeof entry === "object");
+    const allSources = [];
+
+    regions.forEach((region) => {
+        Object.values(region).forEach((items) => {
+            if (Array.isArray(items)) {
+                items.forEach((item) => allSources.push(String(item?.source ?? "")));
+            }
+        });
+    });
+
+    assert.equal(allSources.includes("eplayerx"), true);
+    assert.equal(allSources.includes("forward"), true);
+    assert.equal(allSources.includes("infuse"), true);
+    assert.equal(httpLogs.some((log) => /\?extended=cloud9,full,watchnow$/.test(log.url)), true);
+});
+
+test("live script: /users/settings 响应会注入 vip、关闭广告并补 watchnow favorites", async (t) => {
+    const config = getLiveConfig();
+    if (!hasOAuthToken(config)) {
+        t.skip("未配置 TRAKT_OAUTH_TOKEN，跳过登录态 settings 真请求测试");
+        return;
+    }
+
+    const settingsResponse = await fetchTraktJson(config, "/users/settings");
+    assert.equal(settingsResponse.status, 200);
+
+    const { result } = await runLiveResponseCase(config, {
+        url: "https://api.trakt.tv/users/settings",
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: settingsResponse.body
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.user.vip, true);
+    assert.equal(payload.account.display_ads, false);
+    assert.ok(Array.isArray(payload.browsing?.watchnow?.favorites));
+    assert.equal(payload.browsing.watchnow.favorites.includes("us-eplayerx"), true);
+    assert.equal(payload.browsing.watchnow.favorites.includes("us-forward"), true);
+    assert.equal(payload.browsing.watchnow.favorites.includes("us-infuse"), true);
+});
+
+test("live script: /users/me/watchlist/movies 会走登录态列表翻译链路", async (t) => {
+    const config = getLiveConfig();
+    if (!hasOAuthToken(config)) {
+        t.skip("未配置 TRAKT_OAUTH_TOKEN，跳过登录态 watchlist 真请求测试");
+        return;
+    }
+
+    const watchlistResponse = await fetchTraktJson(config, "/users/me/watchlist/movies?page=1&limit=10");
+    assert.equal(watchlistResponse.status, 200);
+
+    const items = Array.isArray(watchlistResponse.json) ? watchlistResponse.json : [];
+    if (items.length === 0) {
+        t.skip("当前账号的 watchlist movies 为空，跳过该用例");
+        return;
+    }
+
+    const { result } = await runLiveResponseCase(config, {
+        url: "https://api.trakt.tv/users/me/watchlist/movies?page=1&limit=10",
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: watchlistResponse.body
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.ok(Array.isArray(payload));
+    assert.equal(payload.length > 0, true);
+    assert.equal(typeof payload[0]?.movie?.title, "string");
+});
+
+test("live script: /shows/popular 会命中列表翻译路由并应用缓存中的中文翻译", async () => {
+    const config = getLiveConfig();
+    const sample = await resolvePopularShowWithZhTranslation(config);
+    const normalizedTranslations = JSON.parse(await runLiveResponseCase(config, {
+        url: `https://api.trakt.tv/shows/${sample.traktId}/translations/zh?extended=all`,
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: JSON.stringify(sample.translations)
+    }).then(({ result }) => result.body));
+    const cnTranslation = normalizedTranslations.find((item) => {
+        return String(item?.language ?? "").toLowerCase() === "zh" &&
+            String(item?.country ?? "").toLowerCase() === "cn";
+    }) ?? normalizedTranslations[0];
+
+    const { result } = await runLiveResponseCase(config, {
+        url: "https://apiz.trakt.tv/shows/popular?extended=cloud9,full&limit=100&local_name=%E7%83%AD%E9%97%A8%E5%89%A7%E9%9B%86&page=1&ratings=80-100",
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: sample.listBody,
+        persistentData: createUnifiedPersistentData({
+            traktTranslation: {
+                [`show:${sample.traktId}`]: createMediaTranslationEntry({
+                    translation: {
+                        title: String(cnTranslation?.title ?? ""),
+                        overview: String(cnTranslation?.overview ?? ""),
+                        tagline: String(cnTranslation?.tagline ?? "")
+                    }
+                })
+            }
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    const targetItem = (Array.isArray(payload) ? payload : []).find((item) => {
+        const targetShow = item?.show && typeof item.show === "object" ? item.show : item;
+        return String(targetShow?.ids?.trakt ?? "") === String(sample.traktId);
+    });
+    const targetShow = targetItem?.show && typeof targetItem.show === "object" ? targetItem.show : targetItem;
+
+    assert.ok(targetShow);
+    if (cnTranslation?.title) {
+        assert.equal(targetShow.title, String(cnTranslation.title));
+    }
+});
+
+test("live script: /movies/popular 会命中列表翻译路由并应用缓存中的中文翻译", async () => {
+    const config = getLiveConfig();
+    const sample = await resolvePopularMovieWithZhTranslation(config);
+    const normalizedTranslations = JSON.parse(await runLiveResponseCase(config, {
+        url: `https://api.trakt.tv/movies/${sample.traktId}/translations/zh?extended=all`,
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: JSON.stringify(sample.translations)
+    }).then(({ result }) => result.body));
+    const cnTranslation = normalizedTranslations.find((item) => {
+        return String(item?.language ?? "").toLowerCase() === "zh" &&
+            String(item?.country ?? "").toLowerCase() === "cn";
+    }) ?? normalizedTranslations[0];
+
+    const { result } = await runLiveResponseCase(config, {
+        url: "https://apiz.trakt.tv/movies/popular?extended=cloud9,full&limit=100&local_name=%E7%83%AD%E9%97%A8%E7%94%B5%E5%BD%B1&page=1&ratings=80-100",
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: sample.listBody,
+        persistentData: createUnifiedPersistentData({
+            traktTranslation: {
+                [`movie:${sample.traktId}`]: createMediaTranslationEntry({
+                    translation: {
+                        title: String(cnTranslation?.title ?? ""),
+                        overview: String(cnTranslation?.overview ?? ""),
+                        tagline: String(cnTranslation?.tagline ?? "")
+                    }
+                })
+            }
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    const targetItem = (Array.isArray(payload) ? payload : []).find((item) => {
+        const targetMovie = item?.movie && typeof item.movie === "object" ? item.movie : item;
+        return String(targetMovie?.ids?.trakt ?? "") === String(sample.traktId);
+    });
+    const targetMovie = targetItem?.movie && typeof targetItem.movie === "object" ? targetItem.movie : targetItem;
+
+    assert.ok(targetMovie);
+    if (cnTranslation?.title) {
+        assert.equal(targetMovie.title, String(cnTranslation.title));
+    }
+});
+
+test("live script: /people/:id 会应用缓存中的中文姓名和 biography", async (t) => {
+    const config = getLiveConfig();
+    let sample;
+    try {
+        sample = await resolveMovieWithPeople(config);
+    } catch (error) {
+        t.skip(String(error?.message ?? error));
+        return;
+    }
+
+    const originalName = String(sample.personDetail?.name ?? "").trim();
+    const originalBiography = String(sample.personDetail?.biography ?? "").trim();
+    if (!originalName || !originalBiography) {
+        t.skip("真实 people detail 缺少可验证的 name 或 biography");
+        return;
+    }
+
+    const translatedName = `中文-${originalName}`;
+    const translatedBiography = `中文-${originalBiography}`;
+
+    const { result } = await runLiveResponseCase(config, {
+        url: `https://api.trakt.tv/people/${sample.personId}`,
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: JSON.stringify(sample.personDetail),
+        persistentData: createUnifiedPersistentData({
+            googlePeople: {
+                [sample.personId]: {
+                    name: {
+                        sourceText: originalName,
+                        translatedText: translatedName
+                    },
+                    biography: {
+                        sourceTextHash: computeStringHash(originalBiography),
+                        translatedText: translatedBiography
+                    }
+                }
+            }
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.name, `${translatedName}\n${originalName}`);
+    assert.equal(payload.biography, translatedBiography);
+});
+
+test("live script: /movies/:id/people 会应用缓存中的中文姓名", async (t) => {
+    const config = getLiveConfig();
+    let sample;
+    try {
+        sample = await resolveMovieWithPeople(config);
+    } catch (error) {
+        t.skip(String(error?.message ?? error));
+        return;
+    }
+
+    const originalName = String(sample.person?.name ?? "").trim();
+    if (!originalName) {
+        t.skip("真实 media people 缺少可验证的人名");
+        return;
+    }
+
+    const translatedName = `中文-${originalName}`;
+
+    const { result } = await runLiveResponseCase(config, {
+        url: `https://api.trakt.tv/movies/${sample.traktId}/people`,
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: JSON.stringify(sample.people),
+        persistentData: createUnifiedPersistentData({
+            googlePeople: {
+                [sample.personId]: {
+                    name: {
+                        sourceText: originalName,
+                        translatedText: translatedName
+                    }
+                }
+            }
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.cast[0].person.name, translatedName);
+});
+
+test("live script: comments 响应会应用缓存中的评论翻译", async (t) => {
+    const config = getLiveConfig();
+    let sample;
+    try {
+        sample = await resolveMovieWithComments(config);
+    } catch (error) {
+        t.skip(String(error?.message ?? error));
+        return;
+    }
+
+    const originalComment = String(sample.firstComment?.comment ?? "").trim();
+    const commentId = String(sample.firstComment?.id ?? "").trim();
+    if (!originalComment || !commentId) {
+        t.skip("真实 comments 数据缺少可验证的 comment 或 id");
+        return;
+    }
+
+    const translatedComment = `中文-${originalComment}`;
+
+    const { result } = await runLiveResponseCase(config, {
+        url: `https://api.trakt.tv/movies/${sample.traktId}/comments/all?page=1&limit=10`,
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: JSON.stringify(sample.comments),
+        persistentData: createUnifiedPersistentData({
+            googleComments: {
+                [commentId]: {
+                    sourceTextHash: computeStringHash(originalComment),
+                    translatedText: translatedComment
+                }
+            }
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    const targetComment = payload.find((item) => String(item?.id ?? "") === commentId);
+    assert.ok(targetComment);
+    assert.equal(targetComment.comment, translatedComment);
+});
+
+test("live script: /movies/:id/sentiments 会应用缓存中的情绪翻译", async (t) => {
+    const config = getLiveConfig();
+    let sample;
+    try {
+        sample = await resolveMovieWithSentiments(config);
+    } catch (error) {
+        t.skip(String(error?.message ?? error));
+        return;
+    }
+
+    const prosTheme = String(sample.sentiments?.aspect?.pros?.[0]?.theme ?? "").trim();
+    const firstGood = String(sample.sentiments?.good?.[0]?.sentiment ?? "").trim();
+    const text = String(sample.sentiments?.text ?? "").trim();
+    if (!prosTheme && !firstGood && !text) {
+        t.skip("真实 sentiments 数据缺少可验证文本");
+        return;
+    }
+
+    const translatedProsTheme = prosTheme ? `中文-${prosTheme}` : "";
+    const translatedGood = firstGood ? `中文-${firstGood}` : "";
+    const translatedText = text ? `中文-${text}` : "";
+    const cons = Array.isArray(sample.sentiments?.aspect?.cons) ? sample.sentiments.aspect.cons : [];
+    const bad = Array.isArray(sample.sentiments?.bad) ? sample.sentiments.bad : [];
+    const summary = Array.isArray(sample.sentiments?.summary) ? sample.sentiments.summary : [];
+    const items = Array.isArray(sample.sentiments?.items) ? sample.sentiments.items : [];
+    const analysis = String(sample.sentiments?.analysis ?? "").trim();
+    const highlight = String(sample.sentiments?.highlight ?? "").trim();
+
+    const { result } = await runLiveResponseCase(config, {
+        url: `https://api.trakt.tv/movies/${sample.traktId}/sentiments`,
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: JSON.stringify(sample.sentiments),
+        persistentData: createUnifiedPersistentData({
+            googleSentiments: {
+                [`movie:${sample.traktId}`]: {
+                    translation: {
+                        aspect: {
+                            pros: (Array.isArray(sample.sentiments?.aspect?.pros) ? sample.sentiments.aspect.pros : []).map((item, index) => {
+                                const value = String(item?.theme ?? "").trim();
+                                return {
+                                    sourceTextHash: computeStringHash(value),
+                                    translatedText: index === 0 && translatedProsTheme ? translatedProsTheme : value
+                                };
+                            }),
+                            cons: cons.map((item) => {
+                                const value = String(item?.theme ?? "").trim();
+                                return {
+                                    sourceTextHash: computeStringHash(value),
+                                    translatedText: value
+                                };
+                            })
+                        },
+                        good: (Array.isArray(sample.sentiments?.good) ? sample.sentiments.good : []).map((item, index) => {
+                            const value = String(item?.sentiment ?? "").trim();
+                            return {
+                                sourceTextHash: computeStringHash(value),
+                                translatedText: index === 0 && translatedGood ? translatedGood : value
+                            };
+                        }),
+                        bad: bad.map((item) => {
+                            const value = String(item?.sentiment ?? "").trim();
+                            return {
+                                sourceTextHash: computeStringHash(value),
+                                translatedText: value
+                            };
+                        }),
+                        summary: summary.map((item) => {
+                            const value = String(item ?? "").trim();
+                            return {
+                                sourceTextHash: computeStringHash(value),
+                                translatedText: value
+                            };
+                        }),
+                        analysis: {
+                            sourceTextHash: computeStringHash(analysis),
+                            translatedText: analysis
+                        },
+                        highlight: {
+                            sourceTextHash: computeStringHash(highlight),
+                            translatedText: highlight
+                        },
+                        items: items.map((item) => {
+                            const value = String(item?.text ?? "").trim();
+                            return {
+                                sourceTextHash: computeStringHash(value),
+                                translatedText: value
+                            };
+                        }),
+                        text: text ? {
+                            sourceTextHash: computeStringHash(text),
+                            translatedText: translatedText
+                        } : {
+                            sourceTextHash: computeStringHash(""),
+                            translatedText: ""
+                        }
+                    }
+                }
+            }
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    if (translatedProsTheme) {
+        assert.equal(payload.aspect.pros[0].theme, translatedProsTheme);
+    }
+    if (translatedGood) {
+        assert.equal(payload.good[0].sentiment, translatedGood);
+    }
+    if (translatedText) {
+        assert.equal(payload.text, translatedText);
+    }
+});
+
+test("live script: /users/:id/history/episodes 在 request phase 会被放大为 limit=500", async () => {
+    const config = getLiveConfig();
+    const { result } = await runLiveRequestCase(config, {
+        url: "https://api.trakt.tv/users/test/history/episodes?page=2&limit=10",
+        headers: createScriptRequestHeaders(config)
+    });
+
+    assert.equal(result.url, "https://api.trakt.tv/users/test/history/episodes?page=2&limit=500");
+});
+
+test("live script: /shows/:id/seasons 响应会应用剧集翻译并写入 current season / link cache", async () => {
+    const config = getLiveConfig();
+    const sample = await resolveShowEpisodeSample(config);
+    const seasonsResponse = await fetchTraktJson(config, `/shows/${sample.traktId}/seasons?extended=episodes,full`);
+
+    assert.equal(seasonsResponse.status, 200);
+
+    const { result, persistentData } = await runLiveResponseCase(config, {
+        url: `https://api.trakt.tv/shows/${sample.traktId}/seasons`,
+        argument: {
+            backendBaseUrl: config.backendBaseUrl
+        },
+        headers: createScriptRequestHeaders(config),
+        body: seasonsResponse.body,
+        persistentData: createUnifiedPersistentData({
+            persistentCurrentSeason: {
+                showId: sample.traktId,
+                seasonNumber: sample.seasonNumber
+            }
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.ok(Array.isArray(payload));
+    assert.ok(payload.length > 0);
+    const linkCache = parseUnifiedCache(persistentData).trakt.linkIds;
+    assert.ok(linkCache);
+    const episodeKey = String(sample.episode?.ids?.trakt ?? "");
+    if (episodeKey) {
+        assert.equal(linkCache[episodeKey].showIds.trakt, String(sample.traktId));
+    }
+});
+
+test("live script: response route coverage matrix covers all response phase routes", async (t) => {
+    const config = getLiveConfig();
+    const movieSample = await resolveMovieWithZhTranslation(config);
+    const showSample = await resolvePopularShowWithZhTranslation(config);
+    const directMovieSample = await resolvePopularMovieWithZhTranslation(config);
+    const episodeSample = await resolveShowEpisodeSample(config);
+    const commentsSample = await resolveMovieWithComments(config);
+    const personCreditsSample = await resolvePersonMovieCreditsSample(config);
+    const listSample = await resolveListDescriptionSample(config);
+
+    const wrappedMovieItems = createWrappedMovieItems(movieSample.movie);
+    const wrappedShowItems = createWrappedShowItems(showSample.show);
+    const directMovieItems = [directMovieSample.movie];
+    const directShowItems = [showSample.show];
+    const episodeItems = createHistoryEpisodeItems(episodeSample);
+    const upNextItems = createUpNextItems(episodeSample);
+    const recentCommentItems = createRecentCommentsItems(commentsSample.movie, commentsSample.firstComment);
+    const mirPayload = createMirPayload(movieSample.movie);
+
+    const movieTranslation = {
+        [`movie:${movieSample.traktId}`]: createMediaTranslationEntry({
+            translation: {
+                title: "覆盖中文电影",
+                overview: "覆盖中文简介",
+                tagline: "覆盖中文标语"
+            }
+        }),
+        [`movie:${directMovieSample.traktId}`]: createMediaTranslationEntry({
+            translation: {
+                title: "覆盖直出中文电影",
+                overview: "覆盖直出中文简介",
+                tagline: "覆盖直出中文标语"
+            }
+        }),
+        [`movie:${personCreditsSample.movie.ids.trakt}`]: createMediaTranslationEntry({
+            translation: {
+                title: "覆盖人物作品中文电影",
+                overview: "覆盖人物作品中文简介",
+                tagline: "覆盖人物作品中文标语"
+            }
+        })
+    };
+    const showTranslation = {
+        [`show:${showSample.traktId}`]: createMediaTranslationEntry({
+            translation: {
+                title: "覆盖中文剧集",
+                overview: "覆盖中文剧集简介",
+                tagline: "覆盖中文剧集标语"
+            }
+        })
+    };
+    const episodeTranslation = createEpisodeTranslationCache(episodeSample);
+    const listTranslation = {
+        [String(listSample.list.ids.trakt)]: {
+            description: {
+                sourceTextHash: computeStringHash(String(listSample.list.description)),
+                translatedText: "覆盖中文列表描述"
+            }
+        }
+    };
+    const commentTranslation = {
+        [String(commentsSample.firstComment.id)]: {
+            sourceTextHash: computeStringHash(String(commentsSample.firstComment.comment)),
+            translatedText: "覆盖中文评论"
+        }
+    };
+
+    const responseCases = [
+        {
+            url: `https://api.trakt.tv/movies/${movieSample.traktId}/lists/popular`,
+            body: listSample.body,
+            persistentData: createUnifiedPersistentData({ googleListText: listTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].description, "覆盖中文列表描述");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/trakt/likes/lists",
+            body: listSample.body,
+            persistentData: createUnifiedPersistentData({ googleListText: listTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].description, "覆盖中文列表描述");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/trakt/lists",
+            body: listSample.body,
+            persistentData: createUnifiedPersistentData({ googleListText: listTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].description, "覆盖中文列表描述");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/search/list?query=live",
+            body: listSample.body,
+            persistentData: createUnifiedPersistentData({ googleListText: listTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].description, "覆盖中文列表描述");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/recommendations/movies",
+            body: JSON.stringify(directMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].title, "覆盖直出中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/movies/watched/monthly",
+            body: JSON.stringify(createWrappedMovieItems(movieSample.movie)),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/sync/progress/up_next_nitro",
+            body: JSON.stringify(upNextItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: episodeTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].progress.next_episode.title, "中文剧集标题");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/sync/playback/movies",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/watchlist/movies/released",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/calendars/all/movies/2026-01-01/7",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/history/episodes?page=1&limit=10",
+            body: JSON.stringify(episodeItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: episodeTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].episode.title, "中文剧集标题");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/history/movies",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/sync/history/episodes",
+            body: JSON.stringify(episodeItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: episodeTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].episode.title, "中文剧集标题");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/sync/history",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/sync/watched/movies",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/watched/movies",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/history",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/collection/movies",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/people/1/known_for",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: `https://api.trakt.tv/people/${personCreditsSample.personId}/movies`,
+            body: personCreditsSample.body,
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                const movie = Array.isArray(payload.cast) ? payload.cast[0]?.movie : null;
+                assert.equal(movie?.title, "覆盖人物作品中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/mir",
+            body: JSON.stringify(mirPayload),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload.first_watched.movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/following/activities",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/lists/1/items",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/lists/1/items",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/ratings/all",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/favorites/movies",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/comments/recent/movies/weekly",
+            body: JSON.stringify(recentCommentItems),
+            persistentData: createUnifiedPersistentData({
+                traktTranslation: movieTranslation,
+                googleComments: commentTranslation
+            }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+                assert.equal(payload[0].comment.comment, "覆盖中文评论");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/movies/trending",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/media/recommendations",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/media/anticipated",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/shows/popular",
+            body: JSON.stringify(directShowItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: showTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].title, "覆盖中文剧集");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/watchlist",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/me/watchlist/movies",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            }
+        }
+    ];
+
+    const responseRoutes = createResponsePhaseRoutes({
+        handleHistoryEpisodeList() {},
+        handleListDescriptions() {},
+        handleMediaList() {},
+        handleMir() {},
+        handlePersonMediaCreditsList() {},
+        handleRecentCommentsList() {}
+    });
+
+    const matchedPatterns = collectMatchedPatterns(responseRoutes, responseCases.map((item) => item.url));
+    assert.deepEqual(
+        [...matchedPatterns].sort(),
+        responseRoutes.map((route) => String(route.pattern)).sort()
+    );
+
+    for (const item of responseCases) {
+        await t.test(item.url, async () => {
+            const { result } = await runLiveResponseCase(config, {
+                url: item.url,
+                argument: {
+                    backendBaseUrl: config.backendBaseUrl
+                },
+                headers: createScriptRequestHeaders(config),
+                body: item.body,
+                persistentData: item.persistentData
+            });
+
+            const payload = JSON.parse(result.body);
+            item.assertPayload(payload);
+        });
+    }
+});
+
+test("live script: request route coverage matrix covers all request phase routes", async (t) => {
+    const config = getLiveConfig();
+    const requestCases = [
+        {
+            url: "https://loon-plugins.demojameson.de5.net/api/redirect?deeplink=infuse%3A%2F%2Fmovie%2F123",
+            argument: {
+                useShortcutsJumpEnabled: true
+            },
+            assertResult(result) {
+                assert.equal(result.response.status, 302);
+                assert.match(result.response.headers.Location, /^shortcuts:\/\/run-shortcut\?/);
+            }
+        },
+        {
+            url: "https://image.tmdb.org/t/p/w342/forward_logo.webp",
+            assertResult(result) {
+                assert.equal(result.response.status, 302);
+                assert.equal(
+                    result.response.headers.Location,
+                    "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/forward_logo.webp"
+                );
+            }
+        },
+        {
+            url: "https://api.trakt.tv/shows/123/seasons/2",
+            assertResult(result) {
+                assert.equal(Object.keys(result).length, 0);
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/test/history/episodes?page=2&limit=10",
+            assertResult(result) {
+                assert.equal(result.url, "https://api.trakt.tv/users/test/history/episodes?page=2&limit=500");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/users/test/history?page=2&limit=10",
+            headers: {
+                "user-agent": "Rippple/1.0"
+            },
+            assertResult(result) {
+                assert.equal(result.url, "https://api.trakt.tv/users/test/history?page=2&limit=100");
+            }
+        }
+    ];
+
+    const requestRoutes = createRequestPhaseRoutes({
+        handleCurrentSeasonRequest() {},
+        handleDirectRedirectRequest() {},
+        requestHost: "",
+        requestPath: "",
+        shouldApplyLatestHistoryEpisodeOnly() {
+            return false;
+        },
+        shouldApplyRipppleHistoryLimit() {
+            return false;
+        },
+        buildHistoryEpisodesRequestUrl() {
+            return "";
+        },
+        buildRipppleHistoryRequestUrl() {
+            return "";
+        },
+        scriptContext: {
+            done() {}
+        }
+    });
+
+    const matchedPatterns = new Set();
+    requestCases.forEach((item) => {
+        const url = new URL(item.url);
+        const route = requestRoutes.find((entry) => {
+            if (String(entry.condition).includes("requestHost === \"loon-plugins.demojameson.de5.net\"")) {
+                return url.hostname === "loon-plugins.demojameson.de5.net" && url.pathname === "/api/redirect";
+            }
+            if (String(entry.condition).includes("requestHost === \"image.tmdb.org\"")) {
+                return url.hostname === "image.tmdb.org" && /^\/t\/p\/w342\/[a-z0-9_-]+_logo\.webp$/i.test(url.pathname);
+            }
+            if (String(entry.condition).includes("^\\/shows\\/[^/]+\\/seasons\\/\\d+$")) {
+                return /^\/shows\/[^/]+\/seasons\/\d+$/.test(url.pathname);
+            }
+            if (String(entry.condition).includes("shouldApplyLatestHistoryEpisodeOnly")) {
+                return /^\/users\/[^/]+\/history\/episodes$/.test(url.pathname);
+            }
+            if (String(entry.condition).includes("shouldApplyRipppleHistoryLimit")) {
+                return /^\/users\/[^/]+\/history$/.test(url.pathname);
+            }
+            return false;
+        });
+        assert.ok(route, `No request route matched ${item.url}`);
+        matchedPatterns.add(String(route.condition));
+    });
+    assert.equal(matchedPatterns.size, requestRoutes.length);
+
+    for (const item of requestCases) {
+        await t.test(item.url, async () => {
+            const { result } = await runLiveRequestCase(config, {
+                url: item.url,
+                argument: item.argument,
+                headers: item.headers ? createScriptRequestHeaders(config, item.headers) : createScriptRequestHeaders(config)
+            });
+
+            item.assertResult(result);
+        });
+    }
+});

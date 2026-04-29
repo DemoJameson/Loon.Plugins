@@ -1,0 +1,35 @@
+{
+    "aspect": {
+        "pros": [
+            {
+                "theme": "Story"
+            }
+        ],
+        "cons": [
+            {
+                "theme": "Pacing"
+            }
+        ]
+    },
+    "good": [
+        {
+            "sentiment": "Great cast"
+        }
+    ],
+    "bad": [
+        {
+            "sentiment": "Weak ending"
+        }
+    ],
+    "summary": [
+        "Overall enjoyable"
+    ],
+    "analysis": "Detailed analysis",
+    "highlight": "Best moment",
+    "items": [
+        {
+            "text": "Memorable scene"
+        }
+    ],
+    "text": "Audience text"
+}

@@ -1,0 +1,191 @@
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const scriptPath = path.resolve(__dirname, "..", "..", "trakt_simplified_chinese", "trakt_simplified_chinese.js");
+const scriptContent = fs.readFileSync(scriptPath, "utf8");
+
+function createTestConsole(verboseLogs) {
+    if (verboseLogs) {
+        return console;
+    }
+
+    const noop = () => {};
+    return {
+        log: noop,
+        info: noop,
+        warn: noop,
+        error: noop,
+        debug: noop
+    };
+}
+
+function createPersistentStore(initialData = {}) {
+    const data = { ...initialData };
+    return {
+        data,
+        read(key) {
+            return Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null;
+        },
+        write(value, key) {
+            data[key] = value;
+            return true;
+        }
+    };
+}
+
+function createMockHttpResponse(mock) {
+    if (typeof mock === "string") {
+        return {
+            status: 200,
+            statusCode: 200,
+            body: mock
+        };
+    }
+
+    return {
+        status: Number(mock?.status ?? mock?.statusCode ?? 200),
+        statusCode: Number(mock?.statusCode ?? mock?.status ?? 200),
+        body: String(mock?.body ?? "")
+    };
+}
+
+function createMockHttpError(mock) {
+    if (!mock || typeof mock !== "object" || !Object.prototype.hasOwnProperty.call(mock, "error")) {
+        return null;
+    }
+
+    return mock.error instanceof Error
+        ? mock.error
+        : new Error(String(mock.error ?? "Mock HTTP error"));
+}
+
+function resolveHttpMock(mocks, url) {
+    if (!mocks) {
+        return null;
+    }
+
+    function consumeMockValue(value) {
+        if (Array.isArray(value)) {
+            if (value.length === 0) {
+                return null;
+            }
+
+            return value.shift();
+        }
+
+        return value;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(mocks, url)) {
+        return consumeMockValue(mocks[url]);
+    }
+
+    const entries = Object.entries(mocks);
+    for (const [pattern, value] of entries) {
+        if (pattern.startsWith("regex:")) {
+            const regex = new RegExp(pattern.slice(6));
+            if (regex.test(url)) {
+                return consumeMockValue(value);
+            }
+        }
+    }
+
+    return null;
+}
+
+function runLoonScript({ url, body, headers = {}, responseHeaders = {}, responseStatus = 200, argument, persistentData = {}, hasResponse = true, httpGetMocks = {}, httpPostMocks = {}, verboseLogs = false }) {
+    return new Promise((resolve, reject) => {
+        const persistentStore = createPersistentStore(persistentData);
+        const timeout = setTimeout(() => reject(new Error("Timed out waiting for $done")), 2000);
+
+        const context = {
+            $loon: {},
+            $argument: argument,
+            $request: {
+                url,
+                headers
+            },
+            $persistentStore: persistentStore,
+            $httpClient: {
+                get(options, callback) {
+                    const mock = resolveHttpMock(httpGetMocks, String(options.url ?? ""));
+                    if (mock) {
+                        const error = createMockHttpError(mock);
+                        if (error) {
+                            callback(error);
+                            return;
+                        }
+                        const response = createMockHttpResponse(mock);
+                        callback(null, response, response.body);
+                        return;
+                    }
+
+                    callback(new Error(`Unexpected HTTP GET: ${options.url}`));
+                },
+                post(options, callback) {
+                    const postUrl = String(options.url ?? "");
+                    const mock = resolveHttpMock(httpPostMocks, postUrl);
+                    if (mock) {
+                        const error = createMockHttpError(mock);
+                        if (error) {
+                            callback(error);
+                            return;
+                        }
+                        const response = createMockHttpResponse(mock);
+                        callback(null, response, response.body);
+                        return;
+                    }
+
+                    if (/\/api\/trakt\/translations(?:\?|$)/.test(String(options.url ?? ""))) {
+                        callback(null, { status: 200, statusCode: 200, body: "{}" }, "{}");
+                        return;
+                    }
+
+                    if (String(options.url ?? "") === "https://translation.googleapis.com/language/translate/v2") {
+                        callback(null, { status: 200, statusCode: 200, body: "{\"data\":{\"translations\":[]}}" }, "{\"data\":{\"translations\":[]}}");
+                        return;
+                    }
+
+                    callback(new Error(`Unexpected HTTP POST: ${options.url}`));
+                }
+            },
+            $notification: {
+                post() {}
+            },
+            $done(result = {}) {
+                clearTimeout(timeout);
+                resolve({
+                    result,
+                    persistentData: persistentStore.data
+                });
+            },
+            console: createTestConsole(verboseLogs),
+            URL,
+            setTimeout,
+            clearTimeout
+        };
+
+        if (hasResponse) {
+            context.$response = {
+                body,
+                headers: responseHeaders,
+                status: responseStatus,
+                statusCode: responseStatus
+            };
+        }
+
+        try {
+            vm.runInNewContext(scriptContent, context, { filename: scriptPath });
+        } catch (error) {
+            clearTimeout(timeout);
+            reject(error);
+        }
+    });
+}
+
+export {
+    runLoonScript
+};

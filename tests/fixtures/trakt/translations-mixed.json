@@ -1,0 +1,23 @@
+[
+    {
+        "language": "en",
+        "country": "us",
+        "title": "English Title",
+        "overview": "English Overview",
+        "tagline": "English Tagline"
+    },
+    {
+        "language": "zh",
+        "country": "hk",
+        "title": "港版标题",
+        "overview": "港版简介",
+        "tagline": "港版标语"
+    },
+    {
+        "language": "zh",
+        "country": "cn",
+        "title": "国行标题",
+        "overview": "国行简介",
+        "tagline": "国行标语"
+    }
+]

@@ -1,0 +1,17 @@
+{
+    "user": {
+        "vip": false
+    },
+    "account": {
+        "display_ads": true
+    },
+    "browsing": {
+        "watchnow": {
+            "country": "SG",
+            "favorites": [
+                "sg-netflix",
+                "sg-eplayerx"
+            ]
+        }
+    }
+}

@@ -37,6 +37,8 @@ http-response ^https:\/\/api\.(?:themoviedb|tmdb)\.org\/3\/watch\/providers\/(?:
 http-response ^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/tt\d+(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=40, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{eplayerxEnabled},{forwardEnabled},{infuseEnabled},{useShortcutsJumpEnabled},{backendBaseUrl}], tag=Sofa Time Streaming Availability
 # 仅拦截 Sofa Time 的 streaming-availability 国家服务列表，注入播放器
 http-response ^https:\/\/streaming-availability\.p\.rapidapi\.com\/countries\/[a-z]{2}(\?.*)?$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.js, requires-body=true, timeout=40, argument=[{latestHistoryEpisodeOnly},{commentTranslationEnabled},{useShortcutsJumpEnabled},{backendBaseUrl}], tag=Sofa Time Country Services
+# 缓存压力测试脚本
+cron "0 0 1 1 1" script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese_expand_cache.js, timeout=10, enable=false, tag=缓存压力测试脚本
 
 [MITM]
 hostname = apiz.trakt.tv, api.trakt.tv, api.themoviedb.org, image.tmdb.org, streaming-availability.p.rapidapi.com, loon-plugins.demojameson.de5.net
