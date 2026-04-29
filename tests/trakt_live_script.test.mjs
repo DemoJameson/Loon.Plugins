@@ -1006,6 +1006,14 @@ test("live script: response route coverage matrix covers all response phase rout
             }
         },
         {
+            url: "https://api.trakt.tv/movies/boxoffice",
+            body: JSON.stringify(directMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].title, "覆盖直出中文电影");
+            }
+        },
+        {
             url: "https://api.trakt.tv/shows/popular",
             body: JSON.stringify(directShowItems),
             persistentData: createUnifiedPersistentData({ traktTranslation: showTranslation }),

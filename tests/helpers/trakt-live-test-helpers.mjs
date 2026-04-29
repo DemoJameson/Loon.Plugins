@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runLoonScriptLive } from "./run-loon-script-live.mjs";
+import { runScriptLive } from "./run-script-live.mjs";
 
 const TRAKT_BASE_URL = "https://api.trakt.tv";
 const GOOGLE_TRANSLATE_HOST = "translation.googleapis.com";
@@ -437,7 +437,7 @@ async function runLiveResponseCase(config, input) {
         allowRealHttpHosts.push(GOOGLE_TRANSLATE_HOST);
     }
 
-    return runLoonScriptLive({
+    return runScriptLive({
         allowRealHttpHosts,
         ...input
     });

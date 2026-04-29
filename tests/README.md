@@ -28,7 +28,7 @@
 
 ## Helpers
 
-- `helpers/run-loon-script.mjs`
+- `helpers/run-script.mjs`
   负责在 Node 里模拟 Loon 运行时，包括 `$request`、`$response`、`$persistentStore`、`$httpClient`、`$done`。
   默认会静默脚本里的 `console` 输出；排查单个 case 时可传 `verboseLogs: true` 打开日志。
 - `helpers/trakt-test-helpers.mjs`

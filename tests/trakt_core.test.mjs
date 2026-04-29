@@ -46,7 +46,7 @@ test("参数配置支持按顺序解析字符串覆盖", () => {
     core.applyArgumentStringConfig(config, "[false,true,false,true,false,true,https://demo.example]");
 
     assert.equal(config.latestHistoryEpisodeOnly, false);
-    assert.equal(config.commentTranslationEnabled, true);
+    assert.equal(config.googleTranslationEnabled, true);
     assert.equal(config.playerButtonEnabled.eplayerx, false);
     assert.equal(config.playerButtonEnabled.forward, true);
     assert.equal(config.playerButtonEnabled.infuse, false);

@@ -6,7 +6,7 @@ import {
 
 const ARGUMENT_FIELDS = [
     { key: "latestHistoryEpisodeOnly", defaultValue: true },
-    { key: "commentTranslationEnabled", defaultValue: true },
+    { key: "googleTranslationEnabled", defaultValue: true },
     { key: "eplayerxEnabled", defaultValue: true, group: "playerButtonEnabled", groupKey: "eplayerx" },
     { key: "forwardEnabled", defaultValue: true, group: "playerButtonEnabled", groupKey: "forward" },
     { key: "infuseEnabled", defaultValue: true, group: "playerButtonEnabled", groupKey: "infuse" },

@@ -281,7 +281,7 @@ function parseArgumentConfig() {
 
 const argumentConfig = parseArgumentConfig();
 const latestHistoryEpisodeOnly = argumentConfig.latestHistoryEpisodeOnly;
-const commentTranslationEnabled = argumentConfig.commentTranslationEnabled;
+const googleTranslationEnabled = argumentConfig.googleTranslationEnabled;
 const enabledPlayerTypes = Object.values(PLAYER_TYPE).filter((source) => argumentConfig.playerButtonEnabled[source]);
 const useShortcutsJumpEnabled = argumentConfig.useShortcutsJumpEnabled;
 const backendBaseUrl = (() => {
@@ -1156,11 +1156,6 @@ async function translateSentimentItems(items) {
 }
 
 async function handleSentiments() {
-    if (!commentTranslationEnabled) {
-        $.done({});
-        return;
-    }
-
     const data = JSON.parse(body);
     if (!isPlainObject(data)) {
         $.done({});
@@ -1177,6 +1172,11 @@ async function handleSentiments() {
     const cachedEntry = getSentimentTranslationCacheEntry(cache, target.mediaType, target.traktId);
     if (cachedEntry?.translation && hasMatchingSentimentTranslationPayload(data, cachedEntry.translation)) {
         $.done({ body: JSON.stringify(applySentimentTranslationPayload(data, cachedEntry.translation)) });
+        return;
+    }
+
+    if (!googleTranslationEnabled) {
+        $.done({ body: JSON.stringify(data) });
         return;
     }
 
@@ -1619,10 +1619,6 @@ async function translateCommentGroup(comments, sourceLanguage, cache) {
 }
 
 async function translateCommentsInPlace(payload) {
-    if (!commentTranslationEnabled) {
-        return payload;
-    }
-
     const comments = collectCommentTargets(payload);
     if (comments.length === 0) {
         return payload;
@@ -1632,15 +1628,17 @@ async function translateCommentsInPlace(payload) {
     const groups = collectCommentTranslationGroups(comments, cache);
     const languages = Object.keys(groups);
 
-    for (const language of languages) {
-        try {
-            await translateCommentGroup(groups[language], language, cache);
-        } catch (e) {
-            $.log(`Trakt comment translation failed for language=${language}: ${e}`);
+    if (googleTranslationEnabled) {
+        for (const language of languages) {
+            try {
+                await translateCommentGroup(groups[language], language, cache);
+            } catch (e) {
+                $.log(`Trakt comment translation failed for language=${language}: ${e}`);
+            }
         }
-    }
 
-    saveCommentTranslationCache(cache);
+        saveCommentTranslationCache(cache);
+    }
     return payload;
 }
 
@@ -1659,11 +1657,6 @@ async function handleRecentCommentsList() {
 }
 
 async function handleComments() {
-    if (!commentTranslationEnabled) {
-        $.done({});
-        return;
-    }
-
     const comments = JSON.parse(body);
     if (isNotArray(comments) || comments.length === 0) {
         $.done({});
@@ -1808,11 +1801,13 @@ async function handleListDescriptions() {
     const groups = collectListTextTranslationGroups(lists, cache);
     const languages = Object.keys(groups);
 
-    for (const language of languages) {
-        try {
-            await translateListTextGroup(groups[language], language, cache);
-        } catch (e) {
-            $.log(`Trakt list description translation failed for language=${language}: ${e}`);
+    if (googleTranslationEnabled) {
+        for (const language of languages) {
+            try {
+                await translateListTextGroup(groups[language], language, cache);
+            } catch (e) {
+                $.log(`Trakt list description translation failed for language=${language}: ${e}`);
+            }
         }
     }
 
@@ -2832,7 +2827,9 @@ async function handleMediaPeopleList() {
             return;
         }
 
-        const googleTargets = collectPeopleListGoogleNameTranslationTargets(data, cache);
+        const googleTargets = googleTranslationEnabled
+            ? collectPeopleListGoogleNameTranslationTargets(data, cache)
+            : [];
         const googlePromise = googleTargets.length > 0
             ? translateTextsWithGoogle(googleTargets.map((item) => item.originalName), "en")
             : Promise.resolve([]);
@@ -3253,7 +3250,7 @@ async function handlePeopleDetail() {
     const namePromise = originalName && !cachedName && isNonNullish(data?.ids?.tmdb)
         ? fetchTmdbPerson(data.ids.tmdb)
         : null;
-    const googlePromise = originalName || originalBiography
+    const googlePromise = googleTranslationEnabled && (originalName || originalBiography)
         ? translateTextsWithGoogle([originalName, originalBiography], "en")
         : null;
 

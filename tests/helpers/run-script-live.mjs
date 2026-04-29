@@ -83,8 +83,7 @@ function resolveHttpMock(mocks, url) {
         return consumeMockValue(mocks[url]);
     }
 
-    const entries = Object.entries(mocks);
-    for (const [pattern, value] of entries) {
+    for (const [pattern, value] of Object.entries(mocks)) {
         if (pattern.startsWith("regex:")) {
             const regex = new RegExp(pattern.slice(6));
             if (regex.test(url)) {
@@ -96,10 +95,83 @@ function resolveHttpMock(mocks, url) {
     return null;
 }
 
-function runLoonScript({ url, body, headers = {}, responseHeaders = {}, responseStatus = 200, argument, persistentData = {}, hasResponse = true, httpGetMocks = {}, httpPostMocks = {}, verboseLogs = false }) {
+function normalizeHeaders(headers) {
+    const result = {};
+    const input = headers instanceof Headers ? Object.fromEntries(headers.entries()) : headers;
+
+    if (!input || typeof input !== "object") {
+        return result;
+    }
+
+    Object.keys(input).forEach((key) => {
+        result[String(key).toLowerCase()] = String(input[key]);
+    });
+
+    return result;
+}
+
+function isAllowedRealUrl(url, allowRealHttpHosts) {
+    const { hostname } = new URL(url);
+    return allowRealHttpHosts.includes(hostname);
+}
+
+async function performRealHttpRequest(method, options, allowRealHttpHosts, httpLogs) {
+    const requestOptions = typeof options === "string"
+        ? { url: options }
+        : {
+            url: String(options?.url ?? ""),
+            headers: options?.headers,
+            body: options?.body
+        };
+
+    if (!requestOptions.url) {
+        throw new Error(`Missing URL for real HTTP ${method}`);
+    }
+
+    if (!isAllowedRealUrl(requestOptions.url, allowRealHttpHosts)) {
+        throw new Error(`Real HTTP ${method} not allowed for ${requestOptions.url}`);
+    }
+
+    const response = await fetch(requestOptions.url, {
+        method,
+        headers: requestOptions.headers,
+        body: method === "GET" ? undefined : requestOptions.body
+    });
+    const responseBody = await response.text();
+    const responseHeaders = normalizeHeaders(response.headers);
+
+    httpLogs.push({
+        method,
+        url: requestOptions.url,
+        status: response.status
+    });
+
+    return {
+        status: response.status,
+        statusCode: response.status,
+        headers: responseHeaders,
+        body: responseBody
+    };
+}
+
+function runScriptLive({
+    url,
+    body,
+    headers = {},
+    responseHeaders = {},
+    responseStatus = 200,
+    argument,
+    persistentData = {},
+    hasResponse = true,
+    httpGetMocks = {},
+    httpPostMocks = {},
+    allowRealHttpHosts = [],
+    verboseLogs = false
+}) {
     return new Promise((resolve, reject) => {
         const persistentStore = createPersistentStore(persistentData);
-        const timeout = setTimeout(() => reject(new Error("Timed out waiting for $done")), 2000);
+        const httpLogs = [];
+        const timeout = setTimeout(() => reject(new Error("Timed out waiting for $done")), 15000);
 
         const context = {
             $loon: {},
@@ -111,45 +183,54 @@ function runLoonScript({ url, body, headers = {}, responseHeaders = {}, response
             $persistentStore: persistentStore,
             $httpClient: {
                 get(options, callback) {
-                    const mock = resolveHttpMock(httpGetMocks, String(options.url ?? ""));
+                    const requestUrl = String(options?.url ?? "");
+                    const mock = resolveHttpMock(httpGetMocks, requestUrl);
                     if (mock) {
                         const error = createMockHttpError(mock);
                         if (error) {
                             callback(error);
                             return;
                         }
+
                         const response = createMockHttpResponse(mock);
+                        httpLogs.push({
+                            method: "GET",
+                            url: requestUrl,
+                            status: response.status,
+                            mocked: true
+                        });
                         callback(null, response, response.body);
                         return;
                     }
 
-                    callback(new Error(`Unexpected HTTP GET: ${options.url}`));
+                    performRealHttpRequest("GET", options, allowRealHttpHosts, httpLogs)
+                        .then((response) => callback(null, response, response.body))
+                        .catch((error) => callback(error));
                 },
                 post(options, callback) {
-                    const postUrl = String(options.url ?? "");
-                    const mock = resolveHttpMock(httpPostMocks, postUrl);
+                    const requestUrl = String(options?.url ?? "");
+                    const mock = resolveHttpMock(httpPostMocks, requestUrl);
                     if (mock) {
                         const error = createMockHttpError(mock);
                         if (error) {
                             callback(error);
                             return;
                         }
+
                         const response = createMockHttpResponse(mock);
+                        httpLogs.push({
+                            method: "POST",
+                            url: requestUrl,
+                            status: response.status,
+                            mocked: true
+                        });
                         callback(null, response, response.body);
                         return;
                     }
 
-                    if (/\/api\/trakt\/translations(?:\?|$)/.test(String(options.url ?? ""))) {
-                        callback(null, { status: 200, statusCode: 200, body: "{}" }, "{}");
-                        return;
-                    }
-
-                    if (String(options.url ?? "") === "https://translation.googleapis.com/language/translate/v2") {
-                        callback(null, { status: 200, statusCode: 200, body: "{\"data\":{\"translations\":[]}}" }, "{\"data\":{\"translations\":[]}}");
-                        return;
-                    }
-
-                    callback(new Error(`Unexpected HTTP POST: ${options.url}`));
+                    performRealHttpRequest("POST", options, allowRealHttpHosts, httpLogs)
+                        .then((response) => callback(null, response, response.body))
+                        .catch((error) => callback(error));
                 }
             },
             $notification: {
@@ -159,13 +240,16 @@ function runLoonScript({ url, body, headers = {}, responseHeaders = {}, response
                 clearTimeout(timeout);
                 resolve({
                     result,
-                    persistentData: persistentStore.data
+                    persistentData: persistentStore.data,
+                    httpLogs
                 });
             },
             console: createTestConsole(verboseLogs),
             URL,
             setTimeout,
-            clearTimeout
+            clearTimeout,
+            fetch,
+            Headers
         };
 
         if (hasResponse) {
@@ -187,5 +271,5 @@ function runLoonScript({ url, body, headers = {}, responseHeaders = {}, response
 }
 
 export {
-    runLoonScript
+    runScriptLive
 };

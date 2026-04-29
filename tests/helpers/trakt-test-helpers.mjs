@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runLoonScript } from "./run-loon-script.mjs";
+import { runScript } from "./run-script.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UNIFIED_CACHE_KEY = "dj_trakt_unified_cache";
@@ -232,14 +232,14 @@ function createWrappedMovieBody() {
 }
 
 function runResponseCase(input) {
-    return runLoonScript({
+    return runScript({
         hasResponse: true,
         ...input
     });
 }
 
 function runRequestCase(input) {
-    return runLoonScript({
+    return runScript({
         hasResponse: false,
         ...input
     });

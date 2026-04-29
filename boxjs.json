@@ -11,7 +11,7 @@
       "name": "Trakt增强",
       "keys": [
         "@dj_trakt_boxjs_configs.latestHistoryEpisodeOnly",
-        "@dj_trakt_boxjs_configs.commentTranslationEnabled",
+        "@dj_trakt_boxjs_configs.googleTranslationEnabled",
         "@dj_trakt_boxjs_configs.eplayerxEnabled",
         "@dj_trakt_boxjs_configs.forwardEnabled",
         "@dj_trakt_boxjs_configs.infuseEnabled",
@@ -33,11 +33,11 @@
           "desc": "启用后会将历史页面电视剧类别的已观看记录按电视剧合并"
         },
         {
-          "id": "@dj_trakt_boxjs_configs.commentTranslationEnabled",
-          "name": "翻译评论",
+          "id": "@dj_trakt_boxjs_configs.googleTranslationEnabled",
+          "name": "用谷歌翻译部分文本",
           "val": true,
           "type": "boolean",
-          "desc": "启用后会翻译评论，并按评论 id 缓存到本地"
+          "desc": "启用后会翻译评论、sentiments、人物、片单等 Google 翻译场景，并按原文缓存到本地"
         },
         {
           "id": "@dj_trakt_boxjs_configs.eplayerxEnabled",

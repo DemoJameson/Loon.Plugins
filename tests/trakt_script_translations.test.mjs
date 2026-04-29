@@ -381,6 +381,25 @@ test("comments 列表会应用缓存中的评论翻译", async () => {
     assert.equal(payload[0].comment, "很棒的电影");
 });
 
+test("googleTranslationEnabled=false 时 comments 不触发 Google 翻译，但仍可应用缓存", async () => {
+    const cachedComments = JSON.parse(createCommentTranslationCache());
+    const { result, persistentData, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/comments/123/replies",
+        body: readFixture("comments.json"),
+        argument: {
+            googleTranslationEnabled: false
+        },
+        persistentData: createUnifiedPersistentData({
+            googleComments: cachedComments
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].comment, "很棒的电影");
+    assert.equal(parseUnifiedCache(persistentData).google.comments["9001"].translatedText, "很棒的电影");
+    assert.equal(httpLogs.some((entry) => entry.method === "POST" && entry.url === GOOGLE_TRANSLATE_URL), false);
+});
+
 test("comments 列表会翻译未命中的评论并写回缓存", async () => {
     const { result, persistentData } = await runResponseCase({
         url: "https://api.trakt.tv/comments/123/replies",
@@ -583,6 +602,39 @@ test("list descriptions 会应用缓存中的描述翻译", async () => {
     assert.equal(payload[0].description, "一个不错的列表");
 });
 
+test("googleTranslationEnabled=false 时 list descriptions 不触发 Google 翻译，但仍可应用缓存", async () => {
+    const cachedListText = JSON.parse(createListTextTranslationCache({
+        "321": {
+            name: {
+                sourceTextHash: computeStringHash("Favorites"),
+                translatedText: "收藏夹"
+            },
+            description: {
+                sourceTextHash: computeStringHash("A good list"),
+                translatedText: "一个不错的列表"
+            }
+        }
+    }));
+    const { result, persistentData, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/lists/popular",
+        body: readFixture("list-descriptions.json"),
+        argument: {
+            googleTranslationEnabled: false
+        },
+        persistentData: createUnifiedPersistentData({
+            googleListText: cachedListText
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].name, "收藏夹");
+    assert.equal(payload[0].description, "一个不错的列表");
+    const cache = parseUnifiedCache(persistentData).google.listText;
+    assert.equal(cache["321"].name.translatedText, "收藏夹");
+    assert.equal(cache["321"].description.translatedText, "一个不错的列表");
+    assert.equal(httpLogs.some((entry) => entry.method === "POST" && entry.url === GOOGLE_TRANSLATE_URL), false);
+});
+
 test("list descriptions 会翻译未命中的描述并写回缓存", async () => {
     const { result, persistentData } = await runResponseCase({
         url: "https://api.trakt.tv/movies/123/lists/popular",
@@ -775,6 +827,29 @@ test("sentiments 会应用缓存中的翻译结果", async () => {
     assert.equal(payload.highlight, "高光时刻");
     assert.equal(payload.items[0].text, "难忘场景");
     assert.equal(payload.text, "观众文本");
+});
+
+test("googleTranslationEnabled=false 时 sentiments 不触发 Google 翻译，但仍可应用缓存", async () => {
+    const cachedSentiments = JSON.parse(createSentimentTranslationCache());
+    const { result, persistentData, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/sentiments",
+        body: readFixture("sentiments.json"),
+        argument: {
+            googleTranslationEnabled: false
+        },
+        persistentData: createUnifiedPersistentData({
+            googleSentiments: cachedSentiments
+        })
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.aspect.pros[0].theme, "剧情");
+    assert.equal(payload.good[0].sentiment, "演员阵容出色");
+    assert.equal(payload.text, "观众文本");
+    const cache = parseUnifiedCache(persistentData).google.sentiments;
+    assert.equal(cache["movie:123"].translation.aspect.pros[0].translatedText, "剧情");
+    assert.equal(cache["movie:123"].translation.text.translatedText, "观众文本");
+    assert.equal(httpLogs.some((entry) => entry.method === "POST" && entry.url === GOOGLE_TRANSLATE_URL), false);
 });
 
 [
