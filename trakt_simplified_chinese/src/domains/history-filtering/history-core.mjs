@@ -6,7 +6,7 @@ import {
     isNotArray,
     parseQueryParams,
     parseUrlParts
-} from "../utils.mjs";
+} from "../../shared/common.mjs";
 
 const HISTORY_EPISODES_LIMIT = 500;
 const RIPPPLE_HISTORY_MIN_LIMIT = 100;
@@ -31,19 +31,11 @@ function buildMinimumLimitRequestUrl(url, minimumLimit) {
 }
 
 function buildHistoryEpisodesRequestUrl(url, shouldApply) {
-    if (!shouldApply) {
-        return url;
-    }
-
-    return buildMinimumLimitRequestUrl(url, HISTORY_EPISODES_LIMIT);
+    return shouldApply ? buildMinimumLimitRequestUrl(url, HISTORY_EPISODES_LIMIT) : url;
 }
 
 function buildRipppleHistoryRequestUrl(url, shouldApply) {
-    if (!shouldApply) {
-        return url;
-    }
-
-    return buildMinimumLimitRequestUrl(url, RIPPPLE_HISTORY_MIN_LIMIT);
+    return shouldApply ? buildMinimumLimitRequestUrl(url, RIPPPLE_HISTORY_MIN_LIMIT) : url;
 }
 
 function isHistoryEpisodesListUrl(url) {
@@ -76,11 +68,9 @@ function getHistoryEpisodeShowKey(item) {
 
 function getHistoryEpisodeSortKey(item) {
     const episode = item?.episode ?? null;
-    const season = Number.isFinite(Number(episode?.season)) ? Number(episode.season) : -1;
-    const number = Number.isFinite(Number(episode?.number)) ? Number(episode.number) : -1;
     return {
-        season: season,
-        number: number
+        season: Number.isFinite(Number(episode?.season)) ? Number(episode.season) : -1,
+        number: Number.isFinite(Number(episode?.number)) ? Number(episode.number) : -1
     };
 }
 
@@ -118,34 +108,20 @@ function filterHistoryEpisodesAcrossPages(arr, url, cache) {
 
     const bucket = ensureObject(nextCache[bucketKey], { shows: {} });
     const cachedShows = ensureObject(bucket.shows);
-
     const filtered = arr.filter((item) => {
         const showKey = getHistoryEpisodeShowKey(item);
-        if (!showKey) {
-            return true;
-        }
-
-        if (pageNumber > 1) {
-            return !cachedShows[showKey];
-        }
-
-        return true;
+        return !showKey || pageNumber === 1 || !cachedShows[showKey];
     });
 
     filtered.forEach((item) => {
         const showKey = getHistoryEpisodeShowKey(item);
-        if (!showKey) {
-            return;
-        }
-
-        if (!cachedShows[showKey]) {
+        if (showKey && !cachedShows[showKey]) {
             cachedShows[showKey] = createHistoryEpisodeCacheSnapshot(item);
         }
     });
 
     bucket.shows = cachedShows;
     nextCache[bucketKey] = bucket;
-
     return {
         filtered,
         cache: nextCache
@@ -158,7 +134,6 @@ function keepLatestHistoryEpisodes(arr) {
     }
 
     const latestByShow = {};
-
     arr.forEach((item) => {
         const key = getHistoryEpisodeShowKey(item);
         if (!key) {
@@ -173,12 +148,10 @@ function keepLatestHistoryEpisodes(arr) {
 
         const itemSortKey = getHistoryEpisodeSortKey(item);
         const currentSortKey = getHistoryEpisodeSortKey(current);
-        if (itemSortKey.season > currentSortKey.season) {
-            latestByShow[key] = item;
-            return;
-        }
-
-        if (itemSortKey.season === currentSortKey.season && itemSortKey.number > currentSortKey.number) {
+        if (
+            itemSortKey.season > currentSortKey.season ||
+            (itemSortKey.season === currentSortKey.season && itemSortKey.number > currentSortKey.number)
+        ) {
             latestByShow[key] = item;
             return;
         }

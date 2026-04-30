@@ -9,18 +9,20 @@ let core;
 
 before(async () => {
     const basePath = path.resolve(__dirname, "..", "trakt_simplified_chinese", "src");
-    const [config, constants, history, media, translations, watchnow] = await Promise.all([
-        import(pathToFileURL(path.join(basePath, "core", "config.mjs")).href),
-        import(pathToFileURL(path.join(basePath, "core", "constants.mjs")).href),
-        import(pathToFileURL(path.join(basePath, "core", "history.mjs")).href),
-        import(pathToFileURL(path.join(basePath, "core", "media.mjs")).href),
-        import(pathToFileURL(path.join(basePath, "core", "translations.mjs")).href),
-        import(pathToFileURL(path.join(basePath, "core", "watchnow.mjs")).href)
+    const [config, cacheStore, mediaHandlers, history, media, translations, watchnow] = await Promise.all([
+        import(pathToFileURL(path.join(basePath, "app", "argument.mjs")).href),
+        import(pathToFileURL(path.join(basePath, "platform", "cache-store.mjs")).href),
+        import(pathToFileURL(path.join(basePath, "domains", "media-translation", "handlers.mjs")).href),
+        import(pathToFileURL(path.join(basePath, "domains", "history-filtering", "history-core.mjs")).href),
+        import(pathToFileURL(path.join(basePath, "shared", "media-types.mjs")).href),
+        import(pathToFileURL(path.join(basePath, "domains", "media-translation", "translations.mjs")).href),
+        import(pathToFileURL(path.join(basePath, "domains", "player-injection", "trakt", "watchnow.mjs")).href)
     ]);
 
     core = {
         ...config,
-        ...constants,
+        ...cacheStore,
+        ...mediaHandlers,
         ...history,
         ...media,
         ...translations,

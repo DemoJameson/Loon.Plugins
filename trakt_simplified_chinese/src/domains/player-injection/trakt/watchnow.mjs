@@ -4,27 +4,15 @@ import {
     isArray,
     isNotArray,
     isPlainObject
-} from "../utils.mjs";
+} from "../../../shared/common.mjs";
+import { normalizeUrlPath } from "../../../shared/url-routing.mjs";
 import {
-    MEDIA_TYPE,
-    PLAYER_TYPE
-} from "./media.mjs";
+    MEDIA_TYPE
+} from "../../../shared/media-types.mjs";
+import { buildPlayerDeeplink, PLAYER_DEFINITIONS, PLAYER_TYPE } from "../player-definitions.mjs";
 
 const WATCHNOW_DEFAULT_REGION = "us";
 const WATCHNOW_DEFAULT_CURRENCY = "usd";
-
-function normalizeUrlPath(url) {
-    try {
-        const pathname = new URL(String(url ?? "")).pathname || "";
-        if (!pathname || pathname === "/") {
-            return pathname || "/";
-        }
-
-        return pathname.replace(/\/+$/, "") || "/";
-    } catch (e) {
-        return "";
-    }
-}
 
 function resolveWatchnowRegion(watchnow) {
     const country = String(watchnow?.country ?? "").trim().toLowerCase();
@@ -53,13 +41,13 @@ function injectWatchnowFavoriteSources(items, regionCode) {
 
 function createSourceDefinition(source, name, color) {
     return {
-        source: source,
-        name: name,
+        source,
+        name,
         free: true,
         cinema: false,
         amazon: false,
         link_count: 99999,
-        color: color,
+        color,
         images: {
             logo: `raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/${source}.webp`,
             logo_colorized: null,
@@ -76,14 +64,8 @@ function filterOutCustomSources(items) {
 }
 
 function injectCustomSourcesIntoList(items) {
-    const playerDefinitions = {
-        [PLAYER_TYPE.EPLAYERX]: { type: PLAYER_TYPE.EPLAYERX, name: "EplayerX", color: "#33c1c0" },
-        [PLAYER_TYPE.FORWARD]: { type: PLAYER_TYPE.FORWARD, name: "Forward", color: "#000000" },
-        [PLAYER_TYPE.INFUSE]: { type: PLAYER_TYPE.INFUSE, name: "Infuse", color: "#ff8000" }
-    };
-
     return Object.values(PLAYER_TYPE).slice().reverse().map((source) => {
-        const definition = playerDefinitions[source];
+        const definition = PLAYER_DEFINITIONS[source];
         return createSourceDefinition(definition.type, definition.name, definition.color);
     }).concat(filterOutCustomSources(items));
 }
@@ -173,8 +155,8 @@ function resolveWatchnowTarget(url) {
 
 function createWatchnowLinkEntry(source, link) {
     return {
-        source: source,
-        link: link,
+        source,
+        link,
         uhd: false,
         curreny: WATCHNOW_DEFAULT_CURRENCY,
         currency: WATCHNOW_DEFAULT_CURRENCY,
@@ -192,11 +174,11 @@ function buildCustomWatchnowEntries(target, context, enabledPlayerTypes, playerD
 
     return ensureArray(enabledPlayerTypes).map((source) => {
         const definition = playerDefinitions[source];
-        if (!definition || typeof definition.buildDeeplink !== "function") {
+        if (!definition) {
             return null;
         }
 
-        const deeplink = definition.buildDeeplink(target, context);
+        const deeplink = buildPlayerDeeplink(source, target, context);
         if (!deeplink) {
             return null;
         }
@@ -243,7 +225,6 @@ function injectCustomWatchnowEntriesIntoPayload(payload, customEntries, regionCo
     }
 
     payload = ensureWatchnowAllRegions(payload, regionCodes);
-
     if (!isPlainObject(payload)) {
         return payload;
     }

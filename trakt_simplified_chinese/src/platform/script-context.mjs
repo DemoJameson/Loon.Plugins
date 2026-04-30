@@ -1,6 +1,8 @@
 import { Env } from "../../../scripts/vendor/Env.module.mjs";
 
-function createScriptContext(name) {
+const TRAKT_SCRIPT_TITLE = "Trakt增强";
+
+function createScriptContext(name = TRAKT_SCRIPT_TITLE) {
     const env = new Env(name);
 
     return {
@@ -38,5 +40,6 @@ function createScriptContext(name) {
 }
 
 export {
-    createScriptContext
+    createScriptContext,
+    TRAKT_SCRIPT_TITLE
 };

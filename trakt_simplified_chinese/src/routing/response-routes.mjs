@@ -1,23 +1,7 @@
-function normalizeUrlPath(url) {
-    try {
-        const pathname = new URL(String(url ?? "")).pathname || "";
-        if (!pathname || pathname === "/") {
-            return pathname || "/";
-        }
-
-        return pathname.replace(/\/+$/, "") || "/";
-    } catch (e) {
-        return "";
-    }
-}
-
-function getUrlHost(url) {
-    try {
-        return String(new URL(String(url ?? "")).hostname).toLowerCase();
-    } catch (e) {
-        return "";
-    }
-}
+import {
+    getUrlHost,
+    normalizeUrlPath
+} from "../shared/url-routing.mjs";
 
 function isTraktHost(host) {
     return /(^|\.)trakt\.tv$/i.test(String(host ?? ""));

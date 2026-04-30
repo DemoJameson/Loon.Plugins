@@ -2,7 +2,9 @@ import {
     parseArgumentValue,
     parseBooleanArgument,
     readTextArgument
-} from "../utils.mjs";
+} from "../shared/common.mjs";
+
+const BOXJS_CONFIG_KEY = "dj_trakt_boxjs_configs";
 
 const ARGUMENT_FIELDS = [
     { key: "latestHistoryEpisodeOnly", defaultValue: true },
@@ -77,6 +79,7 @@ function applyArgumentStringConfig(config, argument) {
 
 export {
     ARGUMENT_FIELDS,
+    BOXJS_CONFIG_KEY,
     applyArgumentObjectConfig,
     applyArgumentStringConfig,
     createDefaultArgumentConfig,

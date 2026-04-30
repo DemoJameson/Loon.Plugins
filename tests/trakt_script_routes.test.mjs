@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TRAKT_DIRECT_TRANSLATION_MAX_REFS } from "../trakt_simplified_chinese/src/core/constants.mjs";
+import { TRAKT_DIRECT_TRANSLATION_MAX_REFS } from "../trakt_simplified_chinese/src/domains/media-translation/handlers.mjs";
 import {
     createResponsePhaseRoutes,
     createResponseRouteContext
-} from "../trakt_simplified_chinese/src/routes/response_phase.mjs";
+} from "../trakt_simplified_chinese/src/routing/response-routes.mjs";
 
 import {
     readFixture,

@@ -1,6 +1,14 @@
-import { isNonNullish, isPlainObject } from "../utils.mjs";
+import { isNonNullish, isPlainObject } from "../shared/common.mjs";
 
 function createHttpClient(scriptContext) {
+    function get(request) {
+        return scriptContext.env.http.get(request);
+    }
+
+    function post(request) {
+        return scriptContext.env.http.post(request);
+    }
+
     function buildRequestHeaders(extraHeaders, useSourceHeaders) {
         const headers = {};
         const sourceHeaders = scriptContext.request?.headers ?? {};
@@ -32,7 +40,7 @@ function createHttpClient(scriptContext) {
     }
 
     function fetchJson(url, extraHeaders, useSourceHeaders) {
-        return scriptContext.env.http.get({
+        return get({
             url: url,
             headers: buildRequestHeaders(extraHeaders, useSourceHeaders)
         }).then((response) => {
@@ -59,7 +67,7 @@ function createHttpClient(scriptContext) {
     }
 
     function postJson(url, payload, extraHeaders, useSourceHeaders) {
-        return scriptContext.env.http.post({
+        return post({
             url: url,
             headers: buildRequestHeaders(extraHeaders, useSourceHeaders),
             body: JSON.stringify(payload)
@@ -84,8 +92,10 @@ function createHttpClient(scriptContext) {
     return {
         buildRequestHeaders,
         fetchJson,
+        get,
         getRequestHeaderValue,
         getResponseStatusCode,
+        post,
         postJson
     };
 }

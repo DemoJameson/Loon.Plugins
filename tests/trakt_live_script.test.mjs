@@ -33,8 +33,8 @@ import {
 import {
     createResponsePhaseRoutes,
     createResponseRouteContext
-} from "../trakt_simplified_chinese/src/routes/response_phase.mjs";
-import { createRequestPhaseRoutes } from "../trakt_simplified_chinese/src/routes/request_phase.mjs";
+} from "../trakt_simplified_chinese/src/routing/response-routes.mjs";
+import { createRequestPhaseRoutes } from "../trakt_simplified_chinese/src/routing/request-routes.mjs";
 
 function createWrappedMovieItems(movie) {
     return [

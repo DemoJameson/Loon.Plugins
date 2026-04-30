@@ -5,7 +5,7 @@ import {
     UNIFIED_CACHE_KEY,
     UNIFIED_CACHE_MAX_BYTES,
     UNIFIED_CACHE_SCHEMA_VERSION
-} from "../../trakt_simplified_chinese/src/core/constants.mjs";
+} from "../../trakt_simplified_chinese/src/platform/cache-store.mjs";
 import { runScript } from "./run-script.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

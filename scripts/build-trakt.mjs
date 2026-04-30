@@ -13,15 +13,15 @@ const isSyncEnvMode = process.argv.includes("--sync-env");
 
 const buildTargets = [
     {
-        entryPoint: "trakt_simplified_chinese/src/trakt_simplified_chinese.source.mjs",
+        entryPoint: "trakt_simplified_chinese/src/main.mjs",
         outputFile: "trakt_simplified_chinese/trakt_simplified_chinese.js"
     },
     {
-        entryPoint: "trakt_simplified_chinese/src/trakt_simplified_chinese_clear_cache.source.mjs",
+        entryPoint: "trakt_simplified_chinese/src/clear-cache.mjs",
         outputFile: "trakt_simplified_chinese/trakt_simplified_chinese_clear_cache.js"
     },
     {
-        entryPoint: "trakt_simplified_chinese/src/trakt_simplified_chinese_expand_cache.source.mjs",
+        entryPoint: "trakt_simplified_chinese/src/expand-cache.mjs",
         outputFile: "trakt_simplified_chinese/trakt_simplified_chinese_expand_cache.js"
     }
 ];

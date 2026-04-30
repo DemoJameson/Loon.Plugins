@@ -1,19 +1,21 @@
-import { Env } from "../../scripts/vendor/Env.module.mjs";
-import {
-    UNIFIED_CACHE_KEY,
-    UNIFIED_CACHE_SCHEMA_VERSION
-} from "./core/constants.mjs";
 import {
     createEmptyUnifiedCache,
-    normalizeUnifiedCache
-} from "./services/cache_store.mjs";
+    normalizeUnifiedCache,
+    UNIFIED_CACHE_KEY,
+    UNIFIED_CACHE_SCHEMA_VERSION
+} from "./platform/cache-store.mjs";
+import {
+    createScriptContext,
+    TRAKT_SCRIPT_TITLE
+} from "./platform/script-context.mjs";
 
-const TITLE = "Trakt增强";
-const $ = new Env(TITLE);
+const scriptContext = createScriptContext();
+const $ = scriptContext.env;
 const STRESS_TEST_KEY = "__trakt_cache_stress_test__";
 const CHUNK_SIZE_BYTES = 8 * 1024;
 const CHUNKS_PER_RUN = 64;
 const CHUNK_CHAR = "A";
+
 function ensureObject(value, fallback = {}) {
     return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
@@ -93,13 +95,13 @@ function buildStressTestEntry(previousEntry) {
 
     if (saved) {
         $.msg(
-            TITLE,
+            TRAKT_SCRIPT_TITLE,
             "缓存压力数据已追加 64 x 8KB",
             "当前测试块数: " + nextEntry.testChunkCount +
             " | 缓存大小: " + formatMB(beforeBytes) + " -> " + formatMB(afterBytes)
         );
     } else {
-        $.msg(TITLE, "缓存压力数据写入失败", "");
+        $.msg(TRAKT_SCRIPT_TITLE, "缓存压力数据写入失败", "");
     }
 
     $.done({});

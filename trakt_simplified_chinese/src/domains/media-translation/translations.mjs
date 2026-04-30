@@ -1,9 +1,8 @@
-import { isNotArray } from "../utils.mjs";
-import {
-    REQUIRED_TRANSLATION_FIELDS,
-    TRANSLATION_FALLBACK_REGIONS,
-    TRANSLATION_FIELDS
-} from "./constants.mjs";
+import { isNotArray } from "../../shared/common.mjs";
+
+const TRANSLATION_FIELDS = ["title", "overview", "tagline"];
+const REQUIRED_TRANSLATION_FIELDS = ["title", "overview"];
+const TRANSLATION_FALLBACK_REGIONS = ["sg", "tw", "hk"];
 
 const CACHE_STATUS = {
     FOUND: 1,
@@ -138,11 +137,9 @@ function pickCnTranslation(items) {
 
 function extractNormalizedTranslation(items) {
     const cnTranslation = pickCnTranslation(items);
-    const translation = normalizeTranslationPayload(cnTranslation);
-
     return {
         status: cnTranslation?.status ?? CACHE_STATUS.NOT_FOUND,
-        translation: translation
+        translation: normalizeTranslationPayload(cnTranslation)
     };
 }
 

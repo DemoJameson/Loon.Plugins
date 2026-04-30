@@ -3,7 +3,11 @@ import {
     isNonNullish,
     isNullish,
     isPlainObject
-} from "../utils.mjs";
+} from "../shared/common.mjs";
+
+const UNIFIED_CACHE_KEY = "dj_trakt_unified_cache";
+const UNIFIED_CACHE_SCHEMA_VERSION = 2;
+const UNIFIED_CACHE_MAX_BYTES = (1024 * 1024) - (8 * 1024);
 
 function createEmptyUnifiedCache(schemaVersion, maxBytes) {
     return {
@@ -80,11 +84,8 @@ function createCacheStore(options) {
         scriptContext,
         unifiedCacheKey,
         unifiedCacheSchemaVersion,
-        unifiedCacheMaxBytes,
-        legacyCacheKeys
+        unifiedCacheMaxBytes
     } = options;
-
-    let didClearLegacyCacheKeys = false;
 
     function estimateCacheBytes(value) {
         const serialized = scriptContext.env.toStr(value, "");
@@ -146,24 +147,7 @@ function createCacheStore(options) {
         }
     }
 
-    function clearLegacyCacheKeys() {
-        if (didClearLegacyCacheKeys) {
-            return;
-        }
-
-        didClearLegacyCacheKeys = true;
-        legacyCacheKeys.forEach((key) => {
-            try {
-                scriptContext.env.setdata(null, key);
-            } catch (e) {
-                scriptContext.log(`Trakt legacy cache clear failed for key=${key}: ${e}`);
-            }
-        });
-    }
-
     function loadUnifiedCache() {
-        clearLegacyCacheKeys();
-
         try {
             const cache = scriptContext.env.getjson(unifiedCacheKey, null);
             if (!isPlainObject(cache) || Number(cache.version) !== unifiedCacheSchemaVersion) {
@@ -327,5 +311,8 @@ export {
     createCacheStore,
     createEmptyUnifiedCache,
     normalizeUnifiedCache,
-    normalizeUpdatedAtEntryMap
+    normalizeUpdatedAtEntryMap,
+    UNIFIED_CACHE_KEY,
+    UNIFIED_CACHE_MAX_BYTES,
+    UNIFIED_CACHE_SCHEMA_VERSION
 };
