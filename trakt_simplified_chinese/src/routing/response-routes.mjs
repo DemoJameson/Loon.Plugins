@@ -61,9 +61,10 @@ function createResponsePhaseRoutes(handlers) {
         createRoute({ pattern: /^\/lists\/(trending|popular)$/i, id: "lists.trendingOrPopular", handler: invoke(handlers.handleList) }),
 
         createRoute({ pattern: /^\/recommendations\/(shows|movies)$/i, id: "recommendations.showsOrMovies", handler: invoke(handlers.handleDirectMediaList) }),
-        createRoute({ pattern: /^\/(shows|movies|media)\/popular(\/next)?$/i, id: "directMedia.popular", handler: invoke(handlers.handleDirectMediaList) }),
+        createRoute({ pattern: /^\/(shows|movies|media)\/popular$/i, id: "directMedia.popular", handler: invoke(handlers.handleDirectMediaList) }),
         createRoute({ pattern: /^\/movies\/boxoffice$/i, id: "movies.boxoffice", handler: invoke(handlers.handleDirectMediaList) }),
 
+        createRoute({ pattern: /^\/(shows|movies|media)\/popular\/next$/i, id: "wrapperMedia.popularNext", handler: invoke(handlers.handleWrapperMediaList) }),
         createRoute({ pattern: /^\/(shows|movies)\/watched\/monthly$/i, id: "media.watched.monthly", handler: invoke(handlers.handleWrapperMediaList) }),
         createRoute({ pattern: /^\/sync\/progress\/up_next_nitro$/i, id: "sync.progress.upNextNitro", handler: invoke(handlers.handleWrapperMediaList) }),
         createRoute({ pattern: /^\/sync\/playback\/movies$/i, id: "sync.playback.movies", handler: invoke(handlers.handleWrapperMediaList) }),
@@ -147,7 +148,7 @@ function createResponsePhaseRoutes(handlers) {
 
         createRoute({ pattern: /^\/shows\/[^/]+\/seasons\/\d+\/episodes\/\d+$/i, id: "shows.episode.summary", handler: invokeWithMediaType(handlers.mediaTypes.EPISODE) }),
 
-        createRoute({ pattern: /^\/people\/[^/]+$/i, id: "people.summary", handler: invoke(handlers.handlePeopleDetail) })
+        createRoute({ pattern: /^\/people\/[a-z0-9-]+$/i, id: "people.summary", handler: invoke(handlers.handlePeopleDetail) })
     ];
 }
 

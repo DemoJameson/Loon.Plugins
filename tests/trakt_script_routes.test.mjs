@@ -41,6 +41,27 @@ function createShowPersistentData() {
     });
 }
 
+function createMixedDirectMediaPersistentData() {
+    return createUnifiedPersistentData({
+        traktTranslation: {
+            "movie:123": createMediaTranslationEntry({
+                translation: {
+                    title: "中文电影",
+                    overview: "中文电影简介",
+                    tagline: "中文电影标语"
+                }
+            }),
+            "show:456": createMediaTranslationEntry({
+                translation: {
+                    title: "中文剧名",
+                    overview: "中文剧集简介",
+                    tagline: "中文剧集标语"
+                }
+            })
+        }
+    });
+}
+
 function createEpisodePersistentData() {
     return createUnifiedPersistentData({
         traktTranslation: {
@@ -333,6 +354,39 @@ test("handleDirectMediaList 按 direct summary 路由分组生效", async (t) =>
             persistentData: createShowPersistentData(),
             assertPayload(payload) {
                 assert.equal(payload[0].title, "中文剧名");
+            }
+        },
+        {
+            name: "mixed direct media summary",
+            url: "https://api.trakt.tv/media/popular",
+            body: JSON.stringify([
+                JSON.parse(createDirectMovieBody())[0],
+                JSON.parse(createDirectShowBody())[0]
+            ]),
+            persistentData: createMixedDirectMediaPersistentData(),
+            assertPayload(payload) {
+                assert.equal(payload[0].title, "中文电影");
+                assert.equal(payload[1].title, "中文剧名");
+            }
+        },
+        {
+            name: "mixed direct media summary with unknown item",
+            url: "https://api.trakt.tv/media/popular",
+            body: JSON.stringify([
+                JSON.parse(createDirectMovieBody())[0],
+                {
+                    title: "Unknown Media",
+                    ids: {
+                        trakt: 999
+                    }
+                },
+                JSON.parse(createDirectShowBody())[0]
+            ]),
+            persistentData: createMixedDirectMediaPersistentData(),
+            assertPayload(payload) {
+                assert.equal(payload[0].title, "中文电影");
+                assert.equal(payload[1].title, "Unknown Media");
+                assert.equal(payload[2].title, "中文剧名");
             }
         },
         {
@@ -899,6 +953,8 @@ test("handleSeasonEpisodesList 覆盖 /shows/:id/seasons 路由", async () => {
 test("response phase migrated conditions 逐条覆盖且互斥", () => {
     const routes = createResponseRouteStubs();
     const cases = [
+        ["directMedia.popular", "https://api.trakt.tv/shows/popular"],
+        ["wrapperMedia.popularNext", "https://api.trakt.tv/media/popular/next"],
         ["users.settings", "https://api.trakt.tv/users/settings"],
         ["tmdb.watchProviders", "https://api.themoviedb.org/3/watch/providers/movie"],
         ["tmdb.watchProviders", "https://api.themoviedb.org/3/watch/providers/tv"],

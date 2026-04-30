@@ -31,6 +31,8 @@ const DIRECT_MEDIA_TYPE_MOVIE_STATUSES = [
     "in production"
 ];
 
+const DIRECT_MEDIA_ORIGINAL_KEY = "__directOriginal";
+
 function createMediaTranslationHandlers(deps) {
     const {
         scriptContext,
@@ -266,48 +268,24 @@ function createMediaTranslationHandlers(deps) {
         return isNonNullish(item.tagline) ? MEDIA_TYPE.MOVIE : null;
     }
 
-    function resolveForcedDirectMediaType(arr) {
-        if (isNotArray(arr) || arr.length === 0) {
-            return null;
-        }
-
-        let showCount = 0;
-        let movieCount = 0;
-        arr.forEach((item) => {
-            const mediaType = resolveDirectMediaTypeFromItem(item);
-            if (mediaType === MEDIA_TYPE.SHOW) {
-                showCount += 1;
-            } else if (mediaType === MEDIA_TYPE.MOVIE) {
-                movieCount += 1;
-            }
-        });
-
-        if (showCount > 0 && movieCount === 0) {
-            return MEDIA_TYPE.SHOW;
-        }
-        if (movieCount > 0 && showCount === 0) {
-            return MEDIA_TYPE.MOVIE;
-        }
-        return null;
-    }
-
-    function wrapDirectMediaItems(arr, mediaType) {
-        if (!mediaType) {
-            return null;
-        }
-
+    function wrapDirectMediaItems(arr) {
         const wrapped = [];
         for (const item of arr) {
-            if (!isPlainObject(item) || isNullish(item?.ids?.trakt)) {
-                return null;
-            }
-            wrapped.push({ [mediaType]: item });
+            const mediaType = resolveDirectMediaTypeFromItem(item);
+            wrapped.push(mediaType ? { [mediaType]: item } : { [DIRECT_MEDIA_ORIGINAL_KEY]: item });
         }
         return wrapped;
     }
 
-    function unwrapDirectMediaItems(arr, mediaType) {
-        return mediaType ? arr.map((item) => item?.[mediaType] ?? item) : arr;
+    function unwrapDirectMediaItems(arr) {
+        return arr.map((item) => {
+            for (const mediaType of Object.keys(mediaConfig)) {
+                if (item?.[mediaType]) {
+                    return item[mediaType];
+                }
+            }
+            return item?.[DIRECT_MEDIA_ORIGINAL_KEY] ?? item;
+        });
     }
 
     async function processWrappedMediaItems(logLabel, sourceBody) {
@@ -328,16 +306,9 @@ function createMediaTranslationHandlers(deps) {
             return;
         }
 
-        const directMediaType = resolveForcedDirectMediaType(parsed);
-        const wrappedItems = wrapDirectMediaItems(parsed, directMediaType);
-        if (!wrappedItems) {
-            await translateMediaItemsInPlace(parsed, logLabel);
-            scriptContext.done({ body: JSON.stringify(parsed) });
-            return;
-        }
-
+        const wrappedItems = wrapDirectMediaItems(parsed);
         await translateMediaItemsInPlace(wrappedItems, logLabel);
-        scriptContext.done({ body: JSON.stringify(unwrapDirectMediaItems(wrappedItems, directMediaType)) });
+        scriptContext.done({ body: JSON.stringify(unwrapDirectMediaItems(wrappedItems)) });
     }
 
     async function handleWrapperMediaList(logLabel, bodyOverride) {

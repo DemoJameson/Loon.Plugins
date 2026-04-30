@@ -834,6 +834,29 @@ test("live script: response route coverage matrix covers all response phase rout
             }
         },
         {
+            url: "https://api.trakt.tv/search/person?query=tom",
+            body: JSON.stringify([
+                {
+                    type: "person",
+                    score: 1,
+                    person: {
+                        name: "Tom Hanks",
+                        biography: "An American actor and filmmaker.",
+                        ids: {
+                            trakt: 42
+                        }
+                    }
+                }
+            ]),
+            persistentData: createUnifiedPersistentData({
+                googlePeople: JSON.parse(createPeopleTranslationCache())
+            }),
+            assertPayload(payload) {
+                assert.match(payload[0].person.name, /^汤姆·汉克斯/);
+                assert.equal(payload[0].person.biography, "一位美国演员和电影制作人。");
+            }
+        },
+        {
             url: "https://api.trakt.tv/lists/popular",
             body: JSON.stringify([
                 {
@@ -1017,6 +1040,25 @@ test("live script: response route coverage matrix covers all response phase rout
             assertPayload(payload) {
                 const show = Array.isArray(payload.cast) ? payload.cast[0]?.show : null;
                 assert.equal(show?.title, "覆盖中文剧集");
+            }
+        },
+        {
+            url: "https://api.trakt.tv/people/this_month",
+            body: JSON.stringify([
+                {
+                    name: "Tom Hanks",
+                    biography: "An American actor and filmmaker.",
+                    ids: {
+                        trakt: 42
+                    }
+                }
+            ]),
+            persistentData: createUnifiedPersistentData({
+                googlePeople: JSON.parse(createPeopleTranslationCache())
+            }),
+            assertPayload(payload) {
+                assert.match(payload[0].name, /^汤姆·汉克斯/);
+                assert.equal(payload[0].biography, "一位美国演员和电影制作人。");
             }
         },
         {
