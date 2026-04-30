@@ -1,13 +1,15 @@
 import { Env } from "../../scripts/vendor/Env.module.mjs";
 import {
+    UNIFIED_CACHE_KEY,
+    UNIFIED_CACHE_SCHEMA_VERSION
+} from "./core/constants.mjs";
+import {
     createEmptyUnifiedCache,
     normalizeUnifiedCache
 } from "./services/cache_store.mjs";
 
 const TITLE = "Trakt增强";
 const $ = new Env(TITLE);
-const CACHE_KEY = "dj_trakt_unified_cache";
-const CACHE_SCHEMA_VERSION = 1;
 const STRESS_TEST_KEY = "__trakt_cache_stress_test__";
 const CHUNK_SIZE_BYTES = 8 * 1024;
 const CHUNKS_PER_RUN = 64;
@@ -18,17 +20,17 @@ function ensureObject(value, fallback = {}) {
 
 function loadCache() {
     try {
-        return normalizeUnifiedCache($.getjson(CACHE_KEY, {}), CACHE_SCHEMA_VERSION, null);
+        return normalizeUnifiedCache($.getjson(UNIFIED_CACHE_KEY, {}), UNIFIED_CACHE_SCHEMA_VERSION, null);
     } catch (e) {
         $.log("Trakt cache load failed: " + e);
-        return createEmptyUnifiedCache(CACHE_SCHEMA_VERSION, null);
+        return createEmptyUnifiedCache(UNIFIED_CACHE_SCHEMA_VERSION, null);
     }
 }
 
 function saveCache(cache) {
     try {
         cache.updatedAt = Date.now();
-        return $.setjson(cache, CACHE_KEY);
+        return $.setjson(cache, UNIFIED_CACHE_KEY);
     } catch (e) {
         $.log("Trakt cache save failed: " + e);
         return false;

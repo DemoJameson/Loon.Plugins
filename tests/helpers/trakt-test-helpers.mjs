@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+    UNIFIED_CACHE_KEY,
+    UNIFIED_CACHE_MAX_BYTES,
+    UNIFIED_CACHE_SCHEMA_VERSION
+} from "../../trakt_simplified_chinese/src/core/constants.mjs";
 import { runScript } from "./run-script.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const UNIFIED_CACHE_KEY = "dj_trakt_unified_cache";
-const UNIFIED_CACHE_SCHEMA_VERSION = 1;
-const UNIFIED_CACHE_MAX_BYTES = (1024 * 1024) - (8 * 1024);
 
 function readFixture(name) {
     return fs.readFileSync(path.resolve(__dirname, "..", "fixtures", "trakt", name), "utf8");
@@ -57,7 +59,7 @@ function createUnifiedCache(overrides = {}) {
             comments: overrides.googleComments ?? {},
             sentiments: overrides.googleSentiments ?? {},
             people: overrides.googlePeople ?? {},
-            listText: overrides.googleListText ?? {}
+            list: overrides.googleList ?? {}
         },
         persistent: {
             currentSeason: overrides.persistentCurrentSeason ?? null
@@ -112,7 +114,7 @@ function createCommentTranslationCache(overrides = {}) {
     });
 }
 
-function createListTextTranslationCache(overrides = {}) {
+function createListTranslationCache(overrides = {}) {
     return JSON.stringify({
         "321": {
             description: {
@@ -257,7 +259,7 @@ export {
     createMovieTranslationCache,
     createPeopleTranslationCache,
     createCommentTranslationCache,
-    createListTextTranslationCache,
+    createListTranslationCache,
     createSentimentTranslationCache,
     createWatchnowIdsEntry,
     createEpisodeWatchnowIdsEntry,

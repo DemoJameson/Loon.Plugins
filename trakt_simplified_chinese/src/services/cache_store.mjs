@@ -19,7 +19,7 @@ function createEmptyUnifiedCache(schemaVersion, maxBytes) {
             comments: {},
             sentiments: {},
             people: {},
-            listText: {}
+            list: {}
         },
         persistent: {
             currentSeason: null
@@ -65,7 +65,7 @@ function normalizeUnifiedCache(rawCache, schemaVersion, maxBytes) {
     nextCache.google.comments = normalizeUpdatedAtEntryMap(googleCache.comments);
     nextCache.google.sentiments = normalizeUpdatedAtEntryMap(googleCache.sentiments);
     nextCache.google.people = normalizeUpdatedAtEntryMap(googleCache.people);
-    nextCache.google.listText = normalizeUpdatedAtEntryMap(googleCache.listText);
+    nextCache.google.list = normalizeUpdatedAtEntryMap(googleCache.list);
 
     const persistentCache = ensureObject(cache.persistent);
     nextCache.persistent.currentSeason = isPlainObject(persistentCache.currentSeason)
@@ -105,7 +105,7 @@ function createCacheStore(options) {
             ["google", "comments"],
             ["google", "sentiments"],
             ["google", "people"],
-            ["google", "listText"]
+            ["google", "list"]
         ].forEach(([scope, bucket]) => {
             const entries = ensureObject(nextCache?.[scope]?.[bucket]);
             Object.keys(entries).forEach((key) => {
@@ -246,13 +246,13 @@ function createCacheStore(options) {
         saveUnifiedCache(unifiedCache);
     }
 
-    function loadListTextTranslationCache() {
-        return ensureObject(loadUnifiedCache().google.listText);
+    function loadListTranslationCache() {
+        return ensureObject(loadUnifiedCache().google.list);
     }
 
-    function saveListTextTranslationCache(cache) {
+    function saveListTranslationCache(cache) {
         const unifiedCache = loadUnifiedCache();
-        unifiedCache.google.listText = normalizeUpdatedAtEntryMap(cache);
+        unifiedCache.google.list = normalizeUpdatedAtEntryMap(cache);
         saveUnifiedCache(unifiedCache);
     }
 
@@ -305,7 +305,7 @@ function createCacheStore(options) {
         loadCommentTranslationCache,
         loadHistoryEpisodeCache,
         loadLinkIdsCache,
-        loadListTextTranslationCache,
+        loadListTranslationCache,
         loadPeopleTranslationCache,
         loadSentimentTranslationCache,
         loadUnifiedCache,
@@ -315,7 +315,7 @@ function createCacheStore(options) {
         saveCommentTranslationCache,
         saveHistoryEpisodeCache,
         saveLinkIdsCache,
-        saveListTextTranslationCache,
+        saveListTranslationCache,
         savePeopleTranslationCache,
         saveSentimentTranslationCache,
         saveUnifiedCache,

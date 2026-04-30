@@ -8,7 +8,7 @@ import {
     createMediaTranslationCache,
     createMediaTranslationEntry,
     createCommentTranslationCache,
-    createListTextTranslationCache,
+    createListTranslationCache,
     createSentimentTranslationCache,
     createUnifiedPersistentData,
     parseUnifiedCache,
@@ -248,7 +248,7 @@ test("统一缓存 version 不匹配时会清空旧内容并重建后正常写�
     });
 
     const unifiedCache = parseUnifiedCache(persistentData);
-    assert.equal(unifiedCache.version, 1);
+    assert.equal(unifiedCache.version, 2);
     assert.equal(unifiedCache.trakt.translation["movie:123"].translation.title, "港版标题");
 });
 
@@ -594,7 +594,7 @@ test("list descriptions 会应用缓存中的描述翻译", async () => {
         url: "https://api.trakt.tv/movies/123/lists/popular",
         body: readFixture("list-descriptions.json"),
         persistentData: createUnifiedPersistentData({
-            googleListText: JSON.parse(createListTextTranslationCache())
+            googleList: JSON.parse(createListTranslationCache())
         })
     });
 
@@ -603,7 +603,7 @@ test("list descriptions 会应用缓存中的描述翻译", async () => {
 });
 
 test("googleTranslationEnabled=false 时 list descriptions 不触发 Google 翻译，但仍可应用缓存", async () => {
-    const cachedListText = JSON.parse(createListTextTranslationCache({
+    const cachedList = JSON.parse(createListTranslationCache({
         "321": {
             name: {
                 sourceTextHash: computeStringHash("Favorites"),
@@ -622,14 +622,14 @@ test("googleTranslationEnabled=false 时 list descriptions 不触发 Google 翻�
             googleTranslationEnabled: false
         },
         persistentData: createUnifiedPersistentData({
-            googleListText: cachedListText
+            googleList: cachedList
         })
     });
 
     const payload = JSON.parse(result.body);
     assert.equal(payload[0].name, "收藏夹");
     assert.equal(payload[0].description, "一个不错的列表");
-    const cache = parseUnifiedCache(persistentData).google.listText;
+    const cache = parseUnifiedCache(persistentData).google.list;
     assert.equal(cache["321"].name.translatedText, "收藏夹");
     assert.equal(cache["321"].description.translatedText, "一个不错的列表");
     assert.equal(httpLogs.some((entry) => entry.method === "POST" && entry.url === GOOGLE_TRANSLATE_URL), false);
@@ -650,7 +650,7 @@ test("list descriptions 会翻译未命中的描述并写回缓存", async () =>
     const payload = JSON.parse(result.body);
     assert.equal(payload[0].description, "一个不错的列表");
 
-    const cache = parseUnifiedCache(persistentData).google.listText;
+    const cache = parseUnifiedCache(persistentData).google.list;
     assert.equal(cache["321"].description.translatedText, "一个不错的列表");
     assert.equal(cache["321"].description.sourceTextHash, computeStringHash("A good list"));
 });
@@ -660,7 +660,7 @@ test("list descriptions 遇到 hash 不匹配的旧缓存时会忽略旧值并�
         url: "https://api.trakt.tv/movies/123/lists/popular",
         body: readFixture("list-descriptions.json"),
         persistentData: createUnifiedPersistentData({
-            googleListText: JSON.parse(createListTextTranslationCache({
+            googleList: JSON.parse(createListTranslationCache({
                 "321": {
                     description: {
                         sourceTextHash: "deadbeef",
@@ -680,7 +680,7 @@ test("list descriptions 遇到 hash 不匹配的旧缓存时会忽略旧值并�
     const payload = JSON.parse(result.body);
     assert.equal(payload[0].description, "一个不错的列表");
 
-    const cache = parseUnifiedCache(persistentData).google.listText;
+    const cache = parseUnifiedCache(persistentData).google.list;
     assert.equal(cache["321"].description.translatedText, "一个不错的列表");
     assert.equal(cache["321"].description.sourceTextHash, computeStringHash("A good list"));
 });
@@ -733,7 +733,7 @@ test("list descriptions 会批量翻译多个非中文描述并跳过已是中�
     assert.equal(payload[1].description, "优秀列表");
     assert.equal(payload[2].description, "已经是中文描述");
 
-    const cache = parseUnifiedCache(persistentData).google.listText;
+    const cache = parseUnifiedCache(persistentData).google.list;
     assert.equal(cache["321"].description.translatedText, "一个不错的列表");
     assert.equal(cache["322"].description.translatedText, "优秀列表");
     assert.equal(cache["323"], undefined);
@@ -772,7 +772,7 @@ test("list descriptions 在部分翻译结果为空时只更新成功项并保�
     assert.equal(payload[0].description, "一个不错的列表");
     assert.equal(payload[1].description, "Needs more detail");
 
-    const cache = parseUnifiedCache(persistentData).google.listText;
+    const cache = parseUnifiedCache(persistentData).google.list;
     assert.equal(cache["321"].description.translatedText, "一个不错的列表");
     assert.equal(cache["322"], undefined);
 });
@@ -789,7 +789,7 @@ createGoogleFailureCases().forEach(({ name, mock }) => {
 
         const payload = JSON.parse(result.body);
         assert.equal(payload[0].description, "A good list");
-        assert.deepEqual(parseUnifiedCache(persistentData).google.listText, {});
+        assert.deepEqual(parseUnifiedCache(persistentData).google.list, {});
     });
 });
 
@@ -804,7 +804,7 @@ test("list descriptions 在 Google 返回空翻译结果时会保留原描述且
 
     const payload = JSON.parse(result.body);
     assert.equal(payload[0].description, "A good list");
-    assert.deepEqual(parseUnifiedCache(persistentData).google.listText, {});
+    assert.deepEqual(parseUnifiedCache(persistentData).google.list, {});
 });
 
 test("sentiments 会应用缓存中的翻译结果", async () => {

@@ -22,7 +22,10 @@ import {
     GOOGLE_TRANSLATE_BATCH_SIZE,
     REQUEST_BATCH_SIZE,
     SEASON_EPISODE_TRANSLATION_LIMIT,
-    TRAKT_DIRECT_TRANSLATION_MAX_REFS
+    TRAKT_DIRECT_TRANSLATION_MAX_REFS,
+    UNIFIED_CACHE_KEY,
+    UNIFIED_CACHE_MAX_BYTES,
+    UNIFIED_CACHE_SCHEMA_VERSION
 } from "./core/constants.mjs";
 import {
     CACHE_STATUS,
@@ -61,13 +64,13 @@ import { createScriptContext } from "./runtime/script_context.mjs";
 import { createHttpClient } from "./runtime/http_client.mjs";
 import { createCacheStore } from "./services/cache_store.mjs";
 import { createRequestPhaseRoutes } from "./routes/request_phase.mjs";
-import { createResponsePhaseRoutes } from "./routes/response_phase.mjs";
+import {
+    createResponsePhaseRoutes,
+    createResponseRouteContext
+} from "./routes/response_phase.mjs";
 
 const scriptContext = createScriptContext("Trakt增强");
 const $ = scriptContext.env;
-const UNIFIED_CACHE_KEY = "dj_trakt_unified_cache";
-const UNIFIED_CACHE_SCHEMA_VERSION = 1;
-const UNIFIED_CACHE_MAX_BYTES = (1024 * 1024) - (8 * 1024);
 const LEGACY_CACHE_KEYS = [
     "trakt_zh_cn_cache_v2",
     "trakt_current_season",
@@ -86,7 +89,6 @@ const FILM_SHOW_RATINGS_API_BASE_URL = "https://film-show-ratings.p.rapidapi.com
 const FILM_SHOW_RATINGS_RAPIDAPI_HOST = "film-show-ratings.p.rapidapi.com";
 const WATCHNOW_REDIRECT_URL = "https://loon-plugins.demojameson.de5.net/api/redirect";
 const SHORTCUTS_OPENLINK_URL = `shortcuts://run-shortcut?name=${encodeURIComponent("打开链接")}&input=text&text=`;
-// 配套快捷指令 https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d
 const DEFAULT_BACKEND_BASE_URL = "https://loon-plugins.demojameson.de5.net";
 const BOXJS_CONFIG_KEY = "dj_trakt_boxjs_configs";
 const TMDB_LOGO_TARGET_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images";
@@ -203,7 +205,7 @@ const {
     loadCommentTranslationCache,
     loadHistoryEpisodeCache,
     loadLinkIdsCache,
-    loadListTextTranslationCache,
+    loadListTranslationCache,
     loadPeopleTranslationCache,
     loadSentimentTranslationCache,
     loadUnifiedCache,
@@ -212,7 +214,7 @@ const {
     saveCommentTranslationCache,
     saveHistoryEpisodeCache,
     saveLinkIdsCache,
-    saveListTextTranslationCache,
+    saveListTranslationCache,
     savePeopleTranslationCache,
     saveSentimentTranslationCache,
     saveUnifiedCache,
@@ -1790,14 +1792,14 @@ async function translateListTextGroup(items, sourceLanguage, cache) {
     });
 }
 
-async function handleListDescriptions() {
+async function handleList() {
     const lists = JSON.parse(body);
     if (isNotArray(lists) || lists.length === 0) {
         $.done({});
         return;
     }
 
-    const cache = loadListTextTranslationCache();
+    const cache = loadListTranslationCache();
     const groups = collectListTextTranslationGroups(lists, cache);
     const languages = Object.keys(groups);
 
@@ -1811,7 +1813,7 @@ async function handleListDescriptions() {
         }
     }
 
-    saveListTextTranslationCache(cache);
+    saveListTranslationCache(cache);
     $.done({ body: JSON.stringify(lists) });
 }
 
@@ -3114,22 +3116,38 @@ function unwrapDirectMediaItems(arr, mediaType) {
     return arr.map((item) => item?.[mediaType] ?? item);
 }
 
-async function processMediaList(logLabel, sourceBody) {
+async function processWrappedMediaItems(logLabel, sourceBody) {
     const parsed = JSON.parse(sourceBody);
     if (isNotArray(parsed) || parsed.length === 0) {
         return sourceBody;
     }
 
-    const directMediaType = resolveForcedDirectMediaType(parsed);
-    const arr = wrapDirectMediaItems(parsed, directMediaType) ?? parsed;
-
-    await translateMediaItemsInPlace(arr, logLabel);
-    return JSON.stringify(unwrapDirectMediaItems(arr, directMediaType));
+    await translateMediaItemsInPlace(parsed, logLabel);
+    return JSON.stringify(parsed);
 }
 
-async function handleMediaList(logLabel, bodyOverride) {
+async function handleDirectMediaList(logLabel, bodyOverride) {
     const sourceBody = isNonNullish(bodyOverride) ? bodyOverride : body;
-    $.done({ body: await processMediaList(logLabel, sourceBody) });
+    const parsed = JSON.parse(sourceBody);
+    if (isNotArray(parsed) || parsed.length === 0) {
+        $.done({ body: sourceBody });
+        return;
+    }
+
+    const directMediaType = resolveForcedDirectMediaType(parsed);
+    const wrappedItems = wrapDirectMediaItems(parsed, directMediaType);
+    if (!wrappedItems) {
+        $.done({ body: sourceBody });
+        return;
+    }
+
+    await translateMediaItemsInPlace(wrappedItems, logLabel);
+    $.done({ body: JSON.stringify(unwrapDirectMediaItems(wrappedItems, directMediaType)) });
+}
+
+async function handleWrapperMediaList(logLabel, bodyOverride) {
+    const sourceBody = isNonNullish(bodyOverride) ? bodyOverride : body;
+    $.done({ body: await processWrappedMediaItems(logLabel, sourceBody) });
 }
 
 async function handlePersonMediaCreditsList(logLabel) {
@@ -3153,7 +3171,7 @@ async function handlePersonMediaCreditsList(logLabel) {
     $.done({ body: JSON.stringify(data) });
 }
 
-async function handleMir() {
+async function handleMonthlyReview() {
     const data = JSON.parse(body);
     if (!isPlainObject(data)) {
         $.done({});
@@ -3171,7 +3189,7 @@ async function handleMir() {
         return;
     }
 
-    const translated = JSON.parse(await processMediaList("mir", JSON.stringify([firstWatched])));
+    const translated = JSON.parse(await processWrappedMediaItems("mir", JSON.stringify([firstWatched])));
     const translatedItem = isArray(translated) ? translated[0] : null;
     if (!translatedItem || typeof translatedItem !== "object") {
         $.done({});
@@ -3547,7 +3565,7 @@ async function getProcessedHistoryEpisodesBody() {
 
 async function handleHistoryEpisodeList() {
     const historyBody = await getProcessedHistoryEpisodesBody();
-    await handleMediaList("history episode", historyBody);
+    await handleWrapperMediaList("history episode", historyBody);
 }
 
 function isRequest() {
@@ -3600,97 +3618,37 @@ async function handleResponseRoute(url) {
     }
 
     const routes = createResponsePhaseRoutes({
+        handleDirectMediaList,
         handleHistoryEpisodeList,
-        handleListDescriptions,
-        handleMediaList,
-        handleMir,
+        handleList,
+        handleComments,
+        handleMediaDetail,
+        handleMediaPeopleList,
+        handleMonthlyReview: handleMonthlyReview,
+        handlePeopleDetail,
         handlePersonMediaCreditsList,
-        handleRecentCommentsList
+        handleRecentCommentsList,
+        handleSeasonEpisodesList,
+        handleSentiments,
+        handleSofaTimeCountries,
+        handleSofaTimeStreamingAvailability,
+        handleTmdbProviderCatalog,
+        handleTranslations,
+        handleUserSettings,
+        handleWatchnow,
+        handleWatchnowSources,
+        handleWrapperMediaList,
+        mediaTypes: MEDIA_TYPE
     });
 
+    const routeContext = createResponseRouteContext(url);
     for (let i = 0; i < routes.length; i += 1) {
         const route = routes[i];
-        if (route.pattern.test(normalizeUrlPath(url))) {
-            await route.handler();
+        const matched = route.match(routeContext);
+        if (matched) {
+            await route.handler(matched, routeContext);
             return true;
         }
-    }
-
-    if (/^\/users\/settings$/.test(requestPath)) {
-        handleUserSettings();
-        return true;
-    }
-
-    if (isUrlFromHost(requestUrl, "api.themoviedb.org") &&
-        /^\/3\/watch\/providers\/(?:movie|tv)$/i.test(requestPath)) {
-        handleTmdbProviderCatalog();
-        return true;
-    }
-
-    if (isUrlFromHost(requestUrl, "streaming-availability.p.rapidapi.com") &&
-        /^\/shows\/tt\d+$/i.test(requestPath)) {
-        await handleSofaTimeStreamingAvailability();
-        return true;
-    }
-
-    if (isStreamingAvailabilityCountriesRequest(requestUrl)) {
-        handleSofaTimeCountries();
-        return true;
-    }
-
-    if (/^\/watchnow\/sources$/.test(requestPath)) {
-        handleWatchnowSources();
-        return true;
-    }
-
-    if (/^\/(?:shows|movies)\/[^/]+\/people$/i.test(requestPath) ||
-        /^\/shows\/[^/]+\/seasons\/\d+\/episodes\/\d+\/people$/i.test(requestPath)) {
-        await handleMediaPeopleList();
-        return true;
-    }
-
-    if (/^\/(?:movies|shows)\/[^/]+\/comments\/[^/]+$/i.test(requestPath) ||
-        /^\/shows\/[^/]+\/seasons\/\d+\/episodes\/\d+\/comments\/[^/]+$/i.test(requestPath) ||
-        /^\/comments\/\d+\/replies$/i.test(requestPath)) {
-        await handleComments();
-        return true;
-    }
-
-    if (/^\/(?:v3\/)?media\/(?:movie|show)\/\d+\/info\/\d+\/version\/\d+$/i.test(requestPath) ||
-        /^\/(?:shows|movies)\/\d+\/sentiments$/i.test(requestPath)) {
-        await handleSentiments();
-        return true;
-    }
-
-    if (/^\/(?:movies|shows|episodes)\/\d+\/watchnow$/.test(requestPath)) {
-        await handleWatchnow();
-        return true;
-    }
-
-    if (/^\/shows\/[^/]+\/seasons$/.test(requestPath)) {
-        await handleSeasonEpisodesList();
-        return true;
-    }
-
-    const mediaDetailMatch = requestPath.match(/^\/(shows|movies)\/[^/]+$/);
-    if (mediaDetailMatch) {
-        await handleMediaDetail(mediaDetailMatch[1] === "shows" ? MEDIA_TYPE.SHOW : MEDIA_TYPE.MOVIE);
-        return true;
-    }
-
-    if (/^\/shows\/[^/]+\/seasons\/\d+\/episodes\/\d+$/.test(requestPath)) {
-        await handleMediaDetail(MEDIA_TYPE.EPISODE);
-        return true;
-    }
-
-    if (/^\/people\/[^/]+$/i.test(requestPath)) {
-        await handlePeopleDetail();
-        return true;
-    }
-
-    if (/\/translations\/zh$/.test(requestPath)) {
-        handleTranslations();
-        return true;
     }
 
     return false;
