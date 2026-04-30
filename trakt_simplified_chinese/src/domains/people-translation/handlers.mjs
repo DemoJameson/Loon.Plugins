@@ -9,6 +9,12 @@ import {
     isPlainObject
 } from "../../shared/common.mjs";
 
+const PEOPLE_NAME_SOURCE = {
+    TMDB: "tmdb",
+    GOOGLE: "google"
+};
+const PEOPLE_LIST_ORIGINAL_NAME_KEY = "__traktOriginalName";
+
 function createPeopleHandlers(deps) {
     const {
         scriptContext,
@@ -25,6 +31,10 @@ function createPeopleHandlers(deps) {
         fetchTmdbCredits,
         fetchTmdbPerson
     } = deps;
+
+    function isRipppleUserAgent() {
+        return /^Rippple/i.test(scriptContext.getUserAgent());
+    }
 
     function getPeopleTranslationCacheEntry(cache, personId) {
         if (!cache || isNullish(personId)) {
@@ -45,17 +55,21 @@ function createPeopleHandlers(deps) {
         const nextEntry = isPlainObject(currentEntry) ? { ...currentEntry } : {};
 
         if (isPlainObject(payload.name)) {
-            nextEntry.name = {
-                sourceText: String(payload.name.sourceText ?? ""),
-                translatedText: String(payload.name.translatedText ?? "")
-            };
+            const nextNameEntry = buildPersonNameCacheEntry(payload.name);
+            const currentNameEntry = getValidPersonNameCacheEntry(currentEntry);
+            if (nextNameEntry && shouldUpdatePersonNameCache(currentNameEntry, nextNameEntry)) {
+                nextEntry.name = nextNameEntry;
+            }
         }
 
         if (isPlainObject(payload.biography)) {
-            nextEntry.biography = {
+            const nextBiographyEntry = {
                 sourceTextHash: String(payload.biography.sourceTextHash ?? ""),
                 translatedText: String(payload.biography.translatedText ?? "")
             };
+            if (JSON.stringify(ensureObject(currentEntry?.biography)) !== JSON.stringify(nextBiographyEntry)) {
+                nextEntry.biography = nextBiographyEntry;
+            }
         }
 
         if (currentEntry && JSON.stringify(currentEntry) === JSON.stringify(nextEntry)) {
@@ -119,13 +133,85 @@ function createPeopleHandlers(deps) {
         return null;
     }
 
+    function collectPeopleCollectionItems(data) {
+        return ensureArray(data).reduce((items, entry) => {
+            if (isPlainObject(entry?.person)) {
+                items.push({
+                    person: entry.person
+                });
+                return items;
+            }
+
+            if (isPlainObject(entry) && isPlainObject(entry.ids) && String(entry.name ?? "").trim()) {
+                items.push({
+                    person: entry
+                });
+            }
+
+            return items;
+        }, []);
+    }
+
+    function isSupportedPersonNameSource(source) {
+        return source === PEOPLE_NAME_SOURCE.TMDB || source === PEOPLE_NAME_SOURCE.GOOGLE;
+    }
+
+    function buildPersonNameCacheEntry(payload) {
+        const sourceTextHash = String(payload?.sourceTextHash ?? "").trim();
+        const translatedText = String(payload?.translatedText ?? "").trim();
+        const source = String(payload?.source ?? "").trim();
+        if (!sourceTextHash || !translatedText || !isSupportedPersonNameSource(source)) {
+            return null;
+        }
+
+        return {
+            sourceTextHash,
+            translatedText,
+            source
+        };
+    }
+
+    function getValidPersonNameCacheEntry(entry) {
+        return buildPersonNameCacheEntry(entry?.name);
+    }
+
+    function shouldUpdatePersonNameCache(currentNameEntry, nextNameEntry) {
+        if (!nextNameEntry) {
+            return false;
+        }
+
+        if (!currentNameEntry) {
+            return true;
+        }
+
+        if (
+            currentNameEntry.source === PEOPLE_NAME_SOURCE.GOOGLE &&
+            nextNameEntry.source === PEOPLE_NAME_SOURCE.TMDB
+        ) {
+            return true;
+        }
+
+        if (
+            currentNameEntry.source === PEOPLE_NAME_SOURCE.TMDB &&
+            nextNameEntry.source === PEOPLE_NAME_SOURCE.GOOGLE
+        ) {
+            return false;
+        }
+
+        return (
+            currentNameEntry.sourceTextHash !== nextNameEntry.sourceTextHash ||
+            currentNameEntry.translatedText !== nextNameEntry.translatedText ||
+            currentNameEntry.source !== nextNameEntry.source
+        );
+    }
+
     function getCachedPersonNameTranslation(entry, sourceText) {
-        const cachedName = ensureObject(entry?.name);
-        if (!cachedName.translatedText) {
+        const cachedName = getValidPersonNameCacheEntry(entry);
+        if (!cachedName) {
             return "";
         }
 
-        return String(cachedName.sourceText ?? "") === String(sourceText ?? "")
+        return String(cachedName.sourceTextHash ?? "") === computeStringHash(sourceText)
             ? String(cachedName.translatedText)
             : "";
     }
@@ -143,6 +229,24 @@ function createPeopleHandlers(deps) {
         }
 
         return `${translated}\n${original}`;
+    }
+
+    function rememberPeopleListOriginalName(person, originalName) {
+        if (!isPlainObject(person) || !originalName) {
+            return;
+        }
+
+        Object.defineProperty(person, PEOPLE_LIST_ORIGINAL_NAME_KEY, {
+            value: originalName,
+            configurable: true,
+            enumerable: false,
+            writable: true
+        });
+    }
+
+    function getPeopleListOriginalName(person) {
+        const originalName = String(person?.[PEOPLE_LIST_ORIGINAL_NAME_KEY] ?? "").trim();
+        return originalName || String(person?.name ?? "").trim();
     }
 
     function getCachedPersonBiographyTranslation(entry, sourceText) {
@@ -210,14 +314,26 @@ function createPeopleHandlers(deps) {
                 return;
             }
 
-            const cachedName = getPersonTranslationCacheKeys(person)
-                .map((personKey) => getCachedPersonNameTranslation(getPeopleTranslationCacheEntry(cache, personKey), originalName))
+            rememberPeopleListOriginalName(person, originalName);
+
+            const cacheEntries = getPersonTranslationCacheKeys(person)
+                .map((personKey) => getPeopleTranslationCacheEntry(cache, personKey))
+                .filter((entry) => !!entry);
+            const cachedName = cacheEntries
+                .map((entry) => getCachedPersonNameTranslation(entry, originalName))
                 .find((value) => !!value);
+            const hasUpgradeableGoogleCache = isNonNullish(person?.ids?.tmdb) && cacheEntries.some((entry) => {
+                const cachedNameEntry = getValidPersonNameCacheEntry(entry);
+                return cachedNameEntry?.source === PEOPLE_NAME_SOURCE.GOOGLE;
+            });
 
             if (cachedName) {
                 if (cachedName !== originalName) {
                     person.name = cachedName;
                     changed = true;
+                }
+                if (hasUpgradeableGoogleCache) {
+                    hasMissing = true;
                 }
                 return;
             }
@@ -251,21 +367,26 @@ function createPeopleHandlers(deps) {
                 return;
             }
 
-            const originalName = String(person.name ?? "").trim();
-            if (originalName && originalName !== translatedName) {
+            const originalName = getPeopleListOriginalName(person);
+            if (!originalName) {
+                return;
+            }
+
+            if (String(person.name ?? "").trim() !== translatedName) {
                 person.name = translatedName;
                 changed = true;
+            }
 
-                if (cache) {
-                    getPersonTranslationCacheKeys(person).forEach((personKey) => {
-                        setPeopleTranslationCacheEntry(cache, personKey, {
-                            name: {
-                                sourceText: originalName,
-                                translatedText: translatedName
-                            }
-                        });
-                    });
-                }
+            if (cache) {
+                getPersonTranslationCacheKeys(person).forEach((personKey) => {
+                    changed = setPeopleTranslationCacheEntry(cache, personKey, {
+                        name: {
+                            sourceTextHash: computeStringHash(originalName),
+                            translatedText: translatedName,
+                            source: PEOPLE_NAME_SOURCE.TMDB
+                        }
+                    }) || changed;
+                });
             }
         });
 
@@ -308,7 +429,7 @@ function createPeopleHandlers(deps) {
         const normalizedTranslatedTexts = ensureArray(translatedTexts);
         ensureArray(translationTargets).forEach((target, index) => {
             const person = target?.person;
-            const originalName = String(target?.originalName ?? "").trim();
+            const originalName = String(target?.originalName ?? getPeopleListOriginalName(person)).trim();
             const translatedName = String(normalizedTranslatedTexts[index] ?? "").trim();
             if (
                 !isPlainObject(person) ||
@@ -331,12 +452,148 @@ function createPeopleHandlers(deps) {
                 getPersonTranslationCacheKeys(person).forEach((personKey) => {
                     setPeopleTranslationCacheEntry(cache, personKey, {
                         name: {
-                            sourceText: originalName,
-                            translatedText: translatedName
+                            sourceTextHash: computeStringHash(originalName),
+                            translatedText: translatedName,
+                            source: PEOPLE_NAME_SOURCE.GOOGLE
                         }
                     });
                 });
             }
+        });
+
+        return changed;
+    }
+
+    function applyPeopleCollectionCachedTranslations(data, cache) {
+        if (!isPlainObject(cache)) {
+            return {
+                changed: false,
+                nameTargets: [],
+                biographyTargets: []
+            };
+        }
+
+        let changed = false;
+        const nameTargets = [];
+        const biographyTargets = [];
+
+        collectPeopleCollectionItems(data).forEach((item) => {
+            const person = item?.person;
+            if (!isPlainObject(person)) {
+                return;
+            }
+
+            const personKeys = getPersonTranslationCacheKeys(person);
+            const cacheEntries = personKeys
+                .map((personKey) => getPeopleTranslationCacheEntry(cache, personKey))
+                .filter((entry) => !!entry);
+            const originalName = String(person.name ?? "").trim();
+            const originalBiography = String(person.biography ?? "").trim();
+
+            if (originalName) {
+                const cachedName = cacheEntries
+                    .map((entry) => getCachedPersonNameTranslation(entry, originalName))
+                    .find((value) => !!value);
+                if (cachedName) {
+                    if (person.name !== cachedName) {
+                        person.name = cachedName;
+                        changed = true;
+                    }
+                } else if (!containsChineseCharacter(originalName) && personKeys.length > 0) {
+                    nameTargets.push({
+                        person,
+                        originalName,
+                        personKeys
+                    });
+                }
+            }
+
+            if (originalBiography) {
+                const cachedBiography = cacheEntries
+                    .map((entry) => getCachedPersonBiographyTranslation(entry, originalBiography))
+                    .find((value) => !!value);
+                if (cachedBiography) {
+                    if (person.biography !== cachedBiography) {
+                        person.biography = cachedBiography;
+                        changed = true;
+                    }
+                } else if (!containsChineseCharacter(originalBiography) && personKeys.length > 0) {
+                    biographyTargets.push({
+                        person,
+                        originalBiography,
+                        personKeys
+                    });
+                }
+            }
+        });
+
+        return {
+            changed,
+            nameTargets,
+            biographyTargets
+        };
+    }
+
+    function applyPeopleCollectionGoogleNameTranslations(translationTargets, translatedTexts, cache) {
+        let changed = false;
+        const normalizedTranslatedTexts = ensureArray(translatedTexts);
+        ensureArray(translationTargets).forEach((target, index) => {
+            const person = target?.person;
+            const originalName = String(target?.originalName ?? "").trim();
+            const translatedName = String(normalizedTranslatedTexts[index] ?? "").trim();
+            if (
+                !isPlainObject(person) ||
+                !originalName ||
+                !translatedName ||
+                translatedName === originalName ||
+                !containsChineseCharacter(translatedName)
+            ) {
+                return;
+            }
+
+            if (person.name !== translatedName) {
+                person.name = translatedName;
+                changed = true;
+            }
+
+            ensureArray(target?.personKeys).forEach((personKey) => {
+                changed = setPeopleTranslationCacheEntry(cache, personKey, {
+                    name: {
+                        sourceTextHash: computeStringHash(originalName),
+                        translatedText: translatedName,
+                        source: PEOPLE_NAME_SOURCE.GOOGLE
+                    }
+                }) || changed;
+            });
+        });
+
+        return changed;
+    }
+
+    function applyPeopleCollectionGoogleBiographyTranslations(translationTargets, translatedTexts, cache) {
+        let changed = false;
+        const normalizedTranslatedTexts = ensureArray(translatedTexts);
+        ensureArray(translationTargets).forEach((target, index) => {
+            const person = target?.person;
+            const originalBiography = String(target?.originalBiography ?? "").trim();
+            const translatedBiography = String(normalizedTranslatedTexts[index] ?? "").trim();
+            if (!isPlainObject(person) || !originalBiography || !translatedBiography) {
+                return;
+            }
+
+            if (person.biography !== translatedBiography) {
+                person.biography = translatedBiography;
+                changed = true;
+            }
+
+            ensureArray(target?.personKeys).forEach((personKey) => {
+                changed = setPeopleTranslationCacheEntry(cache, personKey, {
+                    biography: {
+                        sourceTextHash: computeStringHash(originalBiography),
+                        translatedText: translatedBiography
+                    }
+                }) || changed;
+            });
         });
 
         return changed;
@@ -450,8 +707,63 @@ function createPeopleHandlers(deps) {
             return;
         }
 
+        if (!isRipppleUserAgent()) {
+            scriptContext.doneJson(data);
+            return;
+        }
+
         await translateMediaItemsInPlace(items, logLabel);
         scriptContext.doneJson(data);
+    }
+
+    async function handlePeopleSearchList() {
+        const data = JSON.parse(body);
+        if (!Array.isArray(data)) {
+            scriptContext.done({});
+            return;
+        }
+
+        const cache = loadPeopleTranslationCache();
+        const cachedResult = applyPeopleCollectionCachedTranslations(data, cache);
+        let changed = cachedResult.changed;
+
+        try {
+            const nameTargets = googleTranslationEnabled ? cachedResult.nameTargets : [];
+            const biographyTargets = googleTranslationEnabled ? cachedResult.biographyTargets : [];
+            if (nameTargets.length === 0 && biographyTargets.length === 0) {
+                scriptContext.doneJson(data);
+                return;
+            }
+
+            const [nameResult, biographyResult] = await Promise.allSettled([
+                nameTargets.length > 0
+                    ? translateTextsWithGoogle(nameTargets.map((item) => item.originalName), "en")
+                    : Promise.resolve([]),
+                biographyTargets.length > 0
+                    ? translateTextsWithGoogle(biographyTargets.map((item) => item.originalBiography), "en")
+                    : Promise.resolve([])
+            ]);
+
+            if (nameResult.status === "fulfilled") {
+                changed = applyPeopleCollectionGoogleNameTranslations(nameTargets, nameResult.value, cache) || changed;
+            } else {
+                scriptContext.log(`Trakt people collection Google name translation failed: ${nameResult.reason}`);
+            }
+
+            if (biographyResult.status === "fulfilled") {
+                changed = applyPeopleCollectionGoogleBiographyTranslations(biographyTargets, biographyResult.value, cache) || changed;
+            } else {
+                scriptContext.log(`Trakt people collection Google biography translation failed: ${biographyResult.reason}`);
+            }
+
+            if (changed) {
+                savePeopleTranslationCache(cache);
+            }
+            scriptContext.doneJson(data);
+        } catch (e) {
+            scriptContext.log(`Trakt people collection translation failed: ${e}`);
+            scriptContext.doneJson(data);
+        }
     }
 
     async function handlePeopleDetail() {
@@ -473,13 +785,15 @@ function createPeopleHandlers(deps) {
         const originalName = String(data.name ?? "").trim();
         const originalBiography = String(data.biography ?? "").trim();
         const cachedName = originalName ? getCachedPersonNameTranslation(cacheEntry, originalName) : "";
+        const cachedNameEntry = getValidPersonNameCacheEntry(cacheEntry);
         const cachedBiography = originalBiography ? getCachedPersonBiographyTranslation(cacheEntry, originalBiography) : "";
 
         if (cachedName) {
             data.name = buildPersonNameDisplay(originalName, cachedName);
             nextCacheEntry.name = {
-                sourceText: originalName,
-                translatedText: cachedName
+                sourceTextHash: computeStringHash(originalName),
+                translatedText: cachedName,
+                source: cachedNameEntry?.source
             };
         }
 
@@ -491,7 +805,10 @@ function createPeopleHandlers(deps) {
             };
         }
 
-        const namePromise = originalName && !cachedName && isNonNullish(data?.ids?.tmdb)
+        const shouldFetchTmdbName = originalName &&
+            isNonNullish(data?.ids?.tmdb) &&
+            cachedNameEntry?.source !== PEOPLE_NAME_SOURCE.TMDB;
+        const namePromise = shouldFetchTmdbName
             ? fetchTmdbPerson(data.ids.tmdb)
             : null;
         const googlePromise = googleTranslationEnabled && (originalName || originalBiography)
@@ -510,8 +827,9 @@ function createPeopleHandlers(deps) {
                 if (translatedName && containsChineseCharacter(translatedName)) {
                     data.name = buildPersonNameDisplay(originalName, translatedName);
                     nextCacheEntry.name = {
-                        sourceText: originalName,
-                        translatedText: translatedName
+                        sourceTextHash: computeStringHash(originalName),
+                        translatedText: translatedName,
+                        source: PEOPLE_NAME_SOURCE.TMDB
                     };
                     hasTranslatedName = true;
                 }
@@ -527,8 +845,9 @@ function createPeopleHandlers(deps) {
                 if (!cachedName && !hasTranslatedName && translatedName && containsChineseCharacter(translatedName)) {
                     data.name = buildPersonNameDisplay(originalName, translatedName);
                     nextCacheEntry.name = {
-                        sourceText: originalName,
-                        translatedText: translatedName
+                        sourceTextHash: computeStringHash(originalName),
+                        translatedText: translatedName,
+                        source: PEOPLE_NAME_SOURCE.GOOGLE
                     };
                     hasTranslatedName = true;
                 }
@@ -554,6 +873,7 @@ function createPeopleHandlers(deps) {
     }
 
     return {
+        handlePeopleSearchList,
         handleMediaPeopleList,
         handlePeopleDetail,
         handlePersonMediaCreditsList

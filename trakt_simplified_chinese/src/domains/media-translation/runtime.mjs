@@ -116,7 +116,7 @@ function createMediaTranslationRuntime(deps) {
 
         if (entry.translation.title) {
             target.title = entry.translation.title;
-            if (/^Rippple/i.test(String(scriptContext.request?.headers?.["user-agent"] ?? "").trim())) {
+            if (/^Rippple/i.test(scriptContext.getUserAgent())) {
                 target.original_title = entry.translation.title;
             }
         }

@@ -454,8 +454,9 @@ test("live script: /people/:id 会应用缓存中的中文姓名和 biography", 
             googlePeople: {
                 [sample.personId]: {
                     name: {
-                        sourceText: originalName,
-                        translatedText: translatedName
+                        sourceTextHash: computeStringHash(originalName),
+                        translatedText: translatedName,
+                        source: "google"
                     },
                     biography: {
                         sourceTextHash: computeStringHash(originalBiography),
@@ -500,8 +501,9 @@ test("live script: /movies/:id/people 会应用缓存中的中文姓名", async 
             googlePeople: {
                 [sample.personId]: {
                     name: {
-                        sourceText: originalName,
-                        translatedText: translatedName
+                        sourceTextHash: computeStringHash(originalName),
+                        translatedText: translatedName,
+                        source: "google"
                     }
                 }
             }
@@ -989,6 +991,9 @@ test("live script: response route coverage matrix covers all response phase rout
         {
             url: `https://api.trakt.tv/people/${personCreditsSample.personId}/movies`,
             body: personCreditsSample.body,
+            headers: {
+                "user-agent": "Rippple/1.0"
+            },
             persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
             assertPayload(payload) {
                 const movie = Array.isArray(payload.cast) ? payload.cast[0]?.movie : null;
@@ -1005,6 +1010,9 @@ test("live script: response route coverage matrix covers all response phase rout
                 ],
                 crew: {}
             }),
+            headers: {
+                "user-agent": "Rippple/1.0"
+            },
             persistentData: createUnifiedPersistentData({ traktTranslation: showTranslation }),
             assertPayload(payload) {
                 const show = Array.isArray(payload.cast) ? payload.cast[0]?.show : null;
@@ -1204,16 +1212,19 @@ test("live script: response route coverage matrix covers all response phase rout
             url: "https://api.trakt.tv/media/popular/next",
             body: JSON.stringify([
                 {
-                    title: directMovieSample.movie.title,
-                    overview: directMovieSample.movie.overview,
-                    released: directMovieSample.movie.released,
-                    tagline: directMovieSample.movie.tagline,
-                    ids: directMovieSample.movie.ids
+                    show: {
+                        title: showSample.show.title,
+                        overview: showSample.show.overview,
+                        first_aired: showSample.show.first_aired,
+                        network: showSample.show.network,
+                        tagline: showSample.show.tagline,
+                        ids: showSample.show.ids
+                    }
                 }
             ]),
-            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            persistentData: createUnifiedPersistentData({ traktTranslation: showTranslation }),
             assertPayload(payload) {
-                assert.equal(payload[0].title, "覆盖直出中文电影");
+                assert.equal(payload[0].show.title, "覆盖中文剧集");
             }
         },
         {
@@ -1600,6 +1611,7 @@ test("live script: response route coverage matrix covers all response phase rout
         handleHistoryEpisodeList() {},
         handleList() {},
         handleMediaDetail() {},
+        handlePeopleSearchList() {},
         handleMediaPeopleList() {},
         handleMonthlyReview() {},
         handlePeopleDetail() {},

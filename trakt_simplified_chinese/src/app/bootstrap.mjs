@@ -382,6 +382,7 @@ async function runTraktScript() {
         translateTextsWithGoogle
     });
     const {
+        handlePeopleSearchList,
         handleMediaPeopleList,
         handlePeopleDetail,
         handlePersonMediaCreditsList
@@ -459,6 +460,7 @@ async function runTraktScript() {
             handleList,
             handleComments,
             handleMediaDetail,
+            handlePeopleSearchList,
             handleMediaPeopleList,
             handleMonthlyReview,
             handlePeopleDetail,

@@ -84,8 +84,9 @@ function createMovieTranslationCache() {
 function createPeopleTranslationCache(overrides = {}) {
     const defaultPerson = {
         name: {
-            sourceText: "Tom Hanks",
-            translatedText: "汤姆·汉克斯"
+            sourceTextHash: computeStringHash("Tom Hanks"),
+            translatedText: "汤姆·汉克斯",
+            source: "google"
         },
         biography: {
             sourceTextHash: computeStringHash("An American actor and filmmaker."),

@@ -331,7 +331,8 @@ function createMediaTranslationHandlers(deps) {
         const directMediaType = resolveForcedDirectMediaType(parsed);
         const wrappedItems = wrapDirectMediaItems(parsed, directMediaType);
         if (!wrappedItems) {
-            scriptContext.done({ body: sourceBody });
+            await translateMediaItemsInPlace(parsed, logLabel);
+            scriptContext.done({ body: JSON.stringify(parsed) });
             return;
         }
 

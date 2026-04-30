@@ -5,6 +5,15 @@ const TRAKT_SCRIPT_TITLE = "Trakt增强";
 function createScriptContext(name = TRAKT_SCRIPT_TITLE) {
     const env = new Env(name);
 
+    function getRequestHeaderValue(headerName) {
+        if (!env.request?.headers || !headerName) {
+            return null;
+        }
+
+        const normalizedHeaderName = String(headerName).toLowerCase();
+        return env.request.headers[normalizedHeaderName] ?? null;
+    }
+
     return {
         env,
         get request() {
@@ -23,6 +32,10 @@ function createScriptContext(name = TRAKT_SCRIPT_TITLE) {
             return typeof env.response !== "undefined" && typeof env.response.body === "string"
                 ? env.response.body
                 : "";
+        },
+        getRequestHeaderValue,
+        getUserAgent() {
+            return String(getRequestHeaderValue("user-agent") ?? "").trim();
         },
         done(payload = {}) {
             env.done(payload);

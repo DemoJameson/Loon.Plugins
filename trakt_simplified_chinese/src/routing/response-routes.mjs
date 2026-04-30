@@ -51,6 +51,7 @@ function createResponsePhaseRoutes(handlers) {
         return () => handlers.handleMediaDetail(mediaType);
     };
 
+    // 正则不要使用非捕获分组
     return [
         createRoute({ pattern: /^\/(movies|shows)\/[^/]+\/lists\/[^/]+(\/[^/]+)?$/i, id: "media.lists.typeSort", handler: invoke(handlers.handleList) }),
         createRoute({ pattern: /^\/users\/[^/]+\/likes\/lists$/i, id: "users.likes.lists", handler: invoke(handlers.handleList) }),
@@ -96,6 +97,8 @@ function createResponsePhaseRoutes(handlers) {
         createRoute({ pattern: /^\/(users\/[^/]+\/history\/episodes(\/\d+)?|sync\/history\/episodes)$/i, id: "history.episodes", handler: invoke(handlers.handleHistoryEpisodeList) }),
 
         createRoute({ pattern: /^\/people\/[^/]+\/(movies|shows)$/i, id: "people.mediaCredits", handler: invoke(handlers.handlePersonMediaCreditsList) }),
+        createRoute({ pattern: /^\/search\/person$/i, id: "search.person", handler: invoke(handlers.handlePeopleSearchList) }),
+        createRoute({ pattern: /^\/people\/this_month$/i, id: "people.thisMonth", handler: invoke(handlers.handlePeopleSearchList) }),
 
         createRoute({ pattern: /^\/users\/[^/]+\/mir$/i, id: "users.mir", handler: invoke(handlers.handleMonthlyReview) }),
 

@@ -76,6 +76,7 @@ function createResponseRouteStubs() {
         handleHistoryEpisodeList() {},
         handleList() {},
         handleMediaDetail() {},
+        handlePeopleSearchList() {},
         handleMediaPeopleList() {},
         handleMonthlyReview() {},
         handlePeopleDetail() {},
@@ -335,12 +336,25 @@ test("handleDirectMediaList 按 direct summary 路由分组生效", async (t) =>
             }
         },
         {
-            name: "mixed popular direct movie summary",
+            name: "mixed popular wrapper show summary",
             url: "https://api.trakt.tv/media/popular/next",
-            body: createDirectMovieBody(),
-            persistentData: createMoviePersistentData(),
+            body: JSON.stringify([
+                {
+                    show: {
+                        title: "Original Show Title",
+                        overview: "Original Show Overview",
+                        first_aired: "2025-01-01T00:00:00.000Z",
+                        network: "HBO",
+                        tagline: "Original Show Tagline",
+                        ids: {
+                            trakt: 456
+                        }
+                    }
+                }
+            ]),
+            persistentData: createShowPersistentData(),
             assertPayload(payload) {
-                assert.equal(payload[0].title, "中文电影");
+                assert.equal(payload[0].show.title, "中文剧名");
             }
         },
         {
@@ -580,6 +594,56 @@ test("handleMediaPeopleList 覆盖 movie、show 与 episode people 路由", asyn
     }
 });
 
+test("handlePeopleSearchList 覆盖 search person 与 people this_month 路由", async (t) => {
+    const cases = [
+        {
+            url: "https://api.trakt.tv/search/person?extended=cloud9,full&limit=100&page=1&query=gong",
+            body: JSON.stringify([
+                {
+                    type: "person",
+                    score: 1,
+                    person: {
+                        name: "Tom Hanks",
+                        biography: "An American actor and filmmaker.",
+                        ids: {
+                            trakt: 42
+                        }
+                    }
+                }
+            ])
+        },
+        {
+            url: "https://api.trakt.tv/people/this_month?extended=cloud9,full",
+            body: JSON.stringify([
+                {
+                    name: "Tom Hanks",
+                    biography: "An American actor and filmmaker.",
+                    ids: {
+                        trakt: 42
+                    }
+                }
+            ])
+        }
+    ];
+
+    for (const item of cases) {
+        await t.test(item.url, async () => {
+            const { result } = await runResponseCase({
+                url: item.url,
+                body: item.body,
+                persistentData: createUnifiedPersistentData({
+                    googlePeople: JSON.parse(createPeopleTranslationCache())
+                })
+            });
+
+            const payload = JSON.parse(result.body);
+            const person = payload[0].person ?? payload[0];
+            assert.match(person.name, /^汤姆·汉克斯/);
+            assert.equal(person.biography, "一位美国演员和电影制作人。");
+        });
+    }
+});
+
 test("handlePersonMediaCreditsList 覆盖 people movie credits 与 show credits 路由", async (t) => {
     const cases = [
         {
@@ -617,6 +681,9 @@ test("handlePersonMediaCreditsList 覆盖 people movie credits 与 show credits 
             const { result } = await runResponseCase({
                 url: item.url,
                 body: item.body,
+                headers: {
+                    "user-agent": "Rippple/1.0"
+                },
                 persistentData: item.persistentData
             });
 
