@@ -1,12 +1,12 @@
-import path from "node:path";
 import { spawn } from "node:child_process";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const commands = [
     { label: "local", command: "npm test" },
-    { label: "live", command: "npm run test:trakt:live" }
+    { label: "live", command: "npm run test:trakt:live" },
 ];
 
 function runCommand({ label, command }) {
@@ -15,7 +15,7 @@ function runCommand({ label, command }) {
             cwd: rootDir,
             env: process.env,
             stdio: ["ignore", "pipe", "pipe"],
-            shell: true
+            shell: true,
         });
 
         const prefixOutput = (stream, writer) => {

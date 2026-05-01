@@ -1,5 +1,81 @@
-import { runTraktScript } from "./app/bootstrap.mjs";
+import { Env } from "../../scripts/vendor/Env.module.mjs";
+
+import * as argumentConfig from "./argument.mjs";
+import * as requestPhase from "./request.mjs";
+import * as responsePhase from "./response.mjs";
+import * as commonUtils from "./utils/common.mjs";
+
+const TRAKT_SCRIPT_TITLE = "Trakt增强";
+
+function isRequestPhase(env) {
+    return typeof env.response === "undefined";
+}
+
+function applyResult(env, result) {
+    const normalized = result && typeof result === "object" ? result : { type: "passThrough" };
+
+    if (normalized.type === "rewriteRequest") {
+        env.done({ url: normalized.url });
+        return;
+    }
+
+    if (normalized.type === "redirect") {
+        env.done({
+            response: {
+                status: 302,
+                headers: {
+                    Location: normalized.location,
+                },
+            },
+        });
+        return;
+    }
+
+    if (normalized.type === "respond") {
+        const payload = {};
+        if (Object.prototype.hasOwnProperty.call(normalized, "body")) {
+            payload.body = normalized.body;
+        }
+        if (Object.prototype.hasOwnProperty.call(normalized, "status")) {
+            payload.status = normalized.status;
+        }
+        if (Object.prototype.hasOwnProperty.call(normalized, "headers")) {
+            payload.headers = normalized.headers;
+        }
+        env.done(payload);
+        return;
+    }
+
+    env.done({});
+}
+
+async function runTraktScript() {
+    const env = new Env(TRAKT_SCRIPT_TITLE);
+    const argument = argumentConfig.parseArgument(env);
+    const url = new URL(env.request.url);
+    url.shortPathname = commonUtils.normalizePathname(url.pathname);
+
+    globalThis.$ctx = {
+        env,
+        url,
+        userAgent: String(env.request.headers["user-agent"] ?? "").trim(),
+        responseBody: typeof env.response?.body === "string" ? env.response.body : "",
+        argument,
+    };
+
+    try {
+        const result = isRequestPhase(env) ? await requestPhase.handleRequest() : await responsePhase.handleResponse();
+        applyResult(env, result);
+    } catch (error) {
+        env.log(`Trakt script error: ${error}`);
+        env.done({});
+    } finally {
+        delete globalThis.$ctx;
+    }
+}
 
 (async () => {
     await runTraktScript();
 })();
+
+export { TRAKT_SCRIPT_TITLE, applyResult, runTraktScript };

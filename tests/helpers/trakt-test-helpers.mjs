@@ -1,11 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-    UNIFIED_CACHE_KEY,
-    UNIFIED_CACHE_MAX_BYTES,
-    UNIFIED_CACHE_SCHEMA_VERSION
-} from "../../trakt_simplified_chinese/src/platform/cache-store.mjs";
+
+import { UNIFIED_CACHE_KEY, UNIFIED_CACHE_MAX_BYTES, UNIFIED_CACHE_SCHEMA_VERSION } from "../../trakt_simplified_chinese/src/utils/cache.mjs";
+
 import { runScript } from "./run-script.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,16 +30,16 @@ function createMediaTranslationEntry(overrides = {}) {
         translation: {
             title: "中文电影",
             overview: "中文简介",
-            tagline: "中文标语"
+            tagline: "中文标语",
         },
-        ...overrides
+        ...overrides,
     };
 }
 
 function createMediaTranslationCache(entries = {}) {
     return JSON.stringify({
         "movie:123": createMediaTranslationEntry(),
-        ...entries
+        ...entries,
     });
 }
 
@@ -52,24 +50,24 @@ function createUnifiedCache(overrides = {}) {
         maxBytes: Number(overrides.maxBytes ?? UNIFIED_CACHE_MAX_BYTES),
         trakt: {
             translation: overrides.traktTranslation ?? {},
-            historyEpisode: overrides.traktHistoryEpisode ?? {},
-            linkIds: overrides.traktLinkIds ?? {}
+            historyEpisodesMergedByShow: overrides.traktHistoryEpisodesMergedByShow ?? {},
+            linkIds: overrides.traktLinkIds ?? {},
         },
         google: {
             comments: overrides.googleComments ?? {},
             sentiments: overrides.googleSentiments ?? {},
             people: overrides.googlePeople ?? {},
-            list: overrides.googleList ?? {}
+            list: overrides.googleList ?? {},
         },
         persistent: {
-            currentSeason: overrides.persistentCurrentSeason ?? null
-        }
+            currentSeason: overrides.persistentCurrentSeason ?? null,
+        },
     });
 }
 
 function createUnifiedPersistentData(overrides = {}) {
     return {
-        [UNIFIED_CACHE_KEY]: createUnifiedCache(overrides)
+        [UNIFIED_CACHE_KEY]: createUnifiedCache(overrides),
     };
 }
 
@@ -86,44 +84,45 @@ function createPeopleTranslationCache(overrides = {}) {
         name: {
             sourceTextHash: computeStringHash("Tom Hanks"),
             translatedText: "汤姆·汉克斯",
-            source: "google"
+            source: "google",
         },
         biography: {
             sourceTextHash: computeStringHash("An American actor and filmmaker."),
-            translatedText: "一位美国演员和电影制作人。"
-        }
+            translatedText: "一位美国演员和电影制作人。",
+        },
     };
 
     return JSON.stringify({
-        "42": {
+        42: {
             ...defaultPerson,
-            ...overrides["42"]
+            ...overrides["42"],
         },
-        ...Object.fromEntries(
-            Object.entries(overrides).filter(([key]) => key !== "42")
-        )
+        ...Object.fromEntries(Object.entries(overrides).filter(([key]) => key !== "42")),
     });
 }
 
 function createCommentTranslationCache(overrides = {}) {
     return JSON.stringify({
-        "9001": {
-            sourceTextHash: computeStringHash("Great movie"),
-            translatedText: "很棒的电影"
+        9001: {
+            comment: {
+                sourceTextHash: computeStringHash("Great movie"),
+                translatedText: "很棒的电影",
+            },
+            updatedAt: Date.now(),
         },
-        ...overrides
+        ...overrides,
     });
 }
 
 function createListTranslationCache(overrides = {}) {
     return JSON.stringify({
-        "321": {
+        321: {
             description: {
                 sourceTextHash: computeStringHash("A good list"),
-                translatedText: "一个不错的列表"
-            }
+                translatedText: "一个不错的列表",
+            },
         },
-        ...overrides
+        ...overrides,
     });
 }
 
@@ -131,7 +130,7 @@ function createSentimentTranslationCache(overrides = {}) {
     const defaultTranslation = {
         aspect: {
             pros: [{ sourceTextHash: computeStringHash("Story"), translatedText: "剧情" }],
-            cons: [{ sourceTextHash: computeStringHash("Pacing"), translatedText: "节奏" }]
+            cons: [{ sourceTextHash: computeStringHash("Pacing"), translatedText: "节奏" }],
         },
         good: [{ sourceTextHash: computeStringHash("Great cast"), translatedText: "演员阵容出色" }],
         bad: [{ sourceTextHash: computeStringHash("Weak ending"), translatedText: "结尾较弱" }],
@@ -139,17 +138,15 @@ function createSentimentTranslationCache(overrides = {}) {
         analysis: { sourceTextHash: computeStringHash("Detailed analysis"), translatedText: "详细分析" },
         highlight: { sourceTextHash: computeStringHash("Best moment"), translatedText: "高光时刻" },
         items: [{ sourceTextHash: computeStringHash("Memorable scene"), translatedText: "难忘场景" }],
-        text: { sourceTextHash: computeStringHash("Audience text"), translatedText: "观众文本" }
+        text: { sourceTextHash: computeStringHash("Audience text"), translatedText: "观众文本" },
     };
 
     return JSON.stringify({
         "movie:123": {
             translation: defaultTranslation,
-            ...overrides["movie:123"]
+            ...overrides["movie:123"],
         },
-        ...Object.fromEntries(
-            Object.entries(overrides).filter(([key]) => key !== "movie:123")
-        )
+        ...Object.fromEntries(Object.entries(overrides).filter(([key]) => key !== "movie:123")),
     });
 }
 
@@ -157,9 +154,9 @@ function createWatchnowIdsEntry(overrides = {}) {
     return {
         ids: {
             trakt: 123,
-            tmdb: 456
+            tmdb: 456,
         },
-        ...overrides
+        ...overrides,
     };
 }
 
@@ -167,43 +164,43 @@ function createEpisodeWatchnowIdsEntry(overrides = {}) {
     return {
         ids: {
             trakt: 1001,
-            tmdb: 9001
+            tmdb: 9001,
         },
         showIds: {
             trakt: 555,
-            imdb: "tt-show"
+            imdb: "tt-show",
         },
         seasonNumber: 1,
         episodeNumber: 2,
-        ...overrides
+        ...overrides,
     };
 }
 
 function createWatchnowIdsCache(entries = {}) {
     return JSON.stringify({
-        "123": createWatchnowIdsEntry(),
-        ...entries
+        123: createWatchnowIdsEntry(),
+        ...entries,
     });
 }
 
 function createGoogleTranslateResponse(translatedTexts) {
     return JSON.stringify({
         data: {
-            translations: translatedTexts.map((translatedText) => ({ translatedText }))
-        }
+            translations: translatedTexts.map((translatedText) => ({ translatedText })),
+        },
     });
 }
 
 function createHttpErrorMock(message) {
     return {
-        error: message
+        error: message,
     };
 }
 
-function createHttpStatusMock(status, body = "{\"error\":\"server error\"}") {
+function createHttpStatusMock(status, body = '{"error":"server error"}') {
     return {
         status,
-        body
+        body,
     };
 }
 
@@ -220,31 +217,31 @@ function createTmdbMovieCreditsResponse(names = ["汤姆·汉克斯"]) {
         credits: {
             cast: names.map((name, index) => ({
                 id: index + 31,
-                name
-            }))
-        }
+                name,
+            })),
+        },
     });
 }
 
 function createWrappedMovieBody() {
     return JSON.stringify([
         {
-            movie: JSON.parse(readFixture("recommendations-movies.json"))[0]
-        }
+            movie: JSON.parse(readFixture("recommendations-movies.json"))[0],
+        },
     ]);
 }
 
 function runResponseCase(input) {
     return runScript({
         hasResponse: true,
-        ...input
+        ...input,
     });
 }
 
 function runRequestCase(input) {
     return runScript({
         hasResponse: false,
-        ...input
+        ...input,
     });
 }
 
@@ -273,5 +270,5 @@ export {
     createTmdbMovieCreditsResponse,
     createWrappedMovieBody,
     runResponseCase,
-    runRequestCase
+    runRequestCase,
 };

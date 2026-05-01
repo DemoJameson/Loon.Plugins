@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const scriptPath = path.resolve(__dirname, "..", "..", "trakt_simplified_chinese", "trakt_simplified_chinese.js");
@@ -18,7 +18,7 @@ function createTestConsole(verboseLogs) {
         info: noop,
         warn: noop,
         error: noop,
-        debug: noop
+        debug: noop,
     };
 }
 
@@ -32,7 +32,7 @@ function createPersistentStore(initialData = {}) {
         write(value, key) {
             data[key] = value;
             return true;
-        }
+        },
     };
 }
 
@@ -41,14 +41,14 @@ function createMockHttpResponse(mock) {
         return {
             status: 200,
             statusCode: 200,
-            body: mock
+            body: mock,
         };
     }
 
     return {
         status: Number(mock?.status ?? mock?.statusCode ?? 200),
         statusCode: Number(mock?.statusCode ?? mock?.status ?? 200),
-        body: String(mock?.body ?? "")
+        body: String(mock?.body ?? ""),
     };
 }
 
@@ -57,9 +57,7 @@ function createMockHttpError(mock) {
         return null;
     }
 
-    return mock.error instanceof Error
-        ? mock.error
-        : new Error(String(mock.error ?? "Mock HTTP error"));
+    return mock.error instanceof Error ? mock.error : new Error(String(mock.error ?? "Mock HTTP error"));
 }
 
 function resolveHttpMock(mocks, url) {
@@ -116,13 +114,14 @@ function isAllowedRealUrl(url, allowRealHttpHosts) {
 }
 
 async function performRealHttpRequest(method, options, allowRealHttpHosts, httpLogs) {
-    const requestOptions = typeof options === "string"
-        ? { url: options }
-        : {
-            url: String(options?.url ?? ""),
-            headers: options?.headers,
-            body: options?.body
-        };
+    const requestOptions =
+        typeof options === "string"
+            ? { url: options }
+            : {
+                  url: String(options?.url ?? ""),
+                  headers: options?.headers,
+                  body: options?.body,
+              };
 
     if (!requestOptions.url) {
         throw new Error(`Missing URL for real HTTP ${method}`);
@@ -135,7 +134,7 @@ async function performRealHttpRequest(method, options, allowRealHttpHosts, httpL
     const response = await fetch(requestOptions.url, {
         method,
         headers: requestOptions.headers,
-        body: method === "GET" ? undefined : requestOptions.body
+        body: method === "GET" ? undefined : requestOptions.body,
     });
     const responseBody = await response.text();
     const responseHeaders = normalizeHeaders(response.headers);
@@ -143,14 +142,14 @@ async function performRealHttpRequest(method, options, allowRealHttpHosts, httpL
     httpLogs.push({
         method,
         url: requestOptions.url,
-        status: response.status
+        status: response.status,
     });
 
     return {
         status: response.status,
         statusCode: response.status,
         headers: responseHeaders,
-        body: responseBody
+        body: responseBody,
     };
 }
 
@@ -166,7 +165,7 @@ function runScriptLive({
     httpGetMocks = {},
     httpPostMocks = {},
     allowRealHttpHosts = [],
-    verboseLogs = false
+    verboseLogs = false,
 }) {
     return new Promise((resolve, reject) => {
         const persistentStore = createPersistentStore(persistentData);
@@ -178,7 +177,7 @@ function runScriptLive({
             $argument: argument,
             $request: {
                 url,
-                headers
+                headers,
             },
             $persistentStore: persistentStore,
             $httpClient: {
@@ -197,7 +196,7 @@ function runScriptLive({
                             method: "GET",
                             url: requestUrl,
                             status: response.status,
-                            mocked: true
+                            mocked: true,
                         });
                         callback(null, response, response.body);
                         return;
@@ -222,7 +221,7 @@ function runScriptLive({
                             method: "POST",
                             url: requestUrl,
                             status: response.status,
-                            mocked: true
+                            mocked: true,
                         });
                         callback(null, response, response.body);
                         return;
@@ -231,17 +230,17 @@ function runScriptLive({
                     performRealHttpRequest("POST", options, allowRealHttpHosts, httpLogs)
                         .then((response) => callback(null, response, response.body))
                         .catch((error) => callback(error));
-                }
+                },
             },
             $notification: {
-                post() {}
+                post() {},
             },
             $done(result = {}) {
                 clearTimeout(timeout);
                 resolve({
                     result,
                     persistentData: persistentStore.data,
-                    httpLogs
+                    httpLogs,
                 });
             },
             console: createTestConsole(verboseLogs),
@@ -249,7 +248,7 @@ function runScriptLive({
             setTimeout,
             clearTimeout,
             fetch,
-            Headers
+            Headers,
         };
 
         if (hasResponse) {
@@ -257,7 +256,7 @@ function runScriptLive({
                 body,
                 headers: responseHeaders,
                 status: responseStatus,
-                statusCode: responseStatus
+                statusCode: responseStatus,
             };
         }
 
@@ -270,6 +269,4 @@ function runScriptLive({
     });
 }
 
-export {
-    runScriptLive
-};
+export { runScriptLive };

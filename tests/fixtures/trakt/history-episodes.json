@@ -12,10 +12,7 @@
             "number": 1,
             "title": "Old Episode",
             "overview": "Old Overview",
-            "available_translations": [
-                "en",
-                "zh"
-            ]
+            "available_translations": ["en", "zh"]
         }
     },
     {
@@ -31,10 +28,7 @@
             "number": 2,
             "title": "New Episode",
             "overview": "New Overview",
-            "available_translations": [
-                "en",
-                "zh"
-            ]
+            "available_translations": ["en", "zh"]
         }
     },
     {
@@ -50,10 +44,7 @@
             "number": 1,
             "title": "Other Show Episode",
             "overview": "Other Show Overview",
-            "available_translations": [
-                "en",
-                "zh"
-            ]
+            "available_translations": ["en", "zh"]
         }
     }
 ]

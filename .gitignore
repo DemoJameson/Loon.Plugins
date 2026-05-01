@@ -6,3 +6,7 @@ node_modules/
 .sisyphus/
 
 .trakt-live-test.local.json
+# CocoIndex Code (ccc)
+/.cocoindex_code/
+/AGENTS.md
+.serena/

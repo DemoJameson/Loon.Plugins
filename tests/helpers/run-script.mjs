@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const scriptPath = path.resolve(__dirname, "..", "..", "trakt_simplified_chinese", "trakt_simplified_chinese.js");
@@ -18,7 +18,7 @@ function createTestConsole(verboseLogs) {
         info: noop,
         warn: noop,
         error: noop,
-        debug: noop
+        debug: noop,
     };
 }
 
@@ -32,7 +32,7 @@ function createPersistentStore(initialData = {}) {
         write(value, key) {
             data[key] = value;
             return true;
-        }
+        },
     };
 }
 
@@ -41,14 +41,14 @@ function createMockHttpResponse(mock) {
         return {
             status: 200,
             statusCode: 200,
-            body: mock
+            body: mock,
         };
     }
 
     return {
         status: Number(mock?.status ?? mock?.statusCode ?? 200),
         statusCode: Number(mock?.statusCode ?? mock?.status ?? 200),
-        body: String(mock?.body ?? "")
+        body: String(mock?.body ?? ""),
     };
 }
 
@@ -57,9 +57,7 @@ function createMockHttpError(mock) {
         return null;
     }
 
-    return mock.error instanceof Error
-        ? mock.error
-        : new Error(String(mock.error ?? "Mock HTTP error"));
+    return mock.error instanceof Error ? mock.error : new Error(String(mock.error ?? "Mock HTTP error"));
 }
 
 function resolveHttpMock(mocks, url) {
@@ -96,25 +94,38 @@ function resolveHttpMock(mocks, url) {
     return null;
 }
 
-function runScript({ url, body, headers = {}, responseHeaders = {}, responseStatus = 200, argument, persistentData = {}, hasResponse = true, httpGetMocks = {}, httpPostMocks = {}, verboseLogs = false }) {
+function runScript({
+    url,
+    body,
+    headers = {},
+    responseHeaders = {},
+    responseStatus = 200,
+    argument,
+    persistentData = {},
+    hasResponse = true,
+    httpGetMocks = {},
+    httpPostMocks = {},
+    verboseLogs = false,
+}) {
     return new Promise((resolve, reject) => {
         const persistentStore = createPersistentStore(persistentData);
         const httpLogs = [];
         const timeout = setTimeout(() => reject(new Error("Timed out waiting for $done")), 2000);
+        let settled = false;
 
         const context = {
             $loon: {},
             $argument: argument,
             $request: {
                 url,
-                headers
+                headers,
             },
             $persistentStore: persistentStore,
             $httpClient: {
                 get(options, callback) {
                     httpLogs.push({
                         method: "GET",
-                        url: String(options.url ?? "")
+                        url: String(options.url ?? ""),
                     });
                     const mock = resolveHttpMock(httpGetMocks, String(options.url ?? ""));
                     if (mock) {
@@ -134,7 +145,7 @@ function runScript({ url, body, headers = {}, responseHeaders = {}, responseStat
                     const postUrl = String(options.url ?? "");
                     httpLogs.push({
                         method: "POST",
-                        url: postUrl
+                        url: postUrl,
                     });
                     const mock = resolveHttpMock(httpPostMocks, postUrl);
                     if (mock) {
@@ -154,28 +165,35 @@ function runScript({ url, body, headers = {}, responseHeaders = {}, responseStat
                     }
 
                     if (String(options.url ?? "") === "https://translation.googleapis.com/language/translate/v2") {
-                        callback(null, { status: 200, statusCode: 200, body: "{\"data\":{\"translations\":[]}}" }, "{\"data\":{\"translations\":[]}}");
+                        callback(null, { status: 200, statusCode: 200, body: '{"data":{"translations":[]}}' }, '{"data":{"translations":[]}}');
                         return;
                     }
 
                     callback(new Error(`Unexpected HTTP POST: ${options.url}`));
-                }
+                },
             },
             $notification: {
-                post() {}
+                post() {},
             },
             $done(result = {}) {
+                if (settled) {
+                    return;
+                }
+                settled = true;
                 clearTimeout(timeout);
-                resolve({
-                    result,
-                    persistentData: persistentStore.data,
-                    httpLogs
-                });
+                setTimeout(() => {
+                    resolve({
+                        result,
+                        persistentData: persistentStore.data,
+                        httpLogs,
+                        hasRuntimeCtx: Object.prototype.hasOwnProperty.call(context, "$ctx"),
+                    });
+                }, 0);
             },
             console: createTestConsole(verboseLogs),
             URL,
             setTimeout,
-            clearTimeout
+            clearTimeout,
         };
 
         if (hasResponse) {
@@ -183,7 +201,7 @@ function runScript({ url, body, headers = {}, responseHeaders = {}, responseStat
                 body,
                 headers: responseHeaders,
                 status: responseStatus,
-                statusCode: responseStatus
+                statusCode: responseStatus,
             };
         }
 
@@ -196,6 +214,4 @@ function runScript({ url, body, headers = {}, responseHeaders = {}, responseStat
     });
 }
 
-export {
-    runScript
-};
+export { runScript };

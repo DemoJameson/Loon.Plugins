@@ -4,9 +4,9 @@
 
 ## 脚本列表
 
-| 脚本                        | 说明 | Loon | Surge | Quantumult X |
-|---------------------------| --- | --- | --- | --- |
-| Trakt Simplified Chinese  | 优先补全和显示 Trakt 的简体中文标题、简介等内容 | [`.plugin`][trakt-plugin] | [`.sgmodule`][trakt-sgmodule] | [`.snippet`][trakt-snippet] |
+| 脚本                      | 说明                                             | Loon                       | Surge                          | Quantumult X                 |
+| ------------------------- | ------------------------------------------------ | -------------------------- | ------------------------------ | ---------------------------- |
+| Trakt Simplified Chinese  | 优先补全和显示 Trakt 的简体中文标题、简介等内容  | [`.plugin`][trakt-plugin]  | [`.sgmodule`][trakt-sgmodule]  | [`.snippet`][trakt-snippet]  |
 | Fix Infuse Image Language | 调整 TMDB 图片语言排序，改善 Infuse 图片语言匹配 | [`.plugin`][infuse-plugin] | [`.sgmodule`][infuse-sgmodule] | [`.snippet`][infuse-snippet] |
 
 [trakt-plugin]: https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.plugin

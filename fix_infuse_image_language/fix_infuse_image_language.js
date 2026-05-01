@@ -7,7 +7,7 @@ let preferredLanguage = "zh-CN";
 if (typeof $argument === "object") {
     preferredLanguage = $argument.preferredLanguage.trim();
 } else if (typeof $argument === "string") {
-    preferredLanguage = $argument.replace(/^\[|\]$/g, '').trim();
+    preferredLanguage = $argument.replace(/^\[|\]$/g, "").trim();
 }
 
 try {
@@ -15,7 +15,6 @@ try {
 
     // 确保响应体包含 images 字段
     if (obj && obj.images) {
-
         let targetLang = null;
         let targetRegion = null;
 
@@ -51,8 +50,8 @@ try {
             };
 
             // 批量应用排序逻辑到海报、背景和 Logo
-            const imageTypes = ['logos', 'posters', 'backdrops'];
-            imageTypes.forEach(type => {
+            const imageTypes = ["logos", "posters", "backdrops"];
+            imageTypes.forEach((type) => {
                 if (Array.isArray(obj.images[type])) {
                     obj.images[type].sort(sortImages);
                 }
@@ -64,8 +63,7 @@ try {
     }
 
     // 返回修改后的 body
-    $done({body});
-
+    $done({ body });
 } catch (e) {
     console.log("TMDB 图片自定义排序脚本错误: " + e);
     $done({});

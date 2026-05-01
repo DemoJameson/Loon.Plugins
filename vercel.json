@@ -1,11 +1,11 @@
 {
-  "functions": {
-    "api/redirect.js": {
-      "maxDuration": 10
+    "functions": {
+        "api/redirect.js": {
+            "maxDuration": 10
+        },
+        "api/trakt/translations.js": {
+            "maxDuration": 30
+        }
     },
-    "api/trakt/translations.js": {
-      "maxDuration": 30
-    }
-  },
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- api/ index.html"
+    "ignoreCommand": "git diff --quiet HEAD^ HEAD -- api/ index.html"
 }

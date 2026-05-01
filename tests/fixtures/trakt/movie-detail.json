@@ -7,8 +7,5 @@
         "trakt": 123,
         "tmdb": 456
     },
-    "available_translations": [
-        "en",
-        "zh"
-    ]
+    "available_translations": ["en", "zh"]
 }

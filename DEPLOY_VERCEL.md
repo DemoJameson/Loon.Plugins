@@ -4,8 +4,8 @@
 
 - 路径：`/api/trakt/translations`
 - 方法：
-  - `GET`：读取缓存
-  - `POST`：写入缓存
+    - `GET`：读取缓存
+    - `POST`：写入缓存
 - 实现文件：`/api/trakt/translations.js`
 
 ## 接口说明
@@ -13,6 +13,7 @@
 ### GET `/api/trakt/translations`
 
 查询参数支持：
+
 - `shows=1,2,3`
 - `movies=11,12,13`
 - `episodes=198225:1:1,198225:1:2,198225:1:3`
@@ -23,7 +24,7 @@
 
 ```json
 {
-  "error": "KV is not configured. Set KV_REST_API_URL and KV_REST_API_TOKEN, or UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN."
+    "error": "KV is not configured. Set KV_REST_API_URL and KV_REST_API_TOKEN, or UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN."
 }
 ```
 
@@ -31,34 +32,35 @@
 
 ```json
 {
-  "shows": {
-    "1": {
-      "status": 1,
-      "translation": {
-        "title": "标题",
-        "overview": "简介",
-        "tagline": "标语"
-      }
+    "shows": {
+        "1": {
+            "status": 1,
+            "translation": {
+                "title": "标题",
+                "overview": "简介",
+                "tagline": "标语"
+            }
+        }
+    },
+    "movies": {},
+    "episodes": {
+        "198225:1:1": {
+            "status": 2,
+            "translation": {
+                "title": "示例标题",
+                "overview": null,
+                "tagline": null
+            }
+        }
     }
-  },
-  "movies": {},
-  "episodes": {
-    "198225:1:1": {
-      "status": 2,
-      "translation": {
-        "title": "示例标题",
-        "overview": null,
-        "tagline": null
-      }
-    }
-  }
 }
 ```
 
 说明：
+
 - `status = 1` 表示 `FOUND`
 - `status = 2` 表示 `PARTIAL_FOUND`
-  - 条件是任意中文地区语言的 `title` 字段有值，但未达到完整命中
+    - 条件是任意中文地区语言的 `title` 字段有值，但未达到完整命中
 - `status = 3` 表示 `NOT_FOUND`
 - 后端只返回缓存内容，不会主动请求 Trakt
 
@@ -70,27 +72,27 @@
 
 ```json
 {
-  "shows": {
-    "1": {
-      "status": 1,
-      "translation": {
-        "title": "标题",
-        "overview": "简介",
-        "tagline": "标语"
-      }
+    "shows": {
+        "1": {
+            "status": 1,
+            "translation": {
+                "title": "标题",
+                "overview": "简介",
+                "tagline": "标语"
+            }
+        }
+    },
+    "movies": {},
+    "episodes": {
+        "198225:1:1": {
+            "status": 2,
+            "translation": {
+                "title": "示例标题",
+                "overview": null,
+                "tagline": null
+            }
+        }
     }
-  },
-  "movies": {},
-  "episodes": {
-    "198225:1:1": {
-      "status": 2,
-      "translation": {
-        "title": "示例标题",
-        "overview": null,
-        "tagline": null
-      }
-    }
-  }
 }
 ```
 
@@ -98,11 +100,11 @@
 
 ```json
 {
-  "counts": {
-    "shows": 1,
-    "movies": 0,
-    "episodes": 1
-  }
+    "counts": {
+        "shows": 1,
+        "movies": 0,
+        "episodes": 1
+    }
 }
 ```
 
@@ -113,8 +115,8 @@
 3. 关闭 `Project Settings -> Deployment Protection -> Vercel Authentication`。
 4. 给项目关联一个 Redis / KV 存储。
 5. 确认环境变量至少配置以下任意一组：
-   - `KV_REST_API_URL` 和 `KV_REST_API_TOKEN`
-   - `UPSTASH_REDIS_REST_URL` 和 `UPSTASH_REDIS_REST_TOKEN`
+    - `KV_REST_API_URL` 和 `KV_REST_API_TOKEN`
+    - `UPSTASH_REDIS_REST_URL` 和 `UPSTASH_REDIS_REST_TOKEN`
 6. 部署完成后，记录你的域名，例如 `https://your-project.vercel.app`。
 
 ## 在 Loon 中使用
@@ -138,13 +140,13 @@ POST https://your-project.vercel.app/api/trakt/translations
 
 - 后端只负责缓存，不主动拉取 Trakt 翻译
 - 插件流程：
-  1. 先向后端批量读取缓存
-  2. 对未命中的条目，由插件直接请求 Trakt `translations/zh`
-  3. 再将结果批量写回后端
+    1. 先向后端批量读取缓存
+    2. 对未命中的条目，由插件直接请求 Trakt `translations/zh`
+    3. 再将结果批量写回后端
 - 后端按单条记录写入 KV，key 格式为：
-  - `trakt:translation:shows:{id}`
-  - `trakt:translation:movies:{id}`
-  - `trakt:translation:episodes:{showId}:{seasonNumber}:{episodeNumber}`
+    - `trakt:translation:shows:{id}`
+    - `trakt:translation:movies:{id}`
+    - `trakt:translation:episodes:{showId}:{seasonNumber}:{episodeNumber}`
 - `FOUND` 永不过期
 - `PARTIAL_FOUND` 缓存 30 天
 - `NOT_FOUND` 缓存 7 天

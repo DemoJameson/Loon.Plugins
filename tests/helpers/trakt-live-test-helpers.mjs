@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { runScriptLive } from "./run-script-live.mjs";
 
 const TRAKT_BASE_URL = "https://api.trakt.tv";
@@ -44,7 +45,7 @@ function getLiveConfig() {
         traktApiVersion: getOptionalEnv("TRAKT_API_VERSION") || "2",
         backendBaseUrl: getRequiredEnv("TRAKT_BACKEND_BASE_URL").replace(/\/+$/, ""),
         traktOAuthToken: getOptionalEnv("TRAKT_OAUTH_TOKEN"),
-        allowGoogleTranslate: /^true$/i.test(getOptionalEnv("LIVE_TEST_ALLOW_GOOGLE_TRANSLATE"))
+        allowGoogleTranslate: /^true$/i.test(getOptionalEnv("LIVE_TEST_ALLOW_GOOGLE_TRANSLATE")),
     };
 }
 
@@ -58,7 +59,7 @@ function createTraktHeaders(config, extraHeaders = {}) {
         "content-type": "application/json",
         "trakt-api-key": config.traktApiKey,
         "trakt-api-version": config.traktApiVersion,
-        ...extraHeaders
+        ...extraHeaders,
     };
 
     if (config.traktOAuthToken) {
@@ -71,18 +72,18 @@ function createTraktHeaders(config, extraHeaders = {}) {
 async function fetchText(url, init = {}) {
     const headers = {
         "user-agent": LIVE_HTTP_USER_AGENT,
-        ...(init.headers ?? {})
+        ...(init.headers ?? {}),
     };
 
     const response = await fetch(url, {
         ...init,
-        headers
+        headers,
     });
     const body = await response.text();
     return {
         status: response.status,
         headers: Object.fromEntries(response.headers.entries()),
-        body
+        body,
     };
 }
 
@@ -90,13 +91,13 @@ async function fetchJson(url, init = {}) {
     const response = await fetchText(url, init);
     return {
         ...response,
-        json: response.body ? JSON.parse(response.body) : null
+        json: response.body ? JSON.parse(response.body) : null,
     };
 }
 
 async function fetchTraktJson(config, pathname, extraHeaders = {}) {
     return fetchJson(`${TRAKT_BASE_URL}${pathname}`, {
-        headers: createTraktHeaders(config, extraHeaders)
+        headers: createTraktHeaders(config, extraHeaders),
     });
 }
 
@@ -128,7 +129,7 @@ function findFirstNestedEpisode(seasons, showId) {
                     showId: normalizedShowId,
                     seasonNumber,
                     episodeNumber,
-                    episode
+                    episode,
                 };
             }
         }
@@ -152,7 +153,7 @@ async function resolveMovieWithZhTranslation(config) {
             return {
                 traktId,
                 movie: item.movie,
-                translations: translations.json
+                translations: translations.json,
             };
         }
         return null;
@@ -191,7 +192,7 @@ async function resolveMovieWithWatchnow(config) {
             return {
                 traktId,
                 movie: item.movie,
-                watchnow: watchnow.json
+                watchnow: watchnow.json,
             };
         }
         return null;
@@ -224,7 +225,7 @@ async function resolveShowEpisodeSample(config) {
             return {
                 traktId,
                 show: item.show,
-                ...firstEpisode
+                ...firstEpisode,
             };
         }
         return null;
@@ -239,7 +240,7 @@ async function resolveShowEpisodeSample(config) {
 
 async function resolvePopularShowWithZhTranslation(config) {
     const popular = await fetchJson("https://apiz.trakt.tv/shows/popular?extended=cloud9,full&limit=100&local_name=%E7%83%AD%E9%97%A8%E5%89%A7%E9%9B%86&page=1&ratings=80-100", {
-        headers: createTraktHeaders(config)
+        headers: createTraktHeaders(config),
     });
     assert.equal(popular.status, 200, "Failed to resolve apiz popular shows");
 
@@ -256,7 +257,7 @@ async function resolvePopularShowWithZhTranslation(config) {
                 traktId,
                 show: targetShow,
                 listBody: popular.body,
-                translations: translations.json
+                translations: translations.json,
             };
         }
         return null;
@@ -271,7 +272,7 @@ async function resolvePopularShowWithZhTranslation(config) {
 
 async function resolvePopularMovieWithZhTranslation(config) {
     const popular = await fetchJson("https://apiz.trakt.tv/movies/popular?extended=cloud9,full&limit=100&local_name=%E7%83%AD%E9%97%A8%E7%94%B5%E5%BD%B1&page=1&ratings=80-100", {
-        headers: createTraktHeaders(config)
+        headers: createTraktHeaders(config),
     });
     assert.equal(popular.status, 200, "Failed to resolve apiz popular movies");
 
@@ -288,7 +289,7 @@ async function resolvePopularMovieWithZhTranslation(config) {
                 traktId,
                 movie: targetMovie,
                 listBody: popular.body,
-                translations: translations.json
+                translations: translations.json,
             };
         }
         return null;
@@ -333,7 +334,7 @@ async function resolveMovieWithPeople(config) {
             people: people.json,
             person: firstPerson,
             personId,
-            personDetail: detail.json
+            personDetail: detail.json,
         };
     });
 
@@ -370,7 +371,7 @@ async function resolveMovieWithComments(config) {
             traktId,
             movie: item.movie,
             comments: comments.json,
-            firstComment
+            firstComment,
         };
     });
 
@@ -408,7 +409,7 @@ async function resolveMovieWithSentiments(config) {
         return {
             traktId,
             movie: item.movie,
-            sentiments: sentiments.json
+            sentiments: sentiments.json,
         };
     });
 
@@ -422,16 +423,12 @@ async function resolveMovieWithSentiments(config) {
 function createScriptRequestHeaders(config, extraHeaders = {}) {
     return createTraktHeaders(config, {
         "user-agent": LIVE_HTTP_USER_AGENT,
-        ...extraHeaders
+        ...extraHeaders,
     });
 }
 
 async function runLiveResponseCase(config, input) {
-    const allowRealHttpHosts = [
-        "api.trakt.tv",
-        "apiz.trakt.tv",
-        new URL(config.backendBaseUrl).hostname
-    ];
+    const allowRealHttpHosts = ["api.trakt.tv", "apiz.trakt.tv", new URL(config.backendBaseUrl).hostname];
 
     if (config.allowGoogleTranslate) {
         allowRealHttpHosts.push(GOOGLE_TRANSLATE_HOST);
@@ -439,14 +436,14 @@ async function runLiveResponseCase(config, input) {
 
     return runScriptLive({
         allowRealHttpHosts,
-        ...input
+        ...input,
     });
 }
 
 async function runLiveRequestCase(config, input) {
     return runLiveResponseCase(config, {
         hasResponse: false,
-        ...input
+        ...input,
     });
 }
 
@@ -467,5 +464,5 @@ export {
     resolvePopularShowWithZhTranslation,
     createScriptRequestHeaders,
     runLiveResponseCase,
-    runLiveRequestCase
+    runLiveRequestCase,
 };

@@ -1,7 +1,7 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline/promises";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_BACKEND_BASE_URL = "https://loon-plugins.demojameson.de5.net";
@@ -10,10 +10,7 @@ const LOCAL_CONFIG_PATH = path.resolve(__dirname, "..", ".trakt-live-test.local.
 const TRAKT_DEVICE_CODE_URL = "https://api.trakt.tv/oauth/device/code";
 const TRAKT_DEVICE_TOKEN_URL = "https://api.trakt.tv/oauth/device/token";
 const TRAKT_VALIDATE_TOKEN_URL = "https://api.trakt.tv/users/settings";
-const LIVE_TEST_FILES = [
-    "tests/trakt_live_backend.test.mjs",
-    "tests/trakt_live_script.test.mjs"
-];
+const LIVE_TEST_FILES = ["tests/trakt_live_backend.test.mjs", "tests/trakt_live_script.test.mjs"];
 
 function readLocalConfig() {
     if (!fs.existsSync(LOCAL_CONFIG_PATH)) {
@@ -39,9 +36,9 @@ async function postJson(url, payload) {
         headers: {
             accept: "application/json",
             "content-type": "application/json",
-            "user-agent": "TraktLiveTestHarness/1.0"
+            "user-agent": "TraktLiveTestHarness/1.0",
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
     });
 
     const body = await response.text();
@@ -56,7 +53,7 @@ async function postJson(url, payload) {
     return {
         status: response.status,
         body,
-        json
+        json,
     };
 }
 
@@ -67,8 +64,8 @@ async function fetchWithJson(url, headers = {}) {
             accept: "application/json",
             "content-type": "application/json",
             "user-agent": "TraktLiveTestHarness/1.0",
-            ...headers
-        }
+            ...headers,
+        },
     });
 
     const body = await response.text();
@@ -83,7 +80,7 @@ async function fetchWithJson(url, headers = {}) {
     return {
         status: response.status,
         body,
-        json
+        json,
     };
 }
 
@@ -98,13 +95,13 @@ async function ensureOAuthToken(rl, currentConfig, traktApiKey, traktClientSecre
         const validateResponse = await fetchWithJson(TRAKT_VALIDATE_TOKEN_URL, {
             authorization: `Bearer ${traktOAuthToken}`,
             "trakt-api-key": traktApiKey,
-            "trakt-api-version": "2"
+            "trakt-api-version": "2",
         });
 
         if (validateResponse.status >= 200 && validateResponse.status < 300) {
             return {
                 TRAKT_OAUTH_TOKEN: traktOAuthToken,
-                TRAKT_CLIENT_SECRET: traktClientSecret
+                TRAKT_CLIENT_SECRET: traktClientSecret,
             };
         }
 
@@ -116,7 +113,7 @@ async function ensureOAuthToken(rl, currentConfig, traktApiKey, traktClientSecre
     if (traktOAuthToken) {
         return {
             TRAKT_OAUTH_TOKEN: traktOAuthToken,
-            TRAKT_CLIENT_SECRET: traktClientSecret
+            TRAKT_CLIENT_SECRET: traktClientSecret,
         };
     }
 
@@ -127,18 +124,16 @@ async function ensureOAuthToken(rl, currentConfig, traktApiKey, traktClientSecre
     if (!traktClientSecret) {
         return {
             TRAKT_OAUTH_TOKEN: "",
-            TRAKT_CLIENT_SECRET: ""
+            TRAKT_CLIENT_SECRET: "",
         };
     }
 
     const deviceCodeResponse = await postJson(TRAKT_DEVICE_CODE_URL, {
-        client_id: traktApiKey
+        client_id: traktApiKey,
     });
 
     if (deviceCodeResponse.status < 200 || deviceCodeResponse.status >= 300 || !deviceCodeResponse.json) {
-        throw new Error(
-            `Failed to create Trakt device code: HTTP ${deviceCodeResponse.status} ${deviceCodeResponse.body}`
-        );
+        throw new Error(`Failed to create Trakt device code: HTTP ${deviceCodeResponse.status} ${deviceCodeResponse.body}`);
     }
 
     const verificationUrl = String(deviceCodeResponse.json.verification_url ?? "").trim();
@@ -146,9 +141,7 @@ async function ensureOAuthToken(rl, currentConfig, traktApiKey, traktClientSecre
     const deviceCode = String(deviceCodeResponse.json.device_code ?? "").trim();
     const intervalSeconds = Number(deviceCodeResponse.json.interval ?? 5);
     const expiresInSeconds = Number(deviceCodeResponse.json.expires_in ?? 600);
-    const loginUrl = verificationUrl && userCode
-        ? `${verificationUrl.replace(/\/+$/, "")}/${encodeURIComponent(userCode)}`
-        : verificationUrl;
+    const loginUrl = verificationUrl && userCode ? `${verificationUrl.replace(/\/+$/, "")}/${encodeURIComponent(userCode)}` : verificationUrl;
 
     console.log("");
     console.log("请在浏览器中打开下面的 Trakt 登录链接并完成授权：");
@@ -170,7 +163,7 @@ async function ensureOAuthToken(rl, currentConfig, traktApiKey, traktClientSecre
         const tokenResponse = await postJson(TRAKT_DEVICE_TOKEN_URL, {
             code: deviceCode,
             client_id: traktApiKey,
-            client_secret: traktClientSecret
+            client_secret: traktClientSecret,
         });
 
         if (tokenResponse.status === 200 && tokenResponse.json?.access_token) {
@@ -178,7 +171,7 @@ async function ensureOAuthToken(rl, currentConfig, traktApiKey, traktClientSecre
             console.log("Trakt 登录授权成功，已获取 access token。");
             return {
                 TRAKT_OAUTH_TOKEN: traktOAuthToken,
-                TRAKT_CLIENT_SECRET: traktClientSecret
+                TRAKT_CLIENT_SECRET: traktClientSecret,
             };
         }
 
@@ -192,9 +185,7 @@ async function ensureOAuthToken(rl, currentConfig, traktApiKey, traktClientSecre
         }
 
         if (tokenResponse.status >= 400) {
-            throw new Error(
-                `Failed to exchange Trakt device token: HTTP ${tokenResponse.status} ${tokenResponse.body}`
-            );
+            throw new Error(`Failed to exchange Trakt device token: HTTP ${tokenResponse.status} ${tokenResponse.body}`);
         }
     }
 
@@ -204,7 +195,7 @@ async function ensureOAuthToken(rl, currentConfig, traktApiKey, traktClientSecre
 async function promptForMissingValues(currentConfig) {
     const rl = readline.createInterface({
         input: process.stdin,
-        output: process.stdout
+        output: process.stdout,
     });
 
     try {
@@ -215,16 +206,12 @@ async function promptForMissingValues(currentConfig) {
 
         let traktClientSecret = String(process.env.TRAKT_CLIENT_SECRET ?? currentConfig.TRAKT_CLIENT_SECRET ?? "").trim();
         if (!traktClientSecret) {
-            traktClientSecret = String(await rl.question(
-                "请输入 TRAKT_CLIENT_SECRET，留空则跳过登录态接口测试: "
-            )).trim();
+            traktClientSecret = String(await rl.question("请输入 TRAKT_CLIENT_SECRET，留空则跳过登录态接口测试: ")).trim();
         }
 
         let backendBaseUrl = String(process.env.TRAKT_BACKEND_BASE_URL ?? currentConfig.TRAKT_BACKEND_BASE_URL ?? "").trim();
         if (!backendBaseUrl) {
-            const answer = String(await rl.question(
-                `请输入 TRAKT_BACKEND_BASE_URL，留空则使用默认值 ${DEFAULT_BACKEND_BASE_URL}: `
-            )).trim();
+            const answer = String(await rl.question(`请输入 TRAKT_BACKEND_BASE_URL，留空则使用默认值 ${DEFAULT_BACKEND_BASE_URL}: `)).trim();
             backendBaseUrl = answer || DEFAULT_BACKEND_BASE_URL;
         }
         const oauthConfig = await ensureOAuthToken(rl, currentConfig, traktApiKey, traktClientSecret);
@@ -233,7 +220,7 @@ async function promptForMissingValues(currentConfig) {
             TRAKT_API_KEY: traktApiKey,
             TRAKT_BACKEND_BASE_URL: backendBaseUrl,
             TRAKT_OAUTH_TOKEN: oauthConfig.TRAKT_OAUTH_TOKEN,
-            TRAKT_CLIENT_SECRET: oauthConfig.TRAKT_CLIENT_SECRET
+            TRAKT_CLIENT_SECRET: oauthConfig.TRAKT_CLIENT_SECRET,
         };
     } finally {
         rl.close();
@@ -245,9 +232,9 @@ function runCommand(command, args, env) {
         stdio: "inherit",
         env: {
             ...process.env,
-            ...env
+            ...env,
         },
-        cwd: path.resolve(__dirname, "..")
+        cwd: path.resolve(__dirname, ".."),
     });
 
     if (typeof result.status === "number" && result.status !== 0) {
@@ -265,12 +252,12 @@ async function main() {
 
     writeLocalConfig({
         ...localConfig,
-        ...resolvedConfig
+        ...resolvedConfig,
     });
 
     const testEnv = {
         TRAKT_API_KEY: resolvedConfig.TRAKT_API_KEY,
-        TRAKT_BACKEND_BASE_URL: resolvedConfig.TRAKT_BACKEND_BASE_URL
+        TRAKT_BACKEND_BASE_URL: resolvedConfig.TRAKT_BACKEND_BASE_URL,
     };
 
     if (!process.env.TRAKT_API_VERSION) {

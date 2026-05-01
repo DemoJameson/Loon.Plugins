@@ -1,9 +1,7 @@
 const MEDIA_TYPE = {
     SHOW: "show",
     MOVIE: "movie",
-    EPISODE: "episode"
+    EPISODE: "episode",
 };
 
-export {
-    MEDIA_TYPE
-};
+export { MEDIA_TYPE };

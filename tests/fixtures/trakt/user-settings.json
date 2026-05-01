@@ -8,10 +8,7 @@
     "browsing": {
         "watchnow": {
             "country": "SG",
-            "favorites": [
-                "sg-netflix",
-                "sg-eplayerx"
-            ]
+            "favorites": ["sg-netflix", "sg-eplayerx"]
         }
     }
 }

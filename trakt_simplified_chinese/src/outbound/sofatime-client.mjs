@@ -1,50 +1,11 @@
-import { escapeQueryComponent } from "../shared/common.mjs";
+import * as httpUtils from "../utils/http.mjs";
 
-function createSofaTimeClient(deps) {
-    const {
-        filmShowRatingsApiBaseUrl,
-        filmShowRatingsRapidApiHost,
-        fetchJson,
-        getRequestHeaderValue
-    } = deps;
+const FILM_SHOW_RATINGS_API_BASE_URL = "https://film-show-ratings.p.rapidapi.com";
 
-    function buildLookupUrl(imdbId) {
-        const normalizedImdbId = String(imdbId ?? "").trim();
-        return /^tt\d+$/i.test(normalizedImdbId)
-            ? `${filmShowRatingsApiBaseUrl}/item/?id=${escapeQueryComponent(normalizedImdbId)}`
-            : "";
-    }
-
-    function buildHeaders() {
-        const headers = {
-            accept: "application/json",
-            "x-rapidapi-host": filmShowRatingsRapidApiHost
-        };
-        [
-            "x-rapidapi-key",
-            "x-rapidapi-ua",
-            "user-agent",
-            "accept-language",
-            "accept-encoding"
-        ].forEach((headerName) => {
-            const value = getRequestHeaderValue(headerName);
-            if (value) {
-                headers[headerName] = value;
-            }
-        });
-        return headers;
-    }
-
-    function fetchByImdbId(imdbId) {
-        const url = buildLookupUrl(imdbId);
-        return url ? fetchJson(url, buildHeaders(), false) : Promise.resolve(null);
-    }
-
-    return {
-        fetchByImdbId
-    };
+function fetchByImdbId(imdbId, headers) {
+    const normalizedImdbId = String(imdbId ?? "").trim();
+    const url = /^tt\d+$/i.test(normalizedImdbId) ? `${FILM_SHOW_RATINGS_API_BASE_URL}/item/?id=${encodeURIComponent(normalizedImdbId)}` : "";
+    return url ? httpUtils.fetchJson(url, headers, false) : Promise.resolve(null);
 }
 
-export {
-    createSofaTimeClient
-};
+export { fetchByImdbId };

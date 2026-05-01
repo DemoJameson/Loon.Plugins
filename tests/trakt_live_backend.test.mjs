@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-    getLiveConfig,
-    fetchJson
-} from "./helpers/trakt-live-test-helpers.mjs";
+import { fetchJson, getLiveConfig } from "./helpers/trakt-live-test-helpers.mjs";
 
 function createBackendUrl(config, query = "") {
     const suffix = query ? `?${query}` : "";
@@ -23,51 +20,49 @@ test("live backend: POST 写入后可以 GET 读回 shows/movies/episodes 缓存
     const config = getLiveConfig();
     const payload = {
         shows: {
-            "99999001": {
+            99999001: {
                 status: 1,
                 translation: {
                     title: "后端测试剧集标题",
                     overview: "后端测试剧集简介",
-                    tagline: "后端测试剧集标语"
-                }
-            }
+                    tagline: "后端测试剧集标语",
+                },
+            },
         },
         movies: {
-            "99999002": {
+            99999002: {
                 status: 2,
                 translation: {
                     title: "后端测试电影标题",
                     overview: null,
-                    tagline: null
-                }
-            }
+                    tagline: null,
+                },
+            },
         },
         episodes: {
             "99999003:1:1": {
                 status: 3,
-                translation: null
-            }
-        }
+                translation: null,
+            },
+        },
     };
 
     const postResponse = await fetchJson(createBackendUrl(config), {
         method: "POST",
         headers: {
-            "content-type": "application/json"
+            "content-type": "application/json",
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
     });
 
     assert.equal(postResponse.status, 200);
     assert.deepEqual(postResponse.json.counts, {
         shows: 1,
         movies: 1,
-        episodes: 1
+        episodes: 1,
     });
 
-    const getResponse = await fetchJson(
-        createBackendUrl(config, "shows=99999001&movies=99999002&episodes=99999003:1:1")
-    );
+    const getResponse = await fetchJson(createBackendUrl(config, "shows=99999001&movies=99999002&episodes=99999003:1:1"));
 
     assert.equal(getResponse.status, 200);
     assert.equal(getResponse.json.shows["99999001"].status, 1);

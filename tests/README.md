@@ -1,21 +1,21 @@
 # Trakt Tests
 
-`tests/` 里的 Trakt 自动化分成两层：
+`tests/` 里的 Trakt 自动化目前分成两层：
 
-- `trakt_core.test.js`
-  覆盖 `trakt_simplified_chinese/src/core/*.mjs` 的纯函数和弱环境耦合逻辑。
-- `trakt_script_*.test.js`
+- `trakt_argument.test.mjs`
+  覆盖参数解析、开关项、请求 phase 改写与配置注入相关行为。
+- `trakt_script_*.test.mjs`
   覆盖构建后的单文件脚本在 Loon 运行时的 request/response 行为。
 
 ## Test File Ownership
 
-- `trakt_script_watchnow.test.js`
+- `trakt_script_watchnow.test.mjs`
   放 `watchnow`、`users/settings`、season request state、redirect/logo rewrite 相关测试。
-- `trakt_script_translations.test.js`
+- `trakt_script_translations.test.mjs`
   放 translations、media detail、history、comments、list descriptions、sentiments 相关测试。
-- `trakt_script_people.test.js`
+- `trakt_script_people.test.mjs`
   放 people detail、media people list、person credits 相关测试。
-- `trakt_script_routes.test.js`
+- `trakt_script_routes.test.mjs`
   放 Sofa Time、TMDb provider、request/response route matrix、以及不适合归到其他主题的 route smoke tests。
 
 新增脚本级测试时，优先按“行为域”归类，不按 URL 数量平均拆分。
@@ -38,9 +38,9 @@
 
 ## Adding Tests
 
-1. 如果测纯逻辑，优先加到 `trakt_core.test.js`。
-2. 如果测脚本路由、缓存、网络编排或 `$done` 输出，加到对应的 `trakt_script_*.test.js`。
-3. 如果是新的 route dispatch smoke test，默认放 `trakt_script_routes.test.js`。
+1. 如果测参数解析、功能开关或 request phase 配置行为，优先加到 `trakt_argument.test.mjs`。
+2. 如果测脚本路由、缓存、网络编排或 `$done` 输出，加到对应的 `trakt_script_*.test.mjs`。
+3. 如果是新的 route dispatch smoke test，默认放 `trakt_script_routes.test.mjs`。
 4. 如果是缓存未命中后的正向链路，除了断言响应内容，还要断言缓存写回。
 5. 如果是 request phase 行为，使用 `hasResponse: false` 明确覆盖无 `$response` 分支。
 
@@ -50,6 +50,14 @@
 
 ```powershell
 npm test
+```
+
+定向运行单个或少量测试前，先格式化并构建：
+
+```powershell
+npm run format
+npm run build:trakt
+node --test tests/xxx.test.mjs
 ```
 
 真实请求联调单独运行：
