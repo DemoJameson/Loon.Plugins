@@ -138,6 +138,23 @@ function formatSgmoduleArgumentValue(value) {
     return `"${formatDefaultValue(value)}"`;
 }
 
+function inferPluginArgumentType(fieldType) {
+    if (fieldType === "boolean") {
+        return "switch";
+    }
+    if (fieldType === "text") {
+        return "input";
+    }
+    throw new Error(`Unsupported plugin argument type: ${fieldType}`);
+}
+
+function inferBoxjsSettingType(fieldType) {
+    if (fieldType === "boolean" || fieldType === "text") {
+        return fieldType;
+    }
+    throw new Error(`Unsupported BoxJs setting type: ${fieldType}`);
+}
+
 function buildArgumentList(argumentKeys, formatter) {
     return argumentKeys.map(formatter).join(",");
 }
@@ -216,7 +233,7 @@ function renderPlugin() {
     ];
 
     argumentFields.forEach((field) => {
-        lines.push(`${field.key} = ${field.pluginType}, ${formatPluginArgumentValue(field.defaultValue)}, tag=${field.tag}, desc=${field.desc}`);
+        lines.push(`${field.key} = ${inferPluginArgumentType(field.type)}, ${formatPluginArgumentValue(field.defaultValue)}, tag=${field.tag}, desc=${field.desc}`);
     });
 
     lines.push("", "[Script]");
@@ -327,7 +344,7 @@ function renderBoxjs() {
             id: `${storagePrefix}.${field.key}`,
             name: field.tag,
             val: field.defaultValue,
-            type: field.boxjsType,
+            type: inferBoxjsSettingType(field.type),
             desc: field.desc,
         })),
         descs_html: boxjs.app.descsHtml,

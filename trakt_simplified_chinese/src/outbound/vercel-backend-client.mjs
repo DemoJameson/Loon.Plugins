@@ -10,6 +10,10 @@ function fetchTranslations(query) {
     return httpUtils.fetchJson(`${resolveBackendBaseUrl()}/api/trakt/translations?${query}`, null, false);
 }
 
+function fetchTranslationOverrides() {
+    return httpUtils.fetchJson(`${resolveBackendBaseUrl()}/api/trakt/translation-overrides`, null, false);
+}
+
 function postTranslations(payload) {
     return httpUtils.postJson(
         `${resolveBackendBaseUrl()}/api/trakt/translations`,
@@ -21,4 +25,4 @@ function postTranslations(payload) {
     );
 }
 
-export { DEFAULT_BACKEND_BASE_URL, fetchTranslations, postTranslations, resolveBackendBaseUrl };
+export { DEFAULT_BACKEND_BASE_URL, fetchTranslationOverrides, fetchTranslations, postTranslations, resolveBackendBaseUrl };

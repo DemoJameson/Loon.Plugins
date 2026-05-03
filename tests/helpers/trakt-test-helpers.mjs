@@ -61,6 +61,12 @@ function createUnifiedCache(overrides = {}) {
         },
         persistent: {
             currentSeason: overrides.persistentCurrentSeason ?? null,
+            translationOverrides: overrides.translationOverrides ?? {
+                fetchedAt: 0,
+                shows: {},
+                movies: {},
+                episodes: {},
+            },
         },
     });
 }

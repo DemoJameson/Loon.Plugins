@@ -57,7 +57,7 @@ test("cache utils: normalizeUnifiedCache keeps comments cache in current nested 
 
 test("cache utils: pruneUnifiedCacheToLimit removes oldest entries first", () => {
     const env = createEnv();
-    const cache = createEmptyUnifiedCache(2, 420);
+    const cache = createEmptyUnifiedCache(2, 450);
 
     cache.google.comments.oldest = {
         comment: {
@@ -81,7 +81,7 @@ test("cache utils: pruneUnifiedCacheToLimit removes oldest entries first", () =>
         updatedAt: 3,
     };
 
-    const pruned = pruneUnifiedCacheToLimit(env, cache, 2, 420);
+    const pruned = pruneUnifiedCacheToLimit(env, cache, 2, 450);
 
     assert.equal(pruned.google.comments.oldest, undefined);
     assert.equal(pruned.google.comments.middle, undefined);

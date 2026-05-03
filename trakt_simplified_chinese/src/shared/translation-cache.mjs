@@ -3,6 +3,9 @@ import * as commonUtils from "../utils/common.mjs";
 const TRANSLATION_FIELDS = ["title", "overview", "tagline"];
 const REQUIRED_TRANSLATION_FIELDS = ["title", "overview"];
 const TRANSLATION_FALLBACK_REGIONS = ["sg", "tw", "hk"];
+const EPISODE_MEDIA_TYPE = "episode";
+const EPISODE_PLACEHOLDER_TITLE_RE = /^\s*episode\s+0*(\d+)\s*$/i;
+const CHINESE_CHARACTER_RE = /[\u3400-\u9fff]/;
 
 const CACHE_STATUS = {
     FOUND: 1,
@@ -12,6 +15,19 @@ const CACHE_STATUS = {
 
 function isEmptyTranslationValue(value) {
     return value === undefined || value === null || value === "";
+}
+
+function extractEpisodePlaceholderNumber(value) {
+    const match = String(value ?? "").match(EPISODE_PLACEHOLDER_TITLE_RE);
+    if (!match) {
+        return null;
+    }
+    const episodeNumber = Number(match[1]);
+    return Number.isFinite(episodeNumber) ? episodeNumber : null;
+}
+
+function containsChineseCharacters(value) {
+    return CHINESE_CHARACTER_RE.test(String(value ?? ""));
 }
 
 function sortTranslations(arr, preferredLanguage) {
@@ -75,20 +91,30 @@ function isChineseTranslation(item) {
     return String(item?.language ?? "").toLowerCase() === "zh";
 }
 
-function normalizeTranslations(items) {
+function normalizeTranslations(items, options = {}) {
     if (commonUtils.isNotArray(items)) {
         items = [];
     }
 
+    const isEpisode = options?.mediaType === EPISODE_MEDIA_TYPE;
     let cnTranslation = findTranslationByRegion(items, "cn");
+    const originalCnTitle = cnTranslation?.title ?? null;
+    const originalCnHasRealTitle = !!(
+        cnTranslation &&
+        !isEmptyTranslationValue(originalCnTitle) &&
+        (!isEpisode || commonUtils.isNullish(extractEpisodePlaceholderNumber(originalCnTitle)))
+    );
     const originalCnComplete = !!(
         cnTranslation &&
         REQUIRED_TRANSLATION_FIELDS.every((field) => {
+            if (isEpisode && field === "title") {
+                return originalCnHasRealTitle;
+            }
             return !isEmptyTranslationValue(cnTranslation[field]);
         })
     );
     const hasAnyChineseTitle = items.some((item) => {
-        return isChineseTranslation(item) && !isEmptyTranslationValue(item.title);
+        return isChineseTranslation(item) && !isEmptyTranslationValue(item.title) && (!isEpisode || commonUtils.isNullish(extractEpisodePlaceholderNumber(item.title)));
     });
 
     if (!cnTranslation) {
@@ -113,7 +139,20 @@ function normalizeTranslations(items) {
         }
     });
 
-    cnTranslation.status = originalCnComplete ? CACHE_STATUS.FOUND : hasAnyChineseTitle ? CACHE_STATUS.PARTIAL_FOUND : CACHE_STATUS.NOT_FOUND;
+    const normalizedTitleNumber = extractEpisodePlaceholderNumber(cnTranslation.title);
+    const sourceTitleNumber = extractEpisodePlaceholderNumber(options?.sourceTitle);
+    const placeholderEpisodeNumber = commonUtils.isNonNullish(normalizedTitleNumber) ? normalizedTitleNumber : sourceTitleNumber;
+    const hasGeneratedEpisodeTitle = isEpisode && !hasAnyChineseTitle && commonUtils.isNonNullish(placeholderEpisodeNumber);
+    if (hasGeneratedEpisodeTitle) {
+        cnTranslation.title = `第${placeholderEpisodeNumber}集`;
+    }
+
+    const hasChineseEpisodeDescription = isEpisode && (containsChineseCharacters(cnTranslation.overview) || containsChineseCharacters(cnTranslation.tagline));
+    cnTranslation.status = originalCnComplete
+        ? CACHE_STATUS.FOUND
+        : hasAnyChineseTitle || (hasGeneratedEpisodeTitle && hasChineseEpisodeDescription)
+          ? CACHE_STATUS.PARTIAL_FOUND
+          : CACHE_STATUS.NOT_FOUND;
 
     return items;
 }
@@ -162,6 +201,8 @@ export {
     extractNormalizedTranslation,
     findTranslationByRegion,
     hasUsefulTranslation,
+    containsChineseCharacters,
+    extractEpisodePlaceholderNumber,
     isChineseTranslation,
     isEmptyTranslationValue,
     normalizeTranslationPayload,

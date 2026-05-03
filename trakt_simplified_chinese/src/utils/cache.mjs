@@ -67,7 +67,32 @@ function createEmptyUnifiedCache(schemaVersion = UNIFIED_CACHE_SCHEMA_VERSION, m
         },
         persistent: {
             currentSeason: null,
+            translationOverrides: {
+                fetchedAt: 0,
+                shows: {},
+                movies: {},
+                episodes: {},
+            },
         },
+    };
+}
+
+function normalizeTranslationOverrides(cache) {
+    const source = commonUtils.ensureObject(cache);
+    const normalizeGroup = (group) => {
+        const entries = commonUtils.ensureObject(group);
+        return Object.fromEntries(
+            Object.entries(entries)
+                .map(([key, entry]) => [key, commonUtils.ensureObject(entry, null)])
+                .filter(([, entry]) => entry && commonUtils.isPlainObject(entry.translation)),
+        );
+    };
+
+    return {
+        fetchedAt: Number.isFinite(Number(source.fetchedAt)) ? Number(source.fetchedAt) : 0,
+        shows: normalizeGroup(source.shows),
+        movies: normalizeGroup(source.movies),
+        episodes: normalizeGroup(source.episodes),
     };
 }
 
@@ -107,6 +132,7 @@ function normalizeUnifiedCache(rawCache, schemaVersion = UNIFIED_CACHE_SCHEMA_VE
 
     const persistentCache = commonUtils.ensureObject(cache.persistent);
     nextCache.persistent.currentSeason = commonUtils.isPlainObject(persistentCache.currentSeason) ? persistentCache.currentSeason : null;
+    nextCache.persistent.translationOverrides = normalizeTranslationOverrides(persistentCache.translationOverrides);
 
     return nextCache;
 }
@@ -240,6 +266,16 @@ function saveLinkIdsCache(env, cache) {
     saveUnifiedCache(env, unifiedCache);
 }
 
+function loadTranslationOverridesCache(env) {
+    return normalizeTranslationOverrides(loadUnifiedCache(env).persistent.translationOverrides);
+}
+
+function saveTranslationOverridesCache(env, cache) {
+    const unifiedCache = loadUnifiedCache(env);
+    unifiedCache.persistent.translationOverrides = normalizeTranslationOverrides(cache);
+    saveUnifiedCache(env, unifiedCache);
+}
+
 function loadCommentTranslationCache(env) {
     return commonUtils.ensureObject(loadUnifiedCache(env).google.comments);
 }
@@ -333,10 +369,12 @@ export {
     loadHistoryEpisodesMergedByShowCache,
     loadLinkIdsCache,
     loadListTranslationCache,
+    loadTranslationOverridesCache,
     loadPeopleTranslationCache,
     loadSentimentTranslationCache,
     loadUnifiedCache,
     normalizeUnifiedCache,
+    normalizeTranslationOverrides,
     normalizeUpdatedAtEntryMap,
     pruneUnifiedCacheToLimit,
     saveCache,
@@ -345,6 +383,7 @@ export {
     saveHistoryEpisodesMergedByShowCache,
     saveLinkIdsCache,
     saveListTranslationCache,
+    saveTranslationOverridesCache,
     savePeopleTranslationCache,
     saveSentimentTranslationCache,
     saveUnifiedCache,

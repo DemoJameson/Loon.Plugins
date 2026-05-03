@@ -92,6 +92,37 @@ function createResponseRouteStubs() {
     return createResponsePhaseRoutes();
 }
 
+function createTraktZhTranslationBody(overrides = {}) {
+    return JSON.stringify([
+        {
+            language: "zh",
+            country: "cn",
+            title: "Trakt 标题",
+            overview: "Trakt 简介",
+            tagline: "Trakt 标语",
+            ...overrides,
+        },
+    ]);
+}
+
+function createBackendTranslationOverridesBody(fieldName, lookupKey, entry) {
+    return JSON.stringify({
+        shows: {},
+        movies: {},
+        episodes: {},
+        [fieldName]: {
+            [lookupKey]: entry,
+        },
+    });
+}
+
+function createTranslationOverrideEntry(translation) {
+    return {
+        translation,
+        updatedAt: 1710000000000,
+    };
+}
+
 function createDirectMovieBody() {
     return readFixture("recommendations-movies.json");
 }
@@ -809,6 +840,79 @@ test("handleMediaDetail 覆盖 movie、show 与 episode detail 路由", async (t
     }
 });
 
+test("handleMediaDetail 会叠加远端 translationOverrides 表", async (t) => {
+    const cases = [
+        {
+            name: "movie detail override title",
+            url: "https://api.trakt.tv/movies/123",
+            body: readFixture("movie-detail.json"),
+            persistentData: createMoviePersistentData(),
+            backendBody: createBackendTranslationOverridesBody("movies", "123", createTranslationOverrideEntry({ title: "电影覆盖标题" })),
+            assertPayload(payload) {
+                assert.equal(payload.title, "电影覆盖标题");
+                assert.equal(payload.overview, "中文简介");
+            },
+        },
+        {
+            name: "show detail override overview",
+            url: "https://api.trakt.tv/shows/456",
+            body: JSON.stringify({
+                title: "Original Show Title",
+                overview: "Original Show Overview",
+                first_aired: "2025-01-01T00:00:00.000Z",
+                network: "HBO",
+                tagline: "Original Show Tagline",
+                ids: {
+                    trakt: 456,
+                },
+            }),
+            persistentData: createShowPersistentData(),
+            backendBody: createBackendTranslationOverridesBody("shows", "456", createTranslationOverrideEntry({ overview: "剧集覆盖简介" })),
+            assertPayload(payload) {
+                assert.equal(payload.title, "中文剧名");
+                assert.equal(payload.overview, "剧集覆盖简介");
+            },
+        },
+        {
+            name: "episode detail override title",
+            url: "https://api.trakt.tv/shows/555/seasons/1/episodes/2",
+            body: JSON.stringify({
+                season: 1,
+                number: 2,
+                title: "Original Episode Title",
+                overview: "Original Episode Overview",
+                ids: {
+                    trakt: 1001,
+                },
+            }),
+            persistentData: createEpisodePersistentData(),
+            backendBody: createBackendTranslationOverridesBody("episodes", "555:1:2", createTranslationOverrideEntry({ title: "单集覆盖标题" })),
+            assertPayload(payload) {
+                assert.equal(payload.title, "单集覆盖标题");
+                assert.equal(payload.overview, "第二集中文简介");
+            },
+        },
+    ];
+
+    for (const item of cases) {
+        await t.test(item.name, async () => {
+            const { result } = await runResponseCase({
+                url: item.url,
+                body: item.body,
+                persistentData: item.persistentData,
+                argument: {
+                    backendBaseUrl: "https://backend.example",
+                },
+                httpGetMocks: {
+                    "https://backend.example/api/trakt/translation-overrides": item.backendBody,
+                },
+            });
+
+            item.assertPayload(JSON.parse(result.body));
+        });
+    }
+});
+
 test("handlePeopleDetail 覆盖 /people/:id 路由", async () => {
     const { result } = await runResponseCase({
         url: "https://api.trakt.tv/people/42",
@@ -860,6 +964,182 @@ test("handleTranslations 覆盖 movie、show 与 episode /translations/zh 路由
             assert.equal(payload[0].country, "cn");
         });
     }
+});
+
+test("handleTranslations 只覆盖 translationOverrides 提供字段", async (t) => {
+    const cases = [
+        {
+            name: "movie override title only",
+            url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
+            backendUrl: "https://backend.example/api/trakt/translation-overrides",
+            backendBody: createBackendTranslationOverridesBody("movies", "123", createTranslationOverrideEntry({ title: "覆盖标题" })),
+            assertPayload(payload) {
+                assert.equal(payload[0].title, "覆盖标题");
+                assert.equal(payload[0].overview, "Trakt 简介");
+                assert.equal(payload[0].tagline, "Trakt 标语");
+            },
+        },
+        {
+            name: "show override overview only",
+            url: "https://api.trakt.tv/shows/456/translations/zh?extended=all",
+            backendUrl: "https://backend.example/api/trakt/translation-overrides",
+            backendBody: createBackendTranslationOverridesBody("shows", "456", createTranslationOverrideEntry({ overview: "覆盖剧集简介" })),
+            assertPayload(payload) {
+                assert.equal(payload[0].title, "Trakt 标题");
+                assert.equal(payload[0].overview, "覆盖剧集简介");
+                assert.equal(payload[0].tagline, "Trakt 标语");
+            },
+        },
+        {
+            name: "episode override title only",
+            url: "https://api.trakt.tv/shows/555/seasons/1/episodes/2/translations/zh?extended=all",
+            backendUrl: "https://backend.example/api/trakt/translation-overrides",
+            backendBody: createBackendTranslationOverridesBody("episodes", "555:1:2", createTranslationOverrideEntry({ title: "覆盖单集标题" })),
+            assertPayload(payload) {
+                assert.equal(payload[0].title, "覆盖单集标题");
+                assert.equal(payload[0].overview, "Trakt 简介");
+                assert.equal(payload[0].tagline, "Trakt 标语");
+            },
+        },
+    ];
+
+    for (const item of cases) {
+        await t.test(item.name, async () => {
+            const { result } = await runResponseCase({
+                url: item.url,
+                body: createTraktZhTranslationBody(),
+                argument: {
+                    backendBaseUrl: "https://backend.example",
+                },
+                httpGetMocks: {
+                    [item.backendUrl]: item.backendBody,
+                },
+            });
+
+            item.assertPayload(JSON.parse(result.body));
+        });
+    }
+});
+
+test("handleTranslations override 字段为空时保留 Trakt 当前翻译", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
+        body: createTraktZhTranslationBody(),
+        argument: {
+            backendBaseUrl: "https://backend.example",
+        },
+        httpGetMocks: {
+            "https://backend.example/api/trakt/translation-overrides": createBackendTranslationOverridesBody("movies", "123", createTranslationOverrideEntry({ title: null })),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].title, "Trakt 标题");
+    assert.equal(payload[0].overview, "Trakt 简介");
+});
+
+test("handleTranslations backend override 读取失败时保持现状", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
+        body: createTraktZhTranslationBody(),
+        argument: {
+            backendBaseUrl: "https://backend.example",
+        },
+        httpGetMocks: {
+            "https://backend.example/api/trakt/translation-overrides": {
+                error: "backend unavailable",
+            },
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].title, "Trakt 标题");
+    assert.equal(payload[0].overview, "Trakt 简介");
+    assert.equal(payload[0].tagline, "Trakt 标语");
+});
+
+test("handleTranslations 脚本内部请求不会读取 translationOverrides 表", async () => {
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
+        body: createTraktZhTranslationBody(),
+        headers: {
+            "x-script-trakt-translation-request": "true",
+        },
+        argument: {
+            backendBaseUrl: "https://backend.example",
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].title, "Trakt 标题");
+    assert.equal(
+        httpLogs.some((item) => item.method === "GET" && item.url === "https://backend.example/api/trakt/translation-overrides"),
+        false,
+    );
+});
+
+test("handleMediaDetail translationOverrides 在刷新周期内直接读本地缓存", async () => {
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: readFixture("movie-detail.json"),
+        persistentData: createUnifiedPersistentData({
+            traktTranslation: JSON.parse(createMovieTranslationCache()),
+            translationOverrides: {
+                fetchedAt: Date.now(),
+                shows: {},
+                movies: {
+                    123: createTranslationOverrideEntry({ title: "缓存覆盖标题" }),
+                },
+                episodes: {},
+            },
+        }),
+        argument: {
+            backendBaseUrl: "https://backend.example",
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.title, "缓存覆盖标题");
+    assert.equal(
+        httpLogs.some((item) => item.method === "GET" && item.url === "https://backend.example/api/trakt/translation-overrides"),
+        false,
+    );
+});
+
+test("debugEnabled=true 时每次都会刷新 translationOverrides", async () => {
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: readFixture("movie-detail.json"),
+        persistentData: createUnifiedPersistentData({
+            traktTranslation: JSON.parse(createMovieTranslationCache()),
+            translationOverrides: {
+                fetchedAt: Date.now(),
+                shows: {},
+                movies: {
+                    123: createTranslationOverrideEntry({ title: "旧缓存标题" }),
+                },
+                episodes: {},
+            },
+        }),
+        argument: {
+            backendBaseUrl: "https://backend.example",
+            debugEnabled: true,
+        },
+        httpGetMocks: {
+            "https://backend.example/api/trakt/translation-overrides": createBackendTranslationOverridesBody(
+                "movies",
+                "123",
+                createTranslationOverrideEntry({ title: "远端最新标题" }),
+            ),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.title, "远端最新标题");
+    assert.equal(
+        httpLogs.some((item) => item.method === "GET" && item.url === "https://backend.example/api/trakt/translation-overrides"),
+        true,
+    );
 });
 
 test("handleSentiments 覆盖原生 sentiments 与代理兼容路由", async (t) => {

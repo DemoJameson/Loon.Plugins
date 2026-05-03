@@ -39,8 +39,8 @@ const DIRECT_MEDIA_TYPE_SHOW_STATUSES = ["returning series", "ended", "canceled"
 const DIRECT_MEDIA_TYPE_MOVIE_STATUSES = ["released", "post production", "in production"];
 
 const DIRECT_MEDIA_ORIGINAL_KEY = "__directOriginal";
-const SCRIPT_TRANSLATION_REQUEST_HEADER = "x-loon-trakt-translation-request";
-const SCRIPT_TRANSLATION_REQUEST_VALUE = "script";
+const SCRIPT_TRANSLATION_REQUEST_HEADER = "x-script-trakt-translation-request";
+const SCRIPT_TRANSLATION_REQUEST_VALUE = "true";
 
 function buildTranslationCacheEntry(status, translation) {
     return { status, translation, updatedAt: Date.now() };
@@ -294,7 +294,12 @@ function fetchDirectTranslation(mediaType, ref) {
                     translation: null,
                 };
             }
-            return translationCache.extractNormalizedTranslation(translationCache.normalizeTranslations(responseJson));
+            return translationCache.extractNormalizedTranslation(
+                translationCache.normalizeTranslations(responseJson, {
+                    mediaType,
+                    sourceTitle: ref?.sourceTitle,
+                }),
+            );
         });
 }
 
@@ -396,6 +401,7 @@ function buildEpisodeRef(item, episode) {
         seasonNumber,
         episodeNumber,
         backendLookupKey: buildEpisodeCompositeKey(showId, seasonNumber, episodeNumber),
+        sourceTitle: episode?.title ?? null,
         availableTranslations: commonUtils.isArray(episode.available_translations) ? episode.available_translations : null,
     };
 }

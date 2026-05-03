@@ -25,6 +25,7 @@ const GOOGLE_TRANSLATE_URL = "https://translation.googleapis.com/language/transl
 const TEST_BACKEND_BASE_URL = "https://backend.example";
 const TEST_BACKEND_TRANSLATIONS_URL = `${TEST_BACKEND_BASE_URL}/api/trakt/translations`;
 const TEST_DIRECT_TRANSLATION_URL = "https://api.trakt.tv/movies/123/translations/zh?extended=all";
+const TEST_DIRECT_EPISODE_TRANSLATION_URL = "https://api.trakt.tv/shows/555/seasons/1/episodes/12/translations/zh?extended=all";
 
 function createPendingBackendPostMocks() {
     return {
@@ -49,6 +50,28 @@ function createDirectTranslationLookupBody() {
     ]);
 }
 
+function createEpisodeTranslationLookupBody(title = "Episode 12") {
+    return JSON.stringify([
+        {
+            watchers: 1,
+            show: {
+                title: "Original Show",
+                ids: {
+                    trakt: 555,
+                },
+                available_translations: [],
+            },
+            episode: {
+                title,
+                overview: "Original Episode Overview",
+                season: 1,
+                number: 12,
+                available_translations: ["zh"],
+            },
+        },
+    ]);
+}
+
 async function runDirectTranslationLookupCase(translationMock) {
     const httpPostMocks = createPendingBackendPostMocks();
     const { result, persistentData } = await runResponseCase({
@@ -59,6 +82,27 @@ async function runDirectTranslationLookupCase(translationMock) {
         },
         httpGetMocks: {
             [TEST_DIRECT_TRANSLATION_URL]: translationMock,
+        },
+        httpPostMocks,
+    });
+
+    return {
+        result,
+        persistentData,
+        backendPostQueue: httpPostMocks[TEST_BACKEND_TRANSLATIONS_URL],
+    };
+}
+
+async function runEpisodeTranslationLookupCase(translationMock, title = "Episode 12") {
+    const httpPostMocks = createPendingBackendPostMocks();
+    const { result, persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/media/trending",
+        body: createEpisodeTranslationLookupBody(title),
+        argument: {
+            backendBaseUrl: TEST_BACKEND_BASE_URL,
+        },
+        httpGetMocks: {
+            [TEST_DIRECT_EPISODE_TRANSLATION_URL]: translationMock,
         },
         httpPostMocks,
     });
@@ -146,6 +190,125 @@ test("/translations/zh 排序后会把 zh-CN 条目放在最前", async () => {
         assert.equal(cacheEntry.status, 3);
         assert.equal(backendPostQueue.length, 0);
     });
+});
+
+test("episode 数字占位标题无中文简介时会生成标题但保持 NOT_FOUND", async () => {
+    const { result, persistentData, backendPostQueue } = await runEpisodeTranslationLookupCase(
+        JSON.stringify([
+            {
+                language: "zh",
+                country: "cn",
+            },
+        ]),
+    );
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].episode.title, "第12集");
+
+    const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["episode:555:1:12"];
+    assert.equal(cacheEntry.status, 3);
+    assert.deepEqual(cacheEntry.translation, {
+        title: "第12集",
+        overview: null,
+        tagline: null,
+    });
+    assert.equal(backendPostQueue.length, 0);
+});
+
+test("episode 数字占位标题有中文简介时会生成标题并标记 PARTIAL_FOUND", async () => {
+    const { result, persistentData } = await runEpisodeTranslationLookupCase(
+        JSON.stringify([
+            {
+                language: "zh",
+                country: "cn",
+                overview: "中文简介",
+            },
+        ]),
+        "Episode 2",
+    );
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].episode.title, "第2集");
+    assert.equal(payload[0].episode.overview, "中文简介");
+
+    const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["episode:555:1:12"];
+    assert.equal(cacheEntry.status, 2);
+    assert.equal(cacheEntry.translation.title, "第2集");
+    assert.equal(cacheEntry.translation.overview, "中文简介");
+});
+
+test("episode 数字占位标题会按标题数字生成并去掉前导零", async () => {
+    const { result } = await runEpisodeTranslationLookupCase(
+        JSON.stringify([
+            {
+                language: "zh",
+                country: "cn",
+            },
+        ]),
+        "Episode 02",
+    );
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].episode.title, "第2集");
+});
+
+test("episode 已有真实中文标题时不会用数字占位标题覆盖", async () => {
+    const { result, persistentData } = await runEpisodeTranslationLookupCase(
+        JSON.stringify([
+            {
+                language: "zh",
+                country: "cn",
+                title: "真正中文标题",
+                overview: "中文简介",
+            },
+        ]),
+        "Episode 2",
+    );
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].episode.title, "真正中文标题");
+
+    const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["episode:555:1:12"];
+    assert.equal(cacheEntry.status, 1);
+    assert.equal(cacheEntry.translation.title, "真正中文标题");
+});
+
+test("episode 非数字占位标题不会生成中文集数标题", async () => {
+    const { result, persistentData } = await runEpisodeTranslationLookupCase(
+        JSON.stringify([
+            {
+                language: "zh",
+                country: "cn",
+            },
+        ]),
+        "Episode xx",
+    );
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].episode.title, "Episode xx");
+
+    const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["episode:555:1:12"];
+    assert.equal(cacheEntry.status, 3);
+    assert.equal(cacheEntry.translation, null);
+});
+
+test("movie 的 Episode 数字标题不会生成中文集数标题", async () => {
+    const { result, persistentData } = await runDirectTranslationLookupCase(
+        JSON.stringify([
+            {
+                language: "zh",
+                country: "cn",
+                title: "Episode 1",
+            },
+        ]),
+    );
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].movie.title, "Episode 1");
+
+    const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["movie:123"];
+    assert.equal(cacheEntry.status, 2);
+    assert.equal(cacheEntry.translation.title, "Episode 1");
 });
 
 [

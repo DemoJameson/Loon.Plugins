@@ -26,8 +26,6 @@ const argumentFields = [
         key: "historyEpisodesMergedByShow",
         defaultValue: true,
         type: "boolean",
-        pluginType: "switch",
-        boxjsType: "boolean",
         tag: "历史剧集按电视剧合并",
         desc: "启用后会将历史页面电视剧类别的观看记录按电视剧合并",
     },
@@ -35,8 +33,6 @@ const argumentFields = [
         key: "googleTranslationEnabled",
         defaultValue: true,
         type: "boolean",
-        pluginType: "switch",
-        boxjsType: "boolean",
         tag: "用谷歌翻译部分文本",
         desc: "启用后会翻译评论、社区情绪、冷知识、演员、片单等谷歌翻译场景",
     },
@@ -44,8 +40,6 @@ const argumentFields = [
         key: "eplayerxEnabled",
         defaultValue: true,
         type: "boolean",
-        pluginType: "switch",
-        boxjsType: "boolean",
         tag: "EplayerX 跳转按钮",
         desc: "启用后在 Trakt 和 SofaTime 中添加 EplayerX 跳转按钮",
     },
@@ -53,8 +47,6 @@ const argumentFields = [
         key: "forwardEnabled",
         defaultValue: true,
         type: "boolean",
-        pluginType: "switch",
-        boxjsType: "boolean",
         tag: "Forward 跳转按钮",
         desc: "启用后在 Trakt 和 SofaTime 中添加 Forward 跳转按钮",
     },
@@ -62,8 +54,6 @@ const argumentFields = [
         key: "infuseEnabled",
         defaultValue: true,
         type: "boolean",
-        pluginType: "switch",
-        boxjsType: "boolean",
         tag: "Infuse 跳转按钮",
         desc: "启用后在 Trakt 和 SofaTime 中添加 Infuse 跳转按钮",
     },
@@ -71,8 +61,6 @@ const argumentFields = [
         key: "useShortcutsJumpEnabled",
         defaultValue: false,
         type: "boolean",
-        pluginType: "switch",
-        boxjsType: "boolean",
         tag: "借助快捷指令跳转",
         desc: `启用后播放器跳转链接改为通过快捷指令打开 DeepLink，用于规避弹框确认。Safari浏览器需处于非无痕模式，配置快捷指令 ${SHORTCUT_URL}`,
     },
@@ -80,16 +68,21 @@ const argumentFields = [
         key: "backendBaseUrl",
         defaultValue: DEFAULT_BACKEND_BASE_URL,
         type: "text",
-        pluginType: "input",
-        boxjsType: "text",
         tag: "翻译缓存接口",
-        desc: "用于批量获取Trakt的中文翻译，一般留空即可",
+        desc: "用于批量获取 Trakt 的中文翻译，一般留空即可",
+    },
+    {
+        key: "debugEnabled",
+        defaultValue: false,
+        type: "boolean",
+        tag: "调试模式",
+        desc: "启用后每次都会刷新 translation-overrides 覆盖数据",
     },
 ];
 
 const ALL_ARGUMENT_KEYS = argumentFields.map((field) => field.key);
 const PLAYER_ARGUMENT_KEYS = ["eplayerxEnabled", "forwardEnabled", "infuseEnabled"];
-const CORE_ARGUMENT_KEYS = ["historyEpisodesMergedByShow", "googleTranslationEnabled", "useShortcutsJumpEnabled", "backendBaseUrl"];
+const CORE_ARGUMENT_KEYS = ["historyEpisodesMergedByShow", "googleTranslationEnabled", "useShortcutsJumpEnabled", "backendBaseUrl", "debugEnabled"];
 const CORE_WITH_PLAYER_ARGUMENT_KEYS = CORE_ARGUMENT_KEYS.flatMap((key) => (key === "useShortcutsJumpEnabled" ? [...PLAYER_ARGUMENT_KEYS, key] : key));
 
 const scriptRules = [
