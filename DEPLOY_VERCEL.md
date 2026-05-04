@@ -134,8 +134,10 @@
 部署后可访问：
 
 ```text
-https://your-project.vercel.app/admin.html
+https://your-project.vercel.app/admin
 ```
+
+也兼容直接访问 `https://your-project.vercel.app/admin.html`。
 
 页面标题为 `Trakt 翻译管理后台`。进入页面时需要输入 `ADMIN_TOKEN`；如果未配置或输入错误，管理接口会拒绝访问。
 

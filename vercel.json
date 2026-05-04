@@ -1,4 +1,14 @@
 {
+    "rewrites": [
+        {
+            "source": "/admin",
+            "destination": "/admin.html"
+        },
+        {
+            "source": "/admin/",
+            "destination": "/admin.html"
+        }
+    ],
     "functions": {
         "api/redirect.js": {
             "maxDuration": 10
@@ -7,5 +17,5 @@
             "maxDuration": 30
         }
     },
-    "ignoreCommand": "git diff --quiet HEAD^ HEAD -- api/ public/"
+    "ignoreCommand": "git diff --quiet HEAD^ HEAD -- api/ public/ vercel.json"
 }
