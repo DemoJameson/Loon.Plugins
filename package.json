@@ -1,5 +1,5 @@
 {
-    "name": "loon-plugins-tests",
+    "name": "proxy-modules-tests",
     "private": true,
     "scripts": {
         "build:trakt": "node scripts/build-trakt.mjs",

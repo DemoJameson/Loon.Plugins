@@ -45,6 +45,10 @@ function sendBadRequest(res, error) {
     res.status(400).json({ error });
 }
 
+function handleAuth(req, res) {
+    res.status(200).json({ ok: true });
+}
+
 function hasAnyOverrideField(translation) {
     return !!(translation && typeof translation === "object" && Object.values(translation).some((value) => value !== undefined && value !== null && value !== ""));
 }
@@ -157,6 +161,14 @@ module.exports = async (req, res) => {
     try {
         if (!authorizeAdmin(req, res)) {
             return;
+        }
+
+        if (req.method === "GET") {
+            const action = String(getSingleValue(req.query.action) || "list");
+            if (action === "auth") {
+                handleAuth(req, res);
+                return;
+            }
         }
 
         const kvConfig = getKvConfig();

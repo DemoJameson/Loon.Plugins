@@ -310,7 +310,7 @@
             }
 
             .row:hover {
-                border-color: transparent;
+                border-bottom-color: var(--line);
                 background: #eaf3ef;
                 transform: none;
             }
@@ -848,6 +848,19 @@
                 renderEditor(null);
             }
 
+            async function validateAdminToken(token) {
+                const previousToken = state.activeToken;
+                state.activeToken = token;
+                try {
+                    await requestAdmin({
+                        action: "auth",
+                    });
+                } catch (error) {
+                    state.activeToken = previousToken;
+                    throw error;
+                }
+            }
+
             async function unlockAdmin() {
                 const token = controls.tokenDialogInput.value.trim();
                 if (!token) {
@@ -857,11 +870,19 @@
 
                 controls.unlockAdmin.disabled = true;
                 controls.tokenDialogError.textContent = "验证中...";
-                enterAdmin(token);
-                controls.unlockAdmin.disabled = false;
+                try {
+                    await validateAdminToken(token);
+                    enterAdmin(token);
+                } catch (error) {
+                    controls.tokenDialogError.textContent = error.message || "管理员验证失败";
+                    controls.tokenDialogInput.focus();
+                    controls.tokenDialogInput.select();
+                } finally {
+                    controls.unlockAdmin.disabled = false;
+                }
             }
 
-            function autoUnlockWithStoredToken() {
+            async function autoUnlockWithStoredToken() {
                 const token = localStorage.getItem("traktAdminToken") || "";
                 if (!token) {
                     openTokenDialog();
@@ -869,7 +890,14 @@
                 }
 
                 controls.tokenDialogInput.value = token;
-                enterAdmin(token);
+                try {
+                    await validateAdminToken(token);
+                    enterAdmin(token);
+                } catch (error) {
+                    localStorage.removeItem("traktAdminToken");
+                    state.activeToken = "";
+                    openTokenDialog(error.message || "管理员验证失败");
+                }
             }
 
             async function requestAdmin(params, options = {}) {
@@ -1292,7 +1320,7 @@
 
                 event.preventDefault();
                 window.clearTimeout(querySearchTimer);
-                resetListToIdleState();
+                refreshFirstPage({ openFirstResult: false }).catch((error) => setListStatus(error.message, "error"));
             });
             fields.forEach((field) => {
                 const fieldControls = getFieldControls(field);
