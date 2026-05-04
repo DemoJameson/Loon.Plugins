@@ -156,6 +156,85 @@ test("/translations/zh 排序后会把 zh-CN 条目放在最前", async () => {
     assert.equal(payload[0].title, "国行标题");
 });
 
+test("/translations/zh 仅有 hk 条目时会按字段转成简体中文", async () => {
+    const { result, persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
+        body: readFixture("translations-traditional-hk.json"),
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].country, "cn");
+    assert.equal(payload[0].title, "港版标题");
+    assert.equal(payload[0].overview, "繁体简介与观众评价");
+    assert.equal(payload[0].tagline, "繁体标语");
+
+    const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["movie:123"];
+    assert.deepEqual(cacheEntry.translation, {
+        title: "港版标题",
+        overview: "繁体简介与观众评价",
+        tagline: "繁体标语",
+    });
+});
+
+test("/translations/zh 仅有 tw 条目时会按字段转成简体中文", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
+        body: readFixture("translations-traditional-tw.json"),
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].country, "cn");
+    assert.equal(payload[0].title, "台湾标题");
+    assert.equal(payload[0].overview, "繁体剧情与观众评价");
+    assert.equal(payload[0].tagline, "繁体标语");
+});
+
+test("/translations/zh 命中 cn 条目时即使是繁体也保持原文", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
+        body: readFixture("translations-traditional-cn.json"),
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].country, "cn");
+    assert.equal(payload[0].title, "國行標題");
+    assert.equal(payload[0].overview, "繁體簡介與觀眾評價");
+    assert.equal(payload[0].tagline, "繁體標語");
+});
+
+test("/translations/zh 使用 sg fallback 时保持原文不转换", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
+        body: readFixture("translations-traditional-sg.json"),
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].country, "cn");
+    assert.equal(payload[0].title, "新加坡標題");
+    assert.equal(payload[0].overview, "繁體簡介與觀眾評價");
+    assert.equal(payload[0].tagline, "繁體標語");
+});
+
+test("/translations/zh 混合来源时只转换来自 hk 或 tw 的字段", async () => {
+    const { result, persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
+        body: readFixture("translations-traditional-mixed.json"),
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].country, "cn");
+    assert.equal(payload[0].title, "台湾标题");
+    assert.equal(payload[0].overview, "新加坡繁體簡介");
+    assert.equal(payload[0].tagline, "港版标语");
+
+    const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["movie:123"];
+    assert.deepEqual(cacheEntry.translation, {
+        title: "台湾标题",
+        overview: "新加坡繁體簡介",
+        tagline: "港版标语",
+    });
+});
+
 [
     {
         name: "空响应体",

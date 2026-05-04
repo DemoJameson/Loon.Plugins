@@ -1,6 +1,6 @@
 import { Env } from "../../scripts/vendor/Env.module.mjs";
 
-import { TRAKT_SCRIPT_TITLE } from "./main.mjs";
+import { TRAKT_SCRIPT_TITLE } from "./module-manifest.mjs";
 import * as cacheUtils from "./utils/cache.mjs";
 
 const env = new Env(TRAKT_SCRIPT_TITLE);

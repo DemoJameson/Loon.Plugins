@@ -1,0 +1,17 @@
+[
+    {
+        "language": "zh",
+        "country": "tw",
+        "title": "台灣標題"
+    },
+    {
+        "language": "zh",
+        "country": "sg",
+        "overview": "新加坡繁體簡介"
+    },
+    {
+        "language": "zh",
+        "country": "hk",
+        "tagline": "港版標語"
+    }
+]

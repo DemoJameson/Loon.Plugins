@@ -1,5 +1,7 @@
 import * as commonUtils from "../utils/common.mjs";
 
+import * as chineseScriptConverter from "./chinese-script-converter.mjs";
+
 const TRANSLATION_FIELDS = ["title", "overview", "tagline"];
 const REQUIRED_TRANSLATION_FIELDS = ["title", "overview"];
 const TRANSLATION_FALLBACK_REGIONS = ["sg", "tw", "hk"];
@@ -91,6 +93,21 @@ function isChineseTranslation(item) {
     return String(item?.language ?? "").toLowerCase() === "zh";
 }
 
+function copyFallbackFieldToCnTranslation(cnTranslation, items, field) {
+    if (!isEmptyTranslationValue(cnTranslation[field])) {
+        return;
+    }
+
+    for (let i = 0; i < TRANSLATION_FALLBACK_REGIONS.length; i += 1) {
+        const region = TRANSLATION_FALLBACK_REGIONS[i];
+        const fallback = findTranslationByRegion(items, region);
+        if (fallback && !isEmptyTranslationValue(fallback[field])) {
+            cnTranslation[field] = chineseScriptConverter.convertRegionalTraditionalChineseToSimplified(fallback[field], region);
+            return;
+        }
+    }
+}
+
 function normalizeTranslations(items, options = {}) {
     if (commonUtils.isNotArray(items)) {
         items = [];
@@ -126,17 +143,7 @@ function normalizeTranslations(items, options = {}) {
     }
 
     TRANSLATION_FIELDS.forEach((field) => {
-        if (!isEmptyTranslationValue(cnTranslation[field])) {
-            return;
-        }
-
-        for (let i = 0; i < TRANSLATION_FALLBACK_REGIONS.length; i += 1) {
-            const fallback = findTranslationByRegion(items, TRANSLATION_FALLBACK_REGIONS[i]);
-            if (fallback && !isEmptyTranslationValue(fallback[field])) {
-                cnTranslation[field] = fallback[field];
-                break;
-            }
-        }
+        copyFallbackFieldToCnTranslation(cnTranslation, items, field);
     });
 
     const normalizedTitleNumber = extractEpisodePlaceholderNumber(cnTranslation.title);

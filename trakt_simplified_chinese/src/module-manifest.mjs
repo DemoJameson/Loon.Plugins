@@ -2,6 +2,7 @@ const REPOSITORY_URL = "https://github.com/DemoJameson/Proxy.Modules";
 const RAW_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main";
 const TRAKT_MODULE_PATH = "trakt_simplified_chinese";
 const TRAKT_SCRIPT_FILE = "trakt_simplified_chinese.js";
+const TRAKT_SCRIPT_TITLE = "Trakt增强";
 const SHORTCUT_URL = "https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d";
 const DEFAULT_BACKEND_BASE_URL = "https://proxy-modules.demojameson.de5.net";
 
@@ -233,4 +234,4 @@ const boxjs = {
     },
 };
 
-export { argumentFields, boxjs, BOXJS_CONFIG_KEY, DEFAULT_BACKEND_BASE_URL, metadata, mitmHosts, scriptRules, SHORTCUT_URL };
+export { argumentFields, boxjs, BOXJS_CONFIG_KEY, DEFAULT_BACKEND_BASE_URL, metadata, mitmHosts, scriptRules, SHORTCUT_URL, TRAKT_SCRIPT_TITLE };

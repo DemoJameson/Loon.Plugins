@@ -1,11 +1,10 @@
 import { Env } from "../../scripts/vendor/Env.module.mjs";
 
 import * as argumentConfig from "./argument.mjs";
+import { TRAKT_SCRIPT_TITLE } from "./module-manifest.mjs";
 import * as requestPhase from "./request.mjs";
 import * as responsePhase from "./response.mjs";
 import * as commonUtils from "./utils/common.mjs";
-
-const TRAKT_SCRIPT_TITLE = "Trakt增强";
 
 function isRequestPhase(env) {
     return typeof env.response === "undefined";
