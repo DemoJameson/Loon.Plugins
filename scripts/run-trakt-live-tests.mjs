@@ -4,7 +4,7 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 
-const DEFAULT_BACKEND_BASE_URL = "https://loon-plugins.demojameson.de5.net";
+const DEFAULT_BACKEND_BASE_URL = "https://proxy-modules.demojameson.de5.net";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOCAL_CONFIG_PATH = path.resolve(__dirname, "..", ".trakt-live-test.local.json");
 const TRAKT_DEVICE_CODE_URL = "https://api.trakt.tv/oauth/device/code";
@@ -88,6 +88,11 @@ function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isRateLimitedResponse(response) {
+    const errorName = String(response?.json?.error_name ?? response?.json?.error ?? "").toLowerCase();
+    return Number(response?.status) === 429 || errorName === "rate_limited" || errorName === "slow_down";
+}
+
 async function ensureOAuthToken(rl, currentConfig, traktApiKey, traktClientSecret) {
     let traktOAuthToken = String(process.env.TRAKT_OAUTH_TOKEN ?? currentConfig.TRAKT_OAUTH_TOKEN ?? "").trim();
 
@@ -131,6 +136,15 @@ async function ensureOAuthToken(rl, currentConfig, traktApiKey, traktClientSecre
     const deviceCodeResponse = await postJson(TRAKT_DEVICE_CODE_URL, {
         client_id: traktApiKey,
     });
+
+    if (isRateLimitedResponse(deviceCodeResponse)) {
+        console.log("");
+        console.log("Trakt 设备授权当前被限流，先跳过登录态 live tests，仅运行非登录态用例。");
+        return {
+            TRAKT_OAUTH_TOKEN: "",
+            TRAKT_CLIENT_SECRET: traktClientSecret,
+        };
+    }
 
     if (deviceCodeResponse.status < 200 || deviceCodeResponse.status >= 300 || !deviceCodeResponse.json) {
         throw new Error(`Failed to create Trakt device code: HTTP ${deviceCodeResponse.status} ${deviceCodeResponse.body}`);

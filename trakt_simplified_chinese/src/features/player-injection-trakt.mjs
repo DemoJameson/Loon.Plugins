@@ -5,7 +5,7 @@ import * as traktTranslationHelper from "../shared/trakt-translation-helper.mjs"
 import * as cacheUtils from "../utils/cache.mjs";
 import * as commonUtils from "../utils/common.mjs";
 
-const WATCHNOW_REDIRECT_URL = "https://loon-plugins.demojameson.de5.net/api/redirect";
+const WATCHNOW_REDIRECT_URL = "https://proxy-modules.demojameson.de5.net/api/redirect";
 const SHORTCUTS_OPENLINK_URL = `shortcuts://run-shortcut?name=${encodeURIComponent("打开链接")}&input=text&text=`;
 
 const WATCHNOW_DEFAULT_REGION = "us";
@@ -21,7 +21,7 @@ function createSourceDefinition(source, name, color) {
         link_count: 99999,
         color,
         images: {
-            logo: `raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/${source}.webp`,
+            logo: `raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/images/${source}.webp`,
             logo_colorized: null,
             channel: null,
         },
@@ -373,7 +373,7 @@ async function handleUserSettings() {
 async function handleDirectRedirectRequest() {
     const context = globalThis.$ctx;
     const location = resolveDirectRedirectLocation(context.url);
-    if (location && context.argument.useShortcutsJumpEnabled && /^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect?/i.test(String(context.url.href))) {
+    if (location && context.argument.useShortcutsJumpEnabled && /^https:\/\/proxy-modules\.demojameson\.de5\.net\/api\/redirect?/i.test(String(context.url.href))) {
         return {
             type: "redirect",
             location: buildShortcutsJumpLink(location),

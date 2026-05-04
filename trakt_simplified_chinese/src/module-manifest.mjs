@@ -1,9 +1,9 @@
-const REPOSITORY_URL = "https://github.com/DemoJameson/Loon.Plugins";
-const RAW_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main";
+const REPOSITORY_URL = "https://github.com/DemoJameson/Proxy.Modules";
+const RAW_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main";
 const TRAKT_MODULE_PATH = "trakt_simplified_chinese";
 const TRAKT_SCRIPT_FILE = "trakt_simplified_chinese.js";
 const SHORTCUT_URL = "https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d";
-const DEFAULT_BACKEND_BASE_URL = "https://loon-plugins.demojameson.de5.net";
+const DEFAULT_BACKEND_BASE_URL = "https://proxy-modules.demojameson.de5.net";
 
 const metadata = {
     name: "Trakt 增强",
@@ -100,7 +100,7 @@ const scriptRules = [
         title: "Direct Redirect",
         comment: "处理播放器 DeepLink 跳转",
         phase: "http-request",
-        pattern: String.raw`^https:\/\/loon-plugins\.demojameson\.de5\.net\/api\/redirect\?.*$`,
+        pattern: String.raw`^https:\/\/proxy-modules\.demojameson\.de5\.net\/api\/redirect\?.*$`,
         scriptFile: TRAKT_SCRIPT_FILE,
         timeout: 10,
         argumentKeys: ALL_ARGUMENT_KEYS,
@@ -206,7 +206,7 @@ const scriptRules = [
     },
 ];
 
-const mitmHosts = ["apiz.trakt.tv", "api.trakt.tv", "api.themoviedb.org", "image.tmdb.org", "streaming-availability.p.rapidapi.com", "loon-plugins.demojameson.de5.net"];
+const mitmHosts = ["apiz.trakt.tv", "api.trakt.tv", "api.themoviedb.org", "image.tmdb.org", "streaming-availability.p.rapidapi.com", "proxy-modules.demojameson.de5.net"];
 
 const boxjs = {
     id: "demojameson.app.sub",
@@ -223,10 +223,10 @@ const boxjs = {
         descsHtml: [
             metadata.description,
             `点此直达 <a href="${REPOSITORY_URL}/tree/main/${TRAKT_MODULE_PATH}">项目目录</a>`,
-            'Egern 安装：<a href="egern:/modules/new?name=%E4%BC%98%E5%8C%96%20Trakt%20%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87%E4%BD%93%E9%AA%8C&amp;url=https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FLoon.Plugins%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.plugin">安装模块</a>',
-            'Loon 安装：<a href="https://www.nsloon.com/openloon/import?plugin=https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FLoon.Plugins%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.plugin">安装插件</a>',
-            'Surge 安装：<a href="surge:///install-module?url=https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FLoon.Plugins%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.sgmodule">安装模块</a>',
-            'QX 安装：<a href="https://quantumult.app/x/open-app/add-resource?remote-resource=%7B%22rewrite_remote%22%3A%5B%22https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FLoon.Plugins%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.snippet%2C%20tag%3DTrakt%20Simplified%20Chinese%2C%20enabled%3Dtrue%22%5D%7D">安装片段</a>',
+            'Egern 安装：<a href="egern:/modules/new?name=%E4%BC%98%E5%8C%96%20Trakt%20%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87%E4%BD%93%E9%AA%8C&amp;url=https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FProxy.Modules%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.plugin">安装模块</a>',
+            'Loon 安装：<a href="https://www.nsloon.com/openloon/import?plugin=https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FProxy.Modules%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.plugin">安装插件</a>',
+            'Surge 安装：<a href="surge:///install-module?url=https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FProxy.Modules%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.sgmodule">安装模块</a>',
+            'QX 安装：<a href="https://quantumult.app/x/open-app/add-resource?remote-resource=%7B%22rewrite_remote%22%3A%5B%22https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FProxy.Modules%2Fmain%2Ftrakt_simplified_chinese%2Ftrakt_simplified_chinese.snippet%2C%20tag%3DTrakt%20Simplified%20Chinese%2C%20enabled%3Dtrue%22%5D%7D">安装片段</a>',
             `配套快捷指令：<a href="${SHORTCUT_URL}">打开链接</a>`,
             "脚本读取优先级：默认值 < BoxJs < 插件参数。已经在插件参数里填写的值会覆盖 BoxJs。",
         ],

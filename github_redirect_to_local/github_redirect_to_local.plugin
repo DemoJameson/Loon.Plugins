@@ -1,16 +1,16 @@
 #!name=GitHub Raw链接重定向到本地
-#!desc=将指定仓库的 raw.githubusercontent.com 请求重定向到本地测试服务，例如把 https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/a.js 转到 http://192.168.50.2:8080/Loon.Plugins/a.js
+#!desc=将指定仓库的 raw.githubusercontent.com 请求重定向到本地测试服务，例如把 https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/a.js 转到 http://192.168.50.2:8080/Proxy.Modules/a.js
 #!icon=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/GitHub.png
-#!homepage=https://github.com/DemoJameson/Loon.Plugins
+#!homepage=https://github.com/DemoJameson/Proxy.Modules
 #!author=DemoJameson
 
 [Argument]
 localBaseUrl = input, "http://192.168.50.2:8080", tag=本地目标地址, desc=填写本地测试服务根地址，不要带结尾斜杠
-repository = input, "Loon.Plugins", tag=仅重定向该仓库, desc=仅重定向该仓库的 raw 链接，默认值为 Loon.Plugins
+repository = input, "Proxy.Modules", tag=仅重定向该仓库, desc=仅重定向该仓库的 raw 链接，默认值为 Proxy.Modules
 
 [Script]
 # 使用脚本重定向，这样本地地址可以通过参数配置
-http-request ^https:\/\/raw\.githubusercontent\.com\/.*$ script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/github_redirect_to_local/github_redirect_to_local.js, timeout=10, argument=[{localBaseUrl},{repository}], tag=Github Raw Redirect
+http-request ^https:\/\/raw\.githubusercontent\.com\/.*$ script-path=https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/github_redirect_to_local/github_redirect_to_local.js, timeout=10, argument=[{localBaseUrl},{repository}], tag=Github Raw Redirect
 
 [MITM]
 hostname = raw.githubusercontent.com

@@ -3,8 +3,8 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Loon.Plugins</title>
-        <meta name="description" content="DemoJameson 的代理工具脚本目录，支持 Loon、Surge、Quantumult X 安装" />
+        <title>Proxy.Modules</title>
+        <meta name="description" content="DemoJameson 的代理工具模块仓库，支持 Egern、Loon、Surge、Quantumult X 安装" />
         <style>
             @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@500;600;700&display=swap");
 
@@ -150,7 +150,7 @@
                 letter-spacing: 0.015em;
             }
 
-            .plugin-card {
+            .module-card {
                 position: relative;
                 z-index: 1;
             }
@@ -243,7 +243,7 @@
                 gap: 22px;
             }
 
-            .plugin-card {
+            .module-card {
                 padding: 24px;
                 border: 1px solid var(--line);
                 border-radius: var(--radius-lg);
@@ -255,23 +255,23 @@
                 animation: rise 0.6s ease both;
             }
 
-            .plugin-card:hover {
+            .module-card:hover {
                 transform: translateY(-4px);
                 border-color: rgba(182, 90, 54, 0.24);
                 box-shadow: 0 22px 56px rgba(70, 40, 22, 0.12);
             }
 
-            .plugin-card:nth-child(2) {
+            .module-card:nth-child(2) {
                 animation-delay: 0.08s;
             }
 
-            .plugin-head {
+            .module-head {
                 display: flex;
                 align-items: center;
                 gap: 16px;
             }
 
-            .plugin-icon {
+            .module-icon {
                 width: 58px;
                 height: 58px;
                 flex: 0 0 58px;
@@ -282,12 +282,12 @@
                 object-fit: cover;
             }
 
-            .plugin-card h3 {
+            .module-card h3 {
                 font-size: clamp(24px, 2.6vw, 28px);
                 line-height: 1.05;
             }
 
-            .plugin-card p {
+            .module-card p {
                 margin: 14px 0 0;
                 color: var(--muted);
                 line-height: 1.8;
@@ -425,11 +425,11 @@
                     font-size: clamp(40px, 13vw, 60px);
                 }
 
-                .plugin-card {
+                .module-card {
                     padding: 20px;
                 }
 
-                .plugin-card h3 {
+                .module-card h3 {
                     font-size: 24px;
                 }
 
@@ -447,7 +447,7 @@
                     font-size: 13px;
                 }
 
-                .plugin-card p {
+                .module-card p {
                     min-height: 0;
                 }
             }
@@ -456,7 +456,7 @@
     <body>
         <main class="page">
             <section class="panel hero">
-                <a class="button hero-corner-link" href="https://github.com/DemoJameson/Loon.Plugins" target="_blank" rel="noreferrer" aria-label="GitHub 仓库">
+                <a class="button hero-corner-link" href="https://github.com/DemoJameson/Proxy.Modules" target="_blank" rel="noreferrer" aria-label="GitHub 仓库">
                     <svg viewBox="0 0 16 16" aria-hidden="true">
                         <path
                             d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.47 7.47 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"
@@ -464,12 +464,12 @@
                     </svg>
                 </a>
                 <div>
-                    <h1>Loon.Plugins</h1>
+                    <h1>Proxy.Modules</h1>
                     <p class="lead">个人使用的代理工具脚本仓库</p>
                     <div class="hero-actions">
                         <a
                             class="button secondary"
-                            href="http://boxjs.com/#/sub/add/https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FLoon.Plugins%2Fmain%2Fboxjs.json"
+                            href="http://boxjs.com/#/sub/add/https%3A%2F%2Fraw.githubusercontent.com%2FDemoJameson%2FProxy.Modules%2Fmain%2Fboxjs.json"
                             target="_blank"
                             rel="noreferrer"
                             >BoxJs 订阅</a
@@ -482,7 +482,7 @@
                 <h2>脚本列表</h2>
             </section>
 
-            <section class="catalog" id="plugin-list"></section>
+            <section class="catalog" id="module-list"></section>
         </main>
 
         <script>
@@ -504,70 +504,68 @@
                 egern: {
                     id: "egern",
                     name: "Egern",
-                    buildImportUrl(resourceUrl, plugin) {
-                        return "egern:/modules/new?name=" + encodeURIComponent(plugin.name) + "&url=" + encodeURIComponent(resourceUrl);
+                    buildImportUrl(resourceUrl, moduleItem) {
+                        return "egern:/modules/new?name=" + encodeURIComponent(moduleItem.name) + "&url=" + encodeURIComponent(resourceUrl);
                     },
                 },
                 qx: {
                     id: "qx",
                     name: "QX",
-                    buildImportUrl(resourceUrl, plugin) {
+                    buildImportUrl(resourceUrl, moduleItem) {
                         const payload = {
-                            rewrite_remote: [resourceUrl + ", tag=" + plugin.qxTag + ", enabled=true"],
+                            rewrite_remote: [resourceUrl + ", tag=" + moduleItem.qxTag + ", enabled=true"],
                         };
                         return "https://quantumult.app/x/open-app/add-resource?remote-resource=" + encodeURIComponent(JSON.stringify(payload));
                     },
                 },
             };
 
-            const plugins = [
+            const modules = [
                 {
                     id: "trakt_simplified_chinese",
-                    name: "优化 Trakt 简体中文体验",
-                    pluginFile: "trakt_simplified_chinese/trakt_simplified_chinese.plugin",
-                    descriptionFallback: "优先补全和显示 Trakt 的简体中文标题、简介等内容，并提供多客户端发布文件",
+                    name: "Trakt 增强",
+                    description: "Trakt App 各页面从英文改为简体中文；历史页面剧集类别的已观看记录按电视剧合并，方便以电视剧为单位查看；Trakt 和 SofaTime 的影片详情页添加 EplayerX、Forward、Infuse 跳转按钮；部分兼容其它使用了 Trakt API 的应用。",
                     qxTag: "Trakt Simplified Chinese",
-                    icon: "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/trakt.webp",
-                    githubFolder: "https://github.com/DemoJameson/Loon.Plugins/tree/main/trakt_simplified_chinese",
+                    icon: "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/images/trakt.webp",
+                    githubFolder: "https://github.com/DemoJameson/Proxy.Modules/tree/main/trakt_simplified_chinese",
                     resources: {
-                        loon: "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.plugin",
-                        surge: "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.sgmodule",
-                        egern: "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.plugin",
-                        qx: "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/trakt_simplified_chinese.snippet",
+                        loon: "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/trakt_simplified_chinese.plugin",
+                        surge: "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/trakt_simplified_chinese.sgmodule",
+                        egern: "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/trakt_simplified_chinese.plugin",
+                        qx: "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/trakt_simplified_chinese.snippet",
                     },
                 },
                 {
                     id: "fix_infuse_image_language",
                     name: "修复 Infuse 图片语言",
-                    pluginFile: "fix_infuse_image_language/fix_infuse_image_language.plugin",
-                    descriptionFallback: "调整 TMDB 图片语言排序，改善 Infuse 对图片语言和地区的匹配结果",
+                    description: "调整 TMDB 图片语言排序，改善 Infuse 对图片语言和地区的匹配结果",
                     qxTag: "Fix Infuse Image Language",
                     icon: "https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Infuse.png",
-                    githubFolder: "https://github.com/DemoJameson/Loon.Plugins/tree/main/fix_infuse_image_language",
+                    githubFolder: "https://github.com/DemoJameson/Proxy.Modules/tree/main/fix_infuse_image_language",
                     resources: {
-                        loon: "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.plugin",
-                        surge: "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.sgmodule",
-                        egern: "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.plugin",
-                        qx: "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.snippet",
+                        loon: "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/fix_infuse_image_language/fix_infuse_image_language.plugin",
+                        surge: "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/fix_infuse_image_language/fix_infuse_image_language.sgmodule",
+                        egern: "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/fix_infuse_image_language/fix_infuse_image_language.plugin",
+                        qx: "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/fix_infuse_image_language/fix_infuse_image_language.snippet",
                     },
                 },
             ];
 
-            function findPlugin(pluginId) {
-                return plugins.find((plugin) => plugin.id === pluginId) || null;
+            function findModule(moduleId) {
+                return modules.find((moduleItem) => moduleItem.id === moduleId) || null;
             }
 
-            function findResource(plugin, toolId) {
-                return plugin && plugin.resources ? plugin.resources[toolId] : "";
+            function findResource(moduleItem, toolId) {
+                return moduleItem && moduleItem.resources ? moduleItem.resources[toolId] : "";
             }
 
-            function buildImportUrl(plugin, toolId) {
+            function buildImportUrl(moduleItem, toolId) {
                 const tool = tools[toolId];
-                const resourceUrl = findResource(plugin, toolId);
+                const resourceUrl = findResource(moduleItem, toolId);
                 if (!tool || !resourceUrl) {
                     return "#";
                 }
-                return tool.buildImportUrl(resourceUrl, plugin);
+                return tool.buildImportUrl(resourceUrl, moduleItem);
             }
 
             function escapeHtml(value) {
@@ -583,42 +581,11 @@
                 });
             }
 
-            function extractPluginHeaderValue(content, key) {
-                const pattern = new RegExp("^#!" + key + "=(.*)$", "m");
-                const match = content.match(pattern);
-                return match ? match[1].trim() : "";
-            }
-
-            async function loadPluginDescription(plugin) {
-                if (!plugin.pluginFile) {
-                    return plugin.descriptionFallback || "";
-                }
-
-                try {
-                    const response = await fetch(plugin.pluginFile);
-                    if (!response.ok) {
-                        throw new Error("Failed to load plugin file: " + plugin.pluginFile);
-                    }
-
-                    const content = await response.text();
-                    return extractPluginHeaderValue(content, "desc") || plugin.descriptionFallback || "";
-                } catch (error) {
-                    return plugin.descriptionFallback || "";
-                }
-            }
-
-            async function hydratePlugin(plugin) {
-                return {
-                    ...plugin,
-                    description: await loadPluginDescription(plugin),
-                };
-            }
-
-            function renderPluginCard(plugin) {
+            function renderModuleCard(moduleItem) {
                 const toolCards = ["egern", "loon", "surge", "qx"]
                     .map((toolId) => {
                         const tool = tools[toolId];
-                        const importUrl = buildImportUrl(plugin, toolId);
+                        const importUrl = buildImportUrl(moduleItem, toolId);
                         return `
           <a class="tool-link" href="${importUrl}">
             <span class="label">${tool.name}</span>
@@ -628,29 +595,28 @@
                     .join("");
 
                 return `
-        <article class="plugin-card">
-          <div class="plugin-head">
-            <img class="plugin-icon" src="${escapeHtml(plugin.icon)}" alt="">
-            <h3>${escapeHtml(plugin.name)}</h3>
+        <article class="module-card">
+          <div class="module-head">
+            <img class="module-icon" src="${escapeHtml(moduleItem.icon)}" alt="">
+            <h3>${escapeHtml(moduleItem.name)}</h3>
           </div>
-          <p>${escapeHtml(plugin.description)}</p>
+          <p>${escapeHtml(moduleItem.description || "")}</p>
           <details class="import-group import-panel">
             <summary class="button primary import-toggle">安装</summary>
             <div class="tool-grid">${toolCards}</div>
           </details>
           <div class="link-row">
-            <a class="button secondary folder-link" href="${plugin.githubFolder}" target="_blank" rel="noreferrer">查看代码</a>
+            <a class="button secondary folder-link" href="${moduleItem.githubFolder}" target="_blank" rel="noreferrer">查看代码</a>
           </div>
         </article>
       `;
             }
 
-            async function renderPlugins() {
-                const list = document.getElementById("plugin-list");
-                const hydratedPlugins = await Promise.all(plugins.map(hydratePlugin));
-                list.innerHTML = hydratedPlugins.map(renderPluginCard).join("");
+            function renderModules() {
+                const list = document.getElementById("module-list");
+                list.innerHTML = modules.map(renderModuleCard).join("");
             }
-            renderPlugins();
+            renderModules();
         </script>
     </body>
 </html>

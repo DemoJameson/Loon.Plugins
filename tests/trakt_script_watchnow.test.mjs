@@ -411,7 +411,7 @@ test("/shows/:id/seasons 会应用缓存剧集翻译并更新 link id 缓存", a
 test("direct redirect 请求在启用时会返回 shortcuts 跳转", async () => {
     const deeplink = "infuse://movie/123";
     const { result } = await runRequestCase({
-        url: `https://loon-plugins.demojameson.de5.net/api/redirect?deeplink=${encodeURIComponent(deeplink)}`,
+        url: `https://proxy-modules.demojameson.de5.net/api/redirect?deeplink=${encodeURIComponent(deeplink)}`,
         argument: {
             useShortcutsJumpEnabled: true,
         },
@@ -428,7 +428,7 @@ test("tmdb logo 请求会重定向到仓库内置 logo 资源", async () => {
     });
 
     assert.equal(result.response.status, 302);
-    assert.equal(result.response.headers.Location, "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/forward_logo.webp");
+    assert.equal(result.response.headers.Location, "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/images/forward_logo.webp");
 });
 
 test("useShortcutsJumpEnabled 不会影响 tmdb logo redirect 的目标地址", async () => {
@@ -440,5 +440,5 @@ test("useShortcutsJumpEnabled 不会影响 tmdb logo redirect 的目标地址", 
     });
 
     assert.equal(result.response.status, 302);
-    assert.equal(result.response.headers.Location, "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/forward_logo.webp");
+    assert.equal(result.response.headers.Location, "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/images/forward_logo.webp");
 });

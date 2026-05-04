@@ -1,6 +1,6 @@
 #!name=修复Infuse图片语言地区错误
 #!desc=将TMDB响应中的图片按脚本默认语言排序
-#!homepage=https://github.com/DemoJameson/Loon.Plugins
+#!homepage=https://github.com/DemoJameson/Proxy.Modules
 #!author=DemoJameson
 
 # 默认参数：
@@ -8,7 +8,7 @@
 # Quantumult X 使用脚本默认值；如需自定义语言参数，优先使用 Loon 或 Surge 配置。
 
 # [rewrite_remote]
-^https:\/\/api\.themoviedb\.org\/3\/(tv|movie)\/\d+ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.js
-^https:\/\/api\.tmdb\.org\/3\/(tv|movie)\/\d+ url script-response-body https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.js
+^https:\/\/api\.themoviedb\.org\/3\/(tv|movie)\/\d+ url script-response-body https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/fix_infuse_image_language/fix_infuse_image_language.js
+^https:\/\/api\.tmdb\.org\/3\/(tv|movie)\/\d+ url script-response-body https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/fix_infuse_image_language/fix_infuse_image_language.js
 # [mitm]
 hostname = api.themoviedb.org, api.tmdb.org

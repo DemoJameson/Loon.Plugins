@@ -727,7 +727,7 @@ test("admin list searches numeric ids directly and titles through Trakt ids", as
             limit: "3",
             apiKey: "test-trakt-api-key",
             apiVersion: "2",
-            userAgent: "Loon.Plugins Admin Translation Search/1.0",
+            userAgent: "Proxy.Modules Admin Translation Search/1.0",
         });
         assert.equal(store.searchCommands, undefined);
         assert.ok(store.getCommands.some(([command, key]) => command === "JSON.GET" && key === TRANSLATION_OVERRIDES_KEY));
@@ -901,7 +901,7 @@ test("admin title search resolves Trakt ids and reads matching Redis entries", a
                     limit: "3",
                     apiKey: "test-trakt-api-key",
                     apiVersion: "2",
-                    userAgent: "Loon.Plugins Admin Translation Search/1.0",
+                    userAgent: "Proxy.Modules Admin Translation Search/1.0",
                 },
             ],
         );

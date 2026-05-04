@@ -448,6 +448,52 @@ test("handleDirectMediaList 按 direct summary 路由分组生效", async (t) =>
     }
 });
 
+test("handleDirectMediaList 与 handleWrapperMediaList 会叠加 translationOverrides", async (t) => {
+    await t.test("direct popular 会覆盖 show 标题", async () => {
+        const { result } = await runResponseCase({
+            url: "https://api.trakt.tv/shows/popular",
+            body: createDirectShowBody(),
+            persistentData: createShowPersistentData(),
+            argument: {
+                backendBaseUrl: "https://backend.example",
+            },
+            httpGetMocks: {
+                "https://backend.example/api/trakt/translation-overrides": createBackendTranslationOverridesBody(
+                    "shows",
+                    "456",
+                    createTranslationOverrideEntry({ title: "热门榜覆盖剧名" }),
+                ),
+            },
+        });
+
+        const payload = JSON.parse(result.body);
+        assert.equal(payload[0].title, "热门榜覆盖剧名");
+        assert.equal(payload[0].overview, "中文剧集简介");
+    });
+
+    await t.test("wrapper up_next_nitro 会覆盖 next episode 标题", async () => {
+        const { result } = await runResponseCase({
+            url: "https://api.trakt.tv/sync/progress/up_next_nitro",
+            body: createUpNextBody(),
+            persistentData: createEpisodePersistentData(),
+            argument: {
+                backendBaseUrl: "https://backend.example",
+            },
+            httpGetMocks: {
+                "https://backend.example/api/trakt/translation-overrides": createBackendTranslationOverridesBody(
+                    "episodes",
+                    "555:1:2",
+                    createTranslationOverrideEntry({ title: "即将播放覆盖标题" }),
+                ),
+            },
+        });
+
+        const payload = JSON.parse(result.body);
+        assert.equal(payload[0].progress.next_episode.title, "即将播放覆盖标题");
+        assert.equal(payload[0].progress.next_episode.overview, "第二集中文简介");
+    });
+});
+
 test("handleWrapperMediaList 按 wrapper 路由分组生效", async (t) => {
     const cases = [
         {
@@ -765,6 +811,28 @@ test("handleMir 会把缓存中的中文翻译应用到 first_watched 媒体", a
     assert.equal(payload.first_watched.movie.title, "中文电影");
     assert.equal(payload.first_watched.movie.overview, "中文简介");
     assert.equal(payload.first_watched.movie.tagline, "中文标语");
+});
+
+test("handleMir 会叠加 translationOverrides 到 first_watched 媒体", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/users/me/mir",
+        body: readFixture("mir.json"),
+        persistentData: createMoviePersistentData(),
+        argument: {
+            backendBaseUrl: "https://backend.example",
+        },
+        httpGetMocks: {
+            "https://backend.example/api/trakt/translation-overrides": createBackendTranslationOverridesBody(
+                "movies",
+                "123",
+                createTranslationOverrideEntry({ title: "月度回顾覆盖标题" }),
+            ),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.first_watched.movie.title, "月度回顾覆盖标题");
+    assert.equal(payload.first_watched.movie.overview, "中文简介");
 });
 
 test("handleMediaDetail 覆盖 movie、show 与 episode detail 路由", async (t) => {
@@ -1205,6 +1273,47 @@ test("handleSeasonEpisodesList 覆盖 /shows/:id/seasons 路由", async () => {
     const payload = JSON.parse(result.body);
     assert.equal(payload[0].episodes[0].title, "第一集中文");
     assert.equal(payload[0].episodes[1].title, "第二集中文");
+});
+
+test("handleSeasonEpisodesList 会叠加 episode translationOverrides", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/shows/555/seasons",
+        body: readFixture("season-list.json"),
+        persistentData: createUnifiedPersistentData({
+            persistentCurrentSeason: { showId: "555", seasonNumber: 1 },
+            traktTranslation: {
+                "episode:555:1:1": createMediaTranslationEntry({
+                    translation: {
+                        title: "第一集中文",
+                        overview: "第一集中文简介",
+                        tagline: "第一集中文标语",
+                    },
+                }),
+                "episode:555:1:2": createMediaTranslationEntry({
+                    translation: {
+                        title: "第二集中文",
+                        overview: "第二集中文简介",
+                        tagline: "第二集中文标语",
+                    },
+                }),
+            },
+        }),
+        argument: {
+            backendBaseUrl: "https://backend.example",
+        },
+        httpGetMocks: {
+            "https://backend.example/api/trakt/translation-overrides": createBackendTranslationOverridesBody(
+                "episodes",
+                "555:1:2",
+                createTranslationOverrideEntry({ title: "第二集覆盖标题" }),
+            ),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].episodes[0].title, "第一集中文");
+    assert.equal(payload[0].episodes[1].title, "第二集覆盖标题");
+    assert.equal(payload[0].episodes[1].overview, "第二集中文简介");
 });
 
 test("response phase migrated conditions 逐条覆盖且互斥", () => {

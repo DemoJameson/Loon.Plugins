@@ -308,7 +308,7 @@ async function searchTraktTitleIds(queryText, types) {
             accept: "application/json",
             "trakt-api-key": apiKey,
             "trakt-api-version": "2",
-            "user-agent": "Loon.Plugins Admin Translation Search/1.0",
+            "user-agent": "Proxy.Modules Admin Translation Search/1.0",
         },
     });
     if (!response.ok) {

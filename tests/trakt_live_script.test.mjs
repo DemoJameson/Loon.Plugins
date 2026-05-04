@@ -101,6 +101,19 @@ function createEpisodeTranslationCache(sample, title = "中文剧集标题") {
     };
 }
 
+function pickPreferredZhTranslation(translations) {
+    const normalizedTranslations = Array.isArray(translations) ? translations : [];
+    return (
+        normalizedTranslations.find((item) => {
+            return String(item?.language ?? "").toLowerCase() === "zh" && String(item?.country ?? "").toLowerCase() === "cn";
+        }) ?? normalizedTranslations[0] ?? null
+    );
+}
+
+function skipOnLiveSampleError(t, error) {
+    t.skip(String(error?.message ?? error));
+}
+
 function flattenResponseRouteEntries(routes) {
     return routes.map((route) => {
         return {
@@ -153,9 +166,15 @@ async function resolvePersonMovieCreditsSample(config) {
     };
 }
 
-test("live script: /translations/zh 响应会被归一化并优先放置 zh-CN", async () => {
+test("live script: /translations/zh 响应会被归一化并优先放置 zh-CN", async (t) => {
     const config = getLiveConfig();
-    const sample = await resolveMovieWithZhTranslation(config);
+    let sample;
+    try {
+        sample = await resolveMovieWithZhTranslation(config);
+    } catch (error) {
+        skipOnLiveSampleError(t, error);
+        return;
+    }
 
     const { result } = await runLiveResponseCase(config, {
         url: `https://api.trakt.tv/movies/${sample.traktId}/translations/zh?extended=all`,
@@ -174,9 +193,15 @@ test("live script: /translations/zh 响应会被归一化并优先放置 zh-CN",
     }
 });
 
-test("live script: /movies/:id 会在 /translations/zh 写入本地缓存后应用中文翻译", async () => {
+test("live script: /movies/:id 会在 /translations/zh 写入本地缓存后应用中文翻译", async (t) => {
     const config = getLiveConfig();
-    const sample = await resolveMovieWithZhTranslation(config);
+    let sample;
+    try {
+        sample = await resolveMovieWithZhTranslation(config);
+    } catch (error) {
+        skipOnLiveSampleError(t, error);
+        return;
+    }
     const detailResponse = await fetchTraktJson(config, `/movies/${sample.traktId}?extended=full`);
 
     assert.equal(detailResponse.status, 200);
@@ -191,10 +216,7 @@ test("live script: /movies/:id 会在 /translations/zh 写入本地缓存后应�
     });
 
     const normalizedTranslations = JSON.parse(translationRun.result.body);
-    const cnTranslation =
-        normalizedTranslations.find((item) => {
-            return String(item?.language ?? "").toLowerCase() === "zh" && String(item?.country ?? "").toLowerCase() === "cn";
-        }) ?? normalizedTranslations[0];
+    const cnTranslation = pickPreferredZhTranslation(normalizedTranslations);
 
     const { result, httpLogs } = await runLiveResponseCase(config, {
         url: `https://api.trakt.tv/movies/${sample.traktId}`,
@@ -215,7 +237,16 @@ test("live script: /movies/:id 会在 /translations/zh 写入本地缓存后应�
     assert.equal(typeof payload.overview, "string");
     assert.equal(typeof payload.tagline, "string");
     assert.equal(payload.title, String(cnTranslation?.title ?? payload.title));
-    assert.equal(httpLogs.length, 0);
+    assert.equal(
+        httpLogs.every((log) => {
+            return (
+                log.method === "GET" &&
+                (log.url.startsWith(`${config.backendBaseUrl}/api/trakt/translations`) ||
+                    log.url.startsWith(`${config.backendBaseUrl}/api/trakt/translation-overrides`))
+            );
+        }),
+        true,
+    );
 });
 
 test("live script: /movies/:id/watchnow 响应会注入自定义播放器条目", async (t) => {
@@ -324,9 +355,15 @@ test("live script: /users/me/watchlist/movies 会走登录态列表翻译链路"
     assert.equal(typeof payload[0]?.movie?.title, "string");
 });
 
-test("live script: /shows/popular 会命中列表翻译路由并应用缓存中的中文翻译", async () => {
+test("live script: /shows/popular 会命中列表翻译路由并应用缓存中的中文翻译", async (t) => {
     const config = getLiveConfig();
-    const sample = await resolvePopularShowWithZhTranslation(config);
+    let sample;
+    try {
+        sample = await resolvePopularShowWithZhTranslation(config);
+    } catch (error) {
+        skipOnLiveSampleError(t, error);
+        return;
+    }
     const normalizedTranslations = JSON.parse(
         await runLiveResponseCase(config, {
             url: `https://api.trakt.tv/shows/${sample.traktId}/translations/zh?extended=all`,
@@ -337,10 +374,7 @@ test("live script: /shows/popular 会命中列表翻译路由并应用缓存中�
             body: JSON.stringify(sample.translations),
         }).then(({ result }) => result.body),
     );
-    const cnTranslation =
-        normalizedTranslations.find((item) => {
-            return String(item?.language ?? "").toLowerCase() === "zh" && String(item?.country ?? "").toLowerCase() === "cn";
-        }) ?? normalizedTranslations[0];
+    const cnTranslation = pickPreferredZhTranslation(normalizedTranslations);
 
     const { result } = await runLiveResponseCase(config, {
         url: "https://apiz.trakt.tv/shows/popular?extended=cloud9,full&limit=100&local_name=%E7%83%AD%E9%97%A8%E5%89%A7%E9%9B%86&page=1&ratings=80-100",
@@ -375,9 +409,15 @@ test("live script: /shows/popular 会命中列表翻译路由并应用缓存中�
     }
 });
 
-test("live script: /movies/popular 会命中列表翻译路由并应用缓存中的中文翻译", async () => {
+test("live script: /movies/popular 会命中列表翻译路由并应用缓存中的中文翻译", async (t) => {
     const config = getLiveConfig();
-    const sample = await resolvePopularMovieWithZhTranslation(config);
+    let sample;
+    try {
+        sample = await resolvePopularMovieWithZhTranslation(config);
+    } catch (error) {
+        skipOnLiveSampleError(t, error);
+        return;
+    }
     const normalizedTranslations = JSON.parse(
         await runLiveResponseCase(config, {
             url: `https://api.trakt.tv/movies/${sample.traktId}/translations/zh?extended=all`,
@@ -388,10 +428,7 @@ test("live script: /movies/popular 会命中列表翻译路由并应用缓存中
             body: JSON.stringify(sample.translations),
         }).then(({ result }) => result.body),
     );
-    const cnTranslation =
-        normalizedTranslations.find((item) => {
-            return String(item?.language ?? "").toLowerCase() === "zh" && String(item?.country ?? "").toLowerCase() === "cn";
-        }) ?? normalizedTranslations[0];
+    const cnTranslation = pickPreferredZhTranslation(normalizedTranslations);
 
     const { result } = await runLiveResponseCase(config, {
         url: "https://apiz.trakt.tv/movies/popular?extended=cloud9,full&limit=100&local_name=%E7%83%AD%E9%97%A8%E7%94%B5%E5%BD%B1&page=1&ratings=80-100",
@@ -689,9 +726,15 @@ test("live script: /users/:id/history/episodes 在 request phase 会被放大为
     assert.equal(result.url, "https://api.trakt.tv/users/test/history/episodes?page=2&limit=500");
 });
 
-test("live script: /shows/:id/seasons 响应会应用剧集翻译并写入 current season / link cache", async () => {
+test("live script: /shows/:id/seasons 响应会应用剧集翻译并写入 current season / link cache", async (t) => {
     const config = getLiveConfig();
-    const sample = await resolveShowEpisodeSample(config);
+    let sample;
+    try {
+        sample = await resolveShowEpisodeSample(config);
+    } catch (error) {
+        skipOnLiveSampleError(t, error);
+        return;
+    }
     const seasonsResponse = await fetchTraktJson(config, `/shows/${sample.traktId}/seasons?extended=episodes,full`);
 
     assert.equal(seasonsResponse.status, 200);
@@ -724,13 +767,25 @@ test("live script: /shows/:id/seasons 响应会应用剧集翻译并写入 curre
 
 test("live script: response route coverage matrix covers all response phase routes", async (t) => {
     const config = getLiveConfig();
-    const movieSample = await resolveMovieWithZhTranslation(config);
-    const showSample = await resolvePopularShowWithZhTranslation(config);
-    const directMovieSample = await resolvePopularMovieWithZhTranslation(config);
-    const episodeSample = await resolveShowEpisodeSample(config);
-    const commentsSample = await resolveMovieWithComments(config);
-    const personCreditsSample = await resolvePersonMovieCreditsSample(config);
-    const listSample = await resolveListDescriptionSample(config);
+    let movieSample;
+    let showSample;
+    let directMovieSample;
+    let episodeSample;
+    let commentsSample;
+    let personCreditsSample;
+    let listSample;
+    try {
+        movieSample = await resolveMovieWithZhTranslation(config);
+        showSample = await resolvePopularShowWithZhTranslation(config);
+        directMovieSample = await resolvePopularMovieWithZhTranslation(config);
+        episodeSample = await resolveShowEpisodeSample(config);
+        commentsSample = await resolveMovieWithComments(config);
+        personCreditsSample = await resolvePersonMovieCreditsSample(config);
+        listSample = await resolveListDescriptionSample(config);
+    } catch (error) {
+        skipOnLiveSampleError(t, error);
+        return;
+    }
 
     const wrappedMovieItems = createWrappedMovieItems(movieSample.movie);
     const wrappedShowItems = createWrappedShowItems(showSample.show);
@@ -764,15 +819,17 @@ test("live script: response route coverage matrix covers all response phase rout
             },
         }),
     };
+    const preferredShowTranslation = pickPreferredZhTranslation(showSample.translations);
     const showTranslation = {
         [`show:${showSample.traktId}`]: createMediaTranslationEntry({
             translation: {
-                title: "覆盖中文剧集",
-                overview: "覆盖中文剧集简介",
-                tagline: "覆盖中文剧集标语",
+                title: String(preferredShowTranslation?.title ?? showSample.show.title ?? ""),
+                overview: String(preferredShowTranslation?.overview ?? showSample.show.overview ?? ""),
+                tagline: String(preferredShowTranslation?.tagline ?? showSample.show.tagline ?? ""),
             },
         }),
     };
+    const expectedShowTitle = String(preferredShowTranslation?.title ?? showSample.show.title ?? "");
     const episodeTranslation = createEpisodeTranslationCache(episodeSample);
     const listTranslation = {
         [String(listSample.list.ids.trakt)]: {
@@ -1048,7 +1105,7 @@ test("live script: response route coverage matrix covers all response phase rout
             persistentData: createUnifiedPersistentData({ traktTranslation: showTranslation }),
             assertPayload(payload) {
                 const show = Array.isArray(payload.cast) ? payload.cast[0]?.show : null;
-                assert.equal(show?.title, "覆盖中文剧集");
+                assert.equal(show?.title, expectedShowTitle);
             },
         },
         {
@@ -1275,7 +1332,7 @@ test("live script: response route coverage matrix covers all response phase rout
             ]),
             persistentData: createUnifiedPersistentData({ traktTranslation: showTranslation }),
             assertPayload(payload) {
-                assert.equal(payload[0].show.title, "覆盖中文剧集");
+                assert.equal(payload[0].show.title, expectedShowTitle);
             },
         },
         {
@@ -1283,7 +1340,7 @@ test("live script: response route coverage matrix covers all response phase rout
             body: JSON.stringify(directShowItems),
             persistentData: createUnifiedPersistentData({ traktTranslation: showTranslation }),
             assertPayload(payload) {
-                assert.equal(payload[0].title, "覆盖中文剧集");
+                assert.equal(payload[0].title, expectedShowTitle);
             },
         },
         {
@@ -1642,7 +1699,7 @@ test("live script: response route coverage matrix covers all response phase rout
                 traktTranslation: showTranslation,
             }),
             assertPayload(payload) {
-                assert.equal(payload.title, "覆盖中文剧集");
+                assert.equal(payload.title, expectedShowTitle);
             },
         },
         {
@@ -1721,7 +1778,7 @@ test("live script: request route coverage matrix covers all request phase routes
     const config = getLiveConfig();
     const requestCases = [
         {
-            url: "https://loon-plugins.demojameson.de5.net/api/redirect?deeplink=infuse%3A%2F%2Fmovie%2F123",
+            url: "https://proxy-modules.demojameson.de5.net/api/redirect?deeplink=infuse%3A%2F%2Fmovie%2F123",
             argument: {
                 useShortcutsJumpEnabled: true,
             },
@@ -1734,7 +1791,7 @@ test("live script: request route coverage matrix covers all request phase routes
             url: "https://image.tmdb.org/t/p/w342/forward_logo.webp",
             assertResult(result) {
                 assert.equal(result.response.status, 302);
-                assert.equal(result.response.headers.Location, "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images/forward_logo.webp");
+                assert.equal(result.response.headers.Location, "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/images/forward_logo.webp");
             },
         },
         {

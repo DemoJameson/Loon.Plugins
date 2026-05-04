@@ -1,15 +1,15 @@
 #!name=修复Infuse图片语言地区错误
 #!desc=将TMDB响应中的图片按模块指定的语言排序
 #!icon=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Infuse.png
-#!homepage=https://github.com/DemoJameson/Loon.Plugins
+#!homepage=https://github.com/DemoJameson/Proxy.Modules
 #!author=DemoJameson
 #!arguments=preferredLanguage:"zh-CN"
 #!arguments-desc=preferredLanguage: 输入目标语言代码，如 zh-CN、zh-TW，默认为 zh-CN。
 
 [Script]
 # 拦截 TMDB 电影和剧集详情响应，按目标语言重排 images 字段
-Fix Infuse Image Language TheMovieDB = type=http-response, pattern=^https:\/\/api\.themoviedb\.org\/3\/(tv|movie)\/\d+, requires-body=true, max-size=0, timeout=10, argument={{{preferredLanguage}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.js
-Fix Infuse Image Language TMDB = type=http-response, pattern=^https:\/\/api\.tmdb\.org\/3\/(tv|movie)\/\d+, requires-body=true, max-size=0, timeout=10, argument={{{preferredLanguage}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/fix_infuse_image_language/fix_infuse_image_language.js
+Fix Infuse Image Language TheMovieDB = type=http-response, pattern=^https:\/\/api\.themoviedb\.org\/3\/(tv|movie)\/\d+, requires-body=true, max-size=0, timeout=10, argument={{{preferredLanguage}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/fix_infuse_image_language/fix_infuse_image_language.js
+Fix Infuse Image Language TMDB = type=http-response, pattern=^https:\/\/api\.tmdb\.org\/3\/(tv|movie)\/\d+, requires-body=true, max-size=0, timeout=10, argument={{{preferredLanguage}}}, script-path=https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/fix_infuse_image_language/fix_infuse_image_language.js
 
 [MITM]
 hostname = %APPEND% api.themoviedb.org, api.tmdb.org

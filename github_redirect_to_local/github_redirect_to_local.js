@@ -1,5 +1,5 @@
 const DEFAULT_BASE_URL = "http://192.168.50.2:8080";
-const DEFAULT_REPOSITORY = "Loon.Plugins";
+const DEFAULT_REPOSITORY = "Proxy.Modules";
 
 function normalizeArgumentValue(value) {
     return typeof value === "string" ? value.trim() : "";

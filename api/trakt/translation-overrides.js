@@ -14,7 +14,7 @@ module.exports = async (req, res) => {
             return;
         }
 
-        res.setHeader("Cache-Control", "public, max-age=60");
+        res.setHeader("Cache-Control", "public, max-age=8");
         res.status(200).json(await readAllTranslationOverridesFromKv(kvConfig));
     } catch (error) {
         res.status(500).json({

@@ -9,7 +9,7 @@ function createRequestPhaseRoutes() {
     return [
         createRoute({
             id: "redirect.direct",
-            host: /^loon-plugins\.demojameson\.de5\.net$/i,
+            host: /^proxy-modules\.demojameson\.de5\.net$/i,
             pattern: /^api\/redirect$/,
             handler: playerInjectionTraktHandler.handleDirectRedirectRequest,
         }),

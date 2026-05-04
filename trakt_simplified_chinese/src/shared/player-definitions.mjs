@@ -19,7 +19,7 @@ const REGION_CODES = [
     "TC", "TD", "TH", "TN", "TR", "TT", "TW", "TZ", "UA", "UG", "US", "UY", "VA", "VE", "XK", "YE", "ZA", "ZM", "ZW",
 ];
 
-const PLAYER_LOGO_ASSET_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Loon.Plugins/main/trakt_simplified_chinese/images";
+const PLAYER_LOGO_ASSET_BASE_URL = "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/images";
 
 const PLAYER_DEFINITIONS = {
     [PLAYER_TYPE.EPLAYERX]: {

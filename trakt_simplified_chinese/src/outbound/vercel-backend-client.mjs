@@ -1,6 +1,6 @@
 import * as httpUtils from "../utils/http.mjs";
 
-const DEFAULT_BACKEND_BASE_URL = "https://loon-plugins.demojameson.de5.net";
+const DEFAULT_BACKEND_BASE_URL = "https://proxy-modules.demojameson.de5.net";
 
 function resolveBackendBaseUrl() {
     return String(globalThis.$ctx.argument?.backendBaseUrl || DEFAULT_BACKEND_BASE_URL).trim();

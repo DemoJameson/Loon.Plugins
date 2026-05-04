@@ -33,6 +33,8 @@ const TRAKT_DIRECT_TRANSLATION_MAX_REFS = 200;
 const PREFERRED_TRANSLATION_LANGUAGE = "zh-CN";
 const BACKEND_FETCH_MIN_REFS = 3;
 const BACKEND_WRITE_BATCH_SIZE = 50;
+const TRANSLATION_OVERRIDES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const TRANSLATION_OVERRIDES_REFRESH_INTERVAL_MS_DEBUG = 10 * 1000;
 
 const DIRECT_MEDIA_TYPE_SHOW_STATUSES = ["returning series", "ended", "canceled"];
 
@@ -44,6 +46,52 @@ const SCRIPT_TRANSLATION_REQUEST_VALUE = "true";
 
 function buildTranslationCacheEntry(status, translation) {
     return { status, translation, updatedAt: Date.now() };
+}
+
+function getOverrideGroupName(mediaType) {
+    if (mediaType === mediaTypes.MEDIA_TYPE.MOVIE) {
+        return "movies";
+    }
+    if (mediaType === mediaTypes.MEDIA_TYPE.SHOW) {
+        return "shows";
+    }
+    if (mediaType === mediaTypes.MEDIA_TYPE.EPISODE) {
+        return "episodes";
+    }
+    return "";
+}
+
+function normalizeTranslationOverridesPayload(payload, fetchedAt = Date.now()) {
+    return {
+        fetchedAt,
+        shows: commonUtils.ensureObject(payload?.shows),
+        movies: commonUtils.ensureObject(payload?.movies),
+        episodes: commonUtils.ensureObject(payload?.episodes),
+    };
+}
+
+async function loadTranslationOverrides(env) {
+    const cached = cacheUtils.loadTranslationOverridesCache(env);
+    if (!vercelBackendClientModule.resolveBackendBaseUrl()) {
+        return cached;
+    }
+
+    const refreshInterval = globalThis.$ctx.argument?.debugEnabled ? TRANSLATION_OVERRIDES_REFRESH_INTERVAL_MS_DEBUG : TRANSLATION_OVERRIDES_REFRESH_INTERVAL_MS;
+    if (Date.now() - Number(cached.fetchedAt || 0) < refreshInterval) {
+        return cached;
+    }
+
+    try {
+        const payload = await vercelBackendClientModule.fetchTranslationOverrides();
+        const next = normalizeTranslationOverridesPayload(payload);
+        cacheUtils.saveTranslationOverridesCache(env, next);
+        return next;
+    } catch (error) {
+        if (cached.fetchedAt > 0) {
+            return cached;
+        }
+        throw error;
+    }
 }
 
 function buildEpisodeCompositeKey(showId, seasonNumber, episodeNumber) {
@@ -321,6 +369,58 @@ function applyTranslation(userAgent, target, entry) {
     }
 }
 
+function applyOverrideToTranslationObject(target, translationOverrides) {
+    if (!target || !translationOverrides) {
+        return target;
+    }
+
+    translationCache.TRANSLATION_FIELDS.forEach((field) => {
+        if (!translationCache.isEmptyTranslationValue(translationOverrides[field])) {
+            target[field] = translationOverrides[field];
+        }
+    });
+
+    return target;
+}
+
+function getOverrideFromTable(table, target) {
+    if (!target) {
+        return null;
+    }
+
+    const groupName = getOverrideGroupName(target.mediaType);
+    const lookupKey = buildMediaCacheLookupKey(target.mediaType, target);
+    if (!groupName || !lookupKey) {
+        return null;
+    }
+
+    const entries = commonUtils.ensureObject(table?.[groupName]);
+    const override = entries[lookupKey];
+    return override && typeof override === "object" ? override : null;
+}
+
+async function getOverrideForTarget(env, target) {
+    return getOverrideFromTable(await loadTranslationOverrides(env), target);
+}
+
+function applyOverrideToTarget(target, override) {
+    return applyOverrideToTranslationObject(target, commonUtils.ensureObject(override?.translation));
+}
+
+function applyOverrideToTranslations(items, override, mediaType) {
+    if (!override) {
+        return items;
+    }
+
+    const cnTranslation = translationCache.pickCnTranslation(items);
+    if (!cnTranslation) {
+        return items;
+    }
+
+    applyOverrideToTarget(cnTranslation, override);
+    return translationCache.normalizeTranslations(items, { mediaType });
+}
+
 function fetchMediaDetail(mediaType, traktId) {
     return traktApiClientModule.fetchMediaDetail(mediaType, traktId);
 }
@@ -440,7 +540,7 @@ function applyTranslationsToItems(arr, cache, mediaConfig, applyTranslationFn) {
             const target = getItemMediaTarget(item, mediaType);
             const ref = buildMediaRef(item, mediaType);
             if (ref) {
-                applyTranslationFn(target, getCachedTranslation(cache, mediaType, ref));
+                applyTranslationFn(target, getCachedTranslation(cache, mediaType, ref), ref);
             }
         });
     });
@@ -554,7 +654,16 @@ async function translateMediaItemsInPlace(items, bodyOverride) {
         cacheUtils.saveCache(context.env, cache);
     }
     flushBackendWrites(backendState);
-    applyTranslationsToItems(items, cache, MEDIA_CONFIG, (target, entry) => applyTranslation(context.userAgent, target, entry));
+    let overridesTable = null;
+    try {
+        overridesTable = await loadTranslationOverrides(context.env);
+    } catch (error) {
+        context.env.log(`Trakt backend override read failed: ${error}`);
+    }
+    applyTranslationsToItems(items, cache, MEDIA_CONFIG, (target, entry, ref) => {
+        applyTranslation(context.userAgent, target, entry);
+        applyOverrideToTarget(target, getOverrideFromTable(overridesTable, ref));
+    });
     return items;
 }
 
@@ -576,6 +685,8 @@ export {
     BACKEND_FETCH_MIN_REFS,
     BACKEND_WRITE_BATCH_SIZE,
     applyTranslation,
+    applyOverrideToTarget,
+    applyOverrideToTranslations,
     buildEpisodeCompositeKey,
     buildMediaCacheLookupKey,
     createBackendState,
@@ -584,8 +695,11 @@ export {
     flushBackendWrites,
     getCachedTranslation,
     getMissingRefs,
+    getOverrideFromTable,
+    getOverrideForTarget,
     hydrateFromBackend,
     isScriptInitiatedTranslationRequest,
+    loadTranslationOverrides,
     queueBackendWrite,
     resolveMediaDetailTarget,
     resolveSeasonListTarget,

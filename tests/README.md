@@ -82,7 +82,7 @@ npm run test:trakt:live
 `TRAKT_BACKEND_BASE_URL` 输入留空时会使用默认值：
 
 ```text
-https://loon-plugins.demojameson.de5.net
+https://proxy-modules.demojameson.de5.net
 ```
 
 可选环境变量：

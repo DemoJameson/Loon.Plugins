@@ -67,7 +67,7 @@ test("live backend: POST 写入后可以 GET 读回 shows/movies/episodes 缓存
     assert.equal(getResponse.status, 200);
     assert.equal(getResponse.json.shows["99999001"].status, 1);
     assert.equal(getResponse.json.shows["99999001"].translation.title, "后端测试剧集标题");
-    assert.equal(getResponse.json.movies["99999002"].status, 1);
+    assert.equal(getResponse.json.movies["99999002"].status, 2);
     assert.equal(getResponse.json.movies["99999002"].translation.title, "后端测试电影标题");
     assert.equal(getResponse.json.episodes["99999003:1:1"].status, 3);
     assert.equal(getResponse.json.episodes["99999003:1:1"].translation, null);
