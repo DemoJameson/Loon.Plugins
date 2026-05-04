@@ -1,8 +1,22 @@
+import * as translationCache from "../shared/translation-cache.mjs";
 import * as commonUtils from "../utils/common.mjs";
 
 const UNIFIED_CACHE_KEY = "dj_trakt_unified_cache";
-const UNIFIED_CACHE_SCHEMA_VERSION = 2;
+const UNIFIED_CACHE_REV_KEY = "dj_trakt_unified_cache_rev";
+const UNIFIED_CACHE_SCHEMA_VERSION = 5;
 const UNIFIED_CACHE_MAX_BYTES = 1024 * 1024 - 8 * 1024;
+const LINK_ID_FIELDS = ["trakt", "tmdb"];
+const UNIFIED_CACHE_SNAPSHOT_RETRY_LIMIT = 3;
+const PRUNE_PRIORITY = {
+    "google.comments": 1,
+    "google.sentiments": 1,
+    "google.list": 1,
+    "google.people": 2,
+    "trakt.linkIds": 3,
+    "trakt.translation.not_found": 4,
+    "trakt.translation.partial_found": 5,
+    "trakt.translation.found": 6,
+};
 
 function buildFieldTranslationCacheKey(id) {
     return commonUtils.isNullish(id) ? "" : String(id);
@@ -11,6 +25,119 @@ function buildFieldTranslationCacheKey(id) {
 function estimatePrunableEntryBytes(env, key, entry) {
     const serialized = env.toStr({ [key]: entry }, "");
     return serialized ? Math.max(serialized.length - 2, 0) : 0;
+}
+
+function normalizeIdSubset(ids) {
+    const source = commonUtils.ensureObject(ids);
+    const normalized = {};
+    LINK_ID_FIELDS.forEach((field) => {
+        if (commonUtils.isNonNullish(source[field])) {
+            normalized[field] = source[field];
+        }
+    });
+    return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function normalizeHashedTranslationEntry(entry) {
+    const sourceTextHash = String(entry?.sourceTextHash ?? "").trim();
+    const translatedText = String(entry?.translatedText ?? "").trim();
+    return sourceTextHash && translatedText ? { sourceTextHash, translatedText } : null;
+}
+
+function normalizePersonTranslationEntry(entry) {
+    const source = commonUtils.ensureObject(entry);
+    const normalized = {};
+    const name = commonUtils.isPlainObject(source.name) ? source.name : null;
+    const normalizedName = normalizeHashedTranslationEntry(name);
+    if (normalizedName && (name.source === "google" || name.source === "tmdb")) {
+        normalized.name = {
+            ...normalizedName,
+            source: name.source,
+        };
+    }
+
+    const biography = normalizeHashedTranslationEntry(source.biography);
+    if (biography) {
+        normalized.biography = biography;
+    }
+
+    return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function normalizeMediaTranslationValue(translation) {
+    const normalized = translationCache.normalizeTranslationPayload(translation);
+    if (!normalized) {
+        return null;
+    }
+
+    return Object.fromEntries(Object.entries(normalized).filter(([, value]) => !translationCache.isEmptyTranslationValue(value)));
+}
+
+function normalizeMediaTranslationEntry(entry) {
+    const status =
+        entry?.status === translationCache.CACHE_STATUS.FOUND
+            ? translationCache.CACHE_STATUS.FOUND
+            : entry?.status === translationCache.CACHE_STATUS.PARTIAL_FOUND
+              ? translationCache.CACHE_STATUS.PARTIAL_FOUND
+              : translationCache.CACHE_STATUS.NOT_FOUND;
+    const translation = normalizeMediaTranslationValue(entry?.translation);
+    if (!translation) {
+        return {
+            status: translationCache.CACHE_STATUS.NOT_FOUND,
+        };
+    }
+
+    return {
+        status,
+        translation,
+    };
+}
+
+function normalizeSentimentTranslationEntry(entry) {
+    const translation = commonUtils.isPlainObject(entry?.translation) ? entry.translation : commonUtils.isPlainObject(entry) ? entry : null;
+    return translation && Object.keys(translation).length > 0 ? { translation } : null;
+}
+
+function normalizeHistoryShowsEntry(entry) {
+    const source = commonUtils.ensureObject(entry);
+    const shows = Object.fromEntries(
+        Object.entries(commonUtils.ensureObject(source.shows)).filter(([showId, value]) => {
+            return !!String(showId).trim() && value === true;
+        }),
+    );
+    return Object.keys(shows).length > 0 ? { shows } : null;
+}
+
+function normalizeLinkIdsEntry(entry) {
+    const source = commonUtils.ensureObject(entry);
+    const normalized = {};
+    const ids = normalizeIdSubset(source.ids);
+    if (ids) {
+        normalized.ids = ids;
+    }
+
+    const showIds = normalizeIdSubset(source.showIds);
+    const seasonNumber = Number(source.seasonNumber);
+    const episodeNumber = Number(source.episodeNumber);
+    const hasEpisodeContext = !!showIds && Number.isFinite(seasonNumber) && Number.isFinite(episodeNumber);
+    if (hasEpisodeContext) {
+        normalized.showIds = showIds;
+        normalized.seasonNumber = seasonNumber;
+        normalized.episodeNumber = episodeNumber;
+    }
+
+    return ids ? normalized : null;
+}
+
+function normalizeEntryMap(cache, normalizeEntry) {
+    return Object.fromEntries(
+        Object.entries(commonUtils.ensureObject(cache))
+            .map(([key, entry]) => {
+                const normalizedEntry = normalizeEntry(entry);
+                return normalizedEntry ? [key, normalizedEntry] : null;
+            })
+            .filter(Boolean),
+    );
 }
 
 function getHashedFieldTranslation(cache, id, field, sourceText) {
@@ -41,22 +168,21 @@ function setHashedFieldTranslation(cache, id, field, sourceText, translatedText)
         return false;
     }
 
-    cache[cacheKey] = {
+    const nextEntry = {
         ...currentEntry,
         [field]: nextFieldEntry,
-        updatedAt: Date.now(),
     };
+    cache[cacheKey] = nextEntry;
     return true;
 }
 
 function createEmptyUnifiedCache(schemaVersion = UNIFIED_CACHE_SCHEMA_VERSION, maxBytes = UNIFIED_CACHE_MAX_BYTES) {
     return {
         version: schemaVersion,
-        updatedAt: Date.now(),
+        rev: Date.now(),
         maxBytes,
         trakt: {
             translation: {},
-            historyEpisodesMergedByShow: {},
             linkIds: {},
         },
         google: {
@@ -67,6 +193,7 @@ function createEmptyUnifiedCache(schemaVersion = UNIFIED_CACHE_SCHEMA_VERSION, m
         },
         persistent: {
             currentSeason: null,
+            historyShows: {},
             translationOverrides: {
                 fetchedAt: 0,
                 shows: {},
@@ -96,42 +223,50 @@ function normalizeTranslationOverrides(cache) {
     };
 }
 
-function normalizeUpdatedAtEntryMap(cache) {
-    const nextCache = {};
-    const now = Date.now();
-
-    Object.keys(commonUtils.ensureObject(cache)).forEach((key) => {
-        const entry = commonUtils.ensureObject(cache[key], null);
-        if (!entry) {
-            return;
-        }
-
-        nextCache[key] = Number.isFinite(Number(entry.updatedAt)) ? entry : { ...entry, updatedAt: now };
+function normalizeRevlessEntryMap(cache) {
+    return normalizeEntryMap(cache, (entry) => {
+        return commonUtils.isPlainObject(entry) ? Object.fromEntries(Object.entries(entry).filter(([key]) => key !== "rev")) : null;
     });
-
-    return nextCache;
 }
 
 function normalizeUnifiedCache(rawCache, schemaVersion = UNIFIED_CACHE_SCHEMA_VERSION, maxBytes = UNIFIED_CACHE_MAX_BYTES) {
     const cache = commonUtils.isPlainObject(rawCache) ? rawCache : {};
     const nextCache = createEmptyUnifiedCache(schemaVersion, maxBytes);
 
-    nextCache.updatedAt = Number.isFinite(Number(cache.updatedAt)) ? Number(cache.updatedAt) : nextCache.updatedAt;
+    nextCache.rev = Number.isFinite(Number(cache.rev)) ? Number(cache.rev) : nextCache.rev;
     nextCache.maxBytes = Number.isFinite(Number(cache.maxBytes)) ? Number(cache.maxBytes) : maxBytes;
 
     const traktCache = commonUtils.ensureObject(cache.trakt);
-    nextCache.trakt.translation = commonUtils.ensureObject(traktCache.translation);
-    nextCache.trakt.historyEpisodesMergedByShow = normalizeUpdatedAtEntryMap(traktCache.historyEpisodesMergedByShow);
-    nextCache.trakt.linkIds = normalizeUpdatedAtEntryMap(traktCache.linkIds);
+    nextCache.trakt.translation = normalizeEntryMap(traktCache.translation, normalizeMediaTranslationEntry);
+    nextCache.trakt.linkIds = normalizeEntryMap(traktCache.linkIds, normalizeLinkIdsEntry);
 
     const googleCache = commonUtils.ensureObject(cache.google);
-    nextCache.google.comments = normalizeUpdatedAtEntryMap(googleCache.comments);
-    nextCache.google.sentiments = normalizeUpdatedAtEntryMap(googleCache.sentiments);
-    nextCache.google.people = normalizeUpdatedAtEntryMap(googleCache.people);
-    nextCache.google.list = normalizeUpdatedAtEntryMap(googleCache.list);
+    nextCache.google.comments = normalizeEntryMap(googleCache.comments, (entry) => {
+        const normalized = {};
+        Object.entries(commonUtils.ensureObject(entry)).forEach(([field, value]) => {
+            const normalizedField = normalizeHashedTranslationEntry(value);
+            if (normalizedField) {
+                normalized[field] = normalizedField;
+            }
+        });
+        return Object.keys(normalized).length > 0 ? normalized : null;
+    });
+    nextCache.google.sentiments = normalizeEntryMap(googleCache.sentiments, normalizeSentimentTranslationEntry);
+    nextCache.google.people = normalizeEntryMap(googleCache.people, normalizePersonTranslationEntry);
+    nextCache.google.list = normalizeEntryMap(googleCache.list, (entry) => {
+        const normalized = {};
+        Object.entries(commonUtils.ensureObject(entry)).forEach(([field, value]) => {
+            const normalizedField = normalizeHashedTranslationEntry(value);
+            if (normalizedField) {
+                normalized[field] = normalizedField;
+            }
+        });
+        return Object.keys(normalized).length > 0 ? normalized : null;
+    });
 
     const persistentCache = commonUtils.ensureObject(cache.persistent);
     nextCache.persistent.currentSeason = commonUtils.isPlainObject(persistentCache.currentSeason) ? persistentCache.currentSeason : null;
+    nextCache.persistent.historyShows = normalizeEntryMap(persistentCache.historyShows, normalizeHistoryShowsEntry);
     nextCache.persistent.translationOverrides = normalizeTranslationOverrides(persistentCache.translationOverrides);
 
     return nextCache;
@@ -142,38 +277,190 @@ function estimateCacheBytes(env, value) {
     return serialized ? serialized.length : 0;
 }
 
+function readUnifiedCacheRev(env, unifiedCacheRevKey = UNIFIED_CACHE_REV_KEY) {
+    const rev = Number(env.getjson(unifiedCacheRevKey, 0));
+    return Number.isFinite(rev) && rev > 0 ? rev : 0;
+}
+
+function readBodyRev(cache) {
+    const rev = Number(cache?.rev);
+    return Number.isFinite(rev) && rev > 0 ? rev : 0;
+}
+
+function buildNextUnifiedCacheRev(currentRev) {
+    const rev = Number(currentRev);
+    const now = Date.now();
+    return Number.isFinite(rev) && rev >= now ? rev + 1 : now;
+}
+
+function getUnifiedCacheMemo(env) {
+    const memo = env?.__traktUnifiedCacheMemo;
+    return commonUtils.isPlainObject(memo) ? memo : null;
+}
+
+function setUnifiedCacheMemo(env, cache, loadedRev, snapshotConsistent = true) {
+    env.__traktUnifiedCacheMemo = {
+        cache,
+        loadedRev,
+        snapshotConsistent,
+    };
+}
+
+function loadUnifiedCacheSnapshot(
+    env,
+    unifiedCacheKey = UNIFIED_CACHE_KEY,
+    unifiedCacheSchemaVersion = UNIFIED_CACHE_SCHEMA_VERSION,
+    unifiedCacheMaxBytes = UNIFIED_CACHE_MAX_BYTES,
+    unifiedCacheRevKey = UNIFIED_CACHE_REV_KEY,
+    retryCount = 0,
+) {
+    const rawCache = env.getjson(unifiedCacheKey, null);
+    const sidecarRev = readUnifiedCacheRev(env, unifiedCacheRevKey);
+    if (!commonUtils.isPlainObject(rawCache) || Number(rawCache.version) !== unifiedCacheSchemaVersion) {
+        return {
+            rawCache,
+            normalizedCache: null,
+            bodyRev: 0,
+            sidecarRev,
+            loadedRev: 0,
+            isValid: false,
+            needsRepair: false,
+            snapshotConsistent: false,
+        };
+    }
+
+    const normalizedCache = normalizeUnifiedCache(rawCache, unifiedCacheSchemaVersion, unifiedCacheMaxBytes);
+    const bodyRev = readBodyRev(normalizedCache);
+    if (bodyRev < sidecarRev && retryCount + 1 < UNIFIED_CACHE_SNAPSHOT_RETRY_LIMIT) {
+        return loadUnifiedCacheSnapshot(env, unifiedCacheKey, unifiedCacheSchemaVersion, unifiedCacheMaxBytes, unifiedCacheRevKey, retryCount + 1);
+    }
+
+    if (bodyRev > sidecarRev) {
+        env.setjson(bodyRev, unifiedCacheRevKey);
+        return {
+            rawCache,
+            normalizedCache,
+            bodyRev,
+            sidecarRev: bodyRev,
+            loadedRev: bodyRev,
+            isValid: true,
+            needsRepair: env.toStr(rawCache, "") !== env.toStr(normalizedCache, ""),
+            snapshotConsistent: true,
+        };
+    }
+
+    return {
+        rawCache,
+        normalizedCache,
+        bodyRev,
+        sidecarRev,
+        loadedRev: bodyRev,
+        isValid: true,
+        needsRepair: env.toStr(rawCache, "") !== env.toStr(normalizedCache, ""),
+        snapshotConsistent: bodyRev === sidecarRev,
+    };
+}
+
+function persistUnifiedCache(
+    env,
+    cache,
+    unifiedCacheKey = UNIFIED_CACHE_KEY,
+    unifiedCacheSchemaVersion = UNIFIED_CACHE_SCHEMA_VERSION,
+    unifiedCacheMaxBytes = UNIFIED_CACHE_MAX_BYTES,
+    unifiedCacheRevKey = UNIFIED_CACHE_REV_KEY,
+    baseRev = 0,
+) {
+    const nextCache = pruneUnifiedCacheToLimit(env, cache, unifiedCacheSchemaVersion, unifiedCacheMaxBytes);
+    const nextRev = buildNextUnifiedCacheRev(baseRev);
+    nextCache.rev = nextRev;
+    env.setjson(nextCache, unifiedCacheKey);
+    env.setjson(nextRev, unifiedCacheRevKey);
+    setUnifiedCacheMemo(env, nextCache, nextRev, true);
+    return nextCache;
+}
+
+function applyOwnedBucket(unifiedCache, owner) {
+    if (!owner || !Array.isArray(owner.path) || owner.path.length === 0) {
+        return;
+    }
+
+    let target = unifiedCache;
+    for (let index = 0; index < owner.path.length - 1; index += 1) {
+        const key = owner.path[index];
+        target[key] = commonUtils.ensureObject(target[key]);
+        target = target[key];
+    }
+    target[owner.path[owner.path.length - 1]] = owner.value;
+}
+
 function pruneUnifiedCacheToLimit(env, cache, schemaVersion = UNIFIED_CACHE_SCHEMA_VERSION, maxBytes = UNIFIED_CACHE_MAX_BYTES) {
     const nextCache = normalizeUnifiedCache(cache, schemaVersion, maxBytes);
     const limit = Number.isFinite(Number(nextCache.maxBytes)) ? Number(nextCache.maxBytes) : maxBytes;
     const prunableEntries = [];
 
-    [
-        ["trakt", "translation"],
-        ["trakt", "historyEpisodesMergedByShow"],
-        ["trakt", "linkIds"],
-        ["google", "comments"],
-        ["google", "sentiments"],
-        ["google", "people"],
-        ["google", "list"],
-    ].forEach(([scope, bucket]) => {
-        const entries = commonUtils.ensureObject(nextCache[scope][bucket]);
-        Object.keys(entries).forEach((key) => {
-            const entry = commonUtils.ensureObject(entries[key], null);
-            if (!entry) {
-                return;
-            }
-
-            prunableEntries.push({
-                scope,
-                bucket,
-                key,
-                updatedAt: Number.isFinite(Number(entry.updatedAt)) ? Number(entry.updatedAt) : 0,
-                estimatedBytes: estimatePrunableEntryBytes(env, key, entry),
-            });
+    Object.entries(commonUtils.ensureObject(nextCache.google.comments)).forEach(([key, entry]) => {
+        prunableEntries.push({
+            scope: "google",
+            bucket: "comments",
+            key,
+            priority: PRUNE_PRIORITY["google.comments"],
+            estimatedBytes: estimatePrunableEntryBytes(env, key, entry),
+        });
+    });
+    Object.entries(commonUtils.ensureObject(nextCache.google.sentiments)).forEach(([key, entry]) => {
+        prunableEntries.push({
+            scope: "google",
+            bucket: "sentiments",
+            key,
+            priority: PRUNE_PRIORITY["google.sentiments"],
+            estimatedBytes: estimatePrunableEntryBytes(env, key, entry),
+        });
+    });
+    Object.entries(commonUtils.ensureObject(nextCache.google.list)).forEach(([key, entry]) => {
+        prunableEntries.push({
+            scope: "google",
+            bucket: "list",
+            key,
+            priority: PRUNE_PRIORITY["google.list"],
+            estimatedBytes: estimatePrunableEntryBytes(env, key, entry),
+        });
+    });
+    Object.entries(commonUtils.ensureObject(nextCache.google.people)).forEach(([key, entry]) => {
+        prunableEntries.push({
+            scope: "google",
+            bucket: "people",
+            key,
+            priority: PRUNE_PRIORITY["google.people"],
+            estimatedBytes: estimatePrunableEntryBytes(env, key, entry),
+        });
+    });
+    Object.entries(commonUtils.ensureObject(nextCache.trakt.linkIds)).forEach(([key, entry]) => {
+        prunableEntries.push({
+            scope: "trakt",
+            bucket: "linkIds",
+            key,
+            priority: PRUNE_PRIORITY["trakt.linkIds"],
+            estimatedBytes: estimatePrunableEntryBytes(env, key, entry),
+        });
+    });
+    Object.entries(commonUtils.ensureObject(nextCache.trakt.translation)).forEach(([key, entry]) => {
+        const status =
+            entry?.status === translationCache.CACHE_STATUS.FOUND ? "found" : entry?.status === translationCache.CACHE_STATUS.PARTIAL_FOUND ? "partial_found" : "not_found";
+        prunableEntries.push({
+            scope: "trakt",
+            bucket: "translation",
+            key,
+            priority: PRUNE_PRIORITY[`trakt.translation.${status}`],
+            estimatedBytes: estimatePrunableEntryBytes(env, key, entry),
         });
     });
 
-    prunableEntries.sort((a, b) => a.updatedAt - b.updatedAt);
+    prunableEntries.sort((a, b) => {
+        if (a.priority !== b.priority) {
+            return a.priority - b.priority;
+        }
+        return b.estimatedBytes - a.estimatedBytes;
+    });
 
     let estimatedBytes = estimateCacheBytes(env, nextCache);
     while (estimatedBytes > limit && prunableEntries.length > 0) {
@@ -195,29 +482,43 @@ function pruneUnifiedCacheToLimit(env, cache, schemaVersion = UNIFIED_CACHE_SCHE
         delete nextCache[target.scope][target.bucket][target.key];
     }
 
-    nextCache.updatedAt = Date.now();
     return nextCache;
 }
 
-function loadUnifiedCache(env, unifiedCacheKey = UNIFIED_CACHE_KEY, unifiedCacheSchemaVersion = UNIFIED_CACHE_SCHEMA_VERSION, unifiedCacheMaxBytes = UNIFIED_CACHE_MAX_BYTES) {
+function loadUnifiedCache(
+    env,
+    unifiedCacheKey = UNIFIED_CACHE_KEY,
+    unifiedCacheSchemaVersion = UNIFIED_CACHE_SCHEMA_VERSION,
+    unifiedCacheMaxBytes = UNIFIED_CACHE_MAX_BYTES,
+    unifiedCacheRevKey = UNIFIED_CACHE_REV_KEY,
+) {
+    const memo = getUnifiedCacheMemo(env);
+    if (memo?.cache) {
+        return memo.cache;
+    }
+
     try {
-        const cache = env.getjson(unifiedCacheKey, null);
-        if (!commonUtils.isPlainObject(cache) || Number(cache.version) !== unifiedCacheSchemaVersion) {
+        const snapshot = loadUnifiedCacheSnapshot(env, unifiedCacheKey, unifiedCacheSchemaVersion, unifiedCacheMaxBytes, unifiedCacheRevKey);
+        if (!snapshot.isValid) {
             const nextCache = createEmptyUnifiedCache(unifiedCacheSchemaVersion, unifiedCacheMaxBytes);
-            saveUnifiedCache(env, nextCache, unifiedCacheKey, unifiedCacheSchemaVersion, unifiedCacheMaxBytes);
+            persistUnifiedCache(env, nextCache, unifiedCacheKey, unifiedCacheSchemaVersion, unifiedCacheMaxBytes, unifiedCacheRevKey, snapshot.sidecarRev);
             return nextCache;
         }
 
-        const normalizedCache = normalizeUnifiedCache(cache, unifiedCacheSchemaVersion, unifiedCacheMaxBytes);
-        if (env.toStr(cache, "") !== env.toStr(normalizedCache, "")) {
-            saveUnifiedCache(env, normalizedCache, unifiedCacheKey, unifiedCacheSchemaVersion, unifiedCacheMaxBytes);
+        if (snapshot.needsRepair) {
+            const latestRev = readUnifiedCacheRev(env, unifiedCacheRevKey);
+            if (snapshot.snapshotConsistent && latestRev === snapshot.loadedRev) {
+                persistUnifiedCache(env, snapshot.normalizedCache, unifiedCacheKey, unifiedCacheSchemaVersion, unifiedCacheMaxBytes, unifiedCacheRevKey, latestRev);
+                return snapshot.normalizedCache;
+            }
         }
 
-        return normalizedCache;
+        setUnifiedCacheMemo(env, snapshot.normalizedCache, snapshot.loadedRev, snapshot.snapshotConsistent);
+        return snapshot.normalizedCache;
     } catch (error) {
         env.log(`Trakt unified cache load failed: ${error}`);
         const nextCache = createEmptyUnifiedCache(unifiedCacheSchemaVersion, unifiedCacheMaxBytes);
-        saveUnifiedCache(env, nextCache, unifiedCacheKey, unifiedCacheSchemaVersion, unifiedCacheMaxBytes);
+        persistUnifiedCache(env, nextCache, unifiedCacheKey, unifiedCacheSchemaVersion, unifiedCacheMaxBytes, unifiedCacheRevKey, readUnifiedCacheRev(env, unifiedCacheRevKey));
         return nextCache;
     }
 }
@@ -228,9 +529,31 @@ function saveUnifiedCache(
     unifiedCacheKey = UNIFIED_CACHE_KEY,
     unifiedCacheSchemaVersion = UNIFIED_CACHE_SCHEMA_VERSION,
     unifiedCacheMaxBytes = UNIFIED_CACHE_MAX_BYTES,
+    options = {},
 ) {
     try {
-        env.setjson(pruneUnifiedCacheToLimit(env, cache, unifiedCacheSchemaVersion, unifiedCacheMaxBytes), unifiedCacheKey);
+        const unifiedCacheRevKey = options.unifiedCacheRevKey ?? UNIFIED_CACHE_REV_KEY;
+        const latestRev = readUnifiedCacheRev(env, unifiedCacheRevKey);
+        const memo = getUnifiedCacheMemo(env);
+        const loadedRev = Number(memo?.loadedRev ?? 0);
+        const canPersistDirectly = memo?.snapshotConsistent === true && latestRev === loadedRev;
+        if (!canPersistDirectly && options.owner) {
+            const latestSnapshot = loadUnifiedCacheSnapshot(env, unifiedCacheKey, unifiedCacheSchemaVersion, unifiedCacheMaxBytes, unifiedCacheRevKey);
+            const latestCache = latestSnapshot.isValid ? latestSnapshot.normalizedCache : createEmptyUnifiedCache(unifiedCacheSchemaVersion, unifiedCacheMaxBytes);
+            applyOwnedBucket(latestCache, options.owner);
+            persistUnifiedCache(
+                env,
+                latestCache,
+                unifiedCacheKey,
+                unifiedCacheSchemaVersion,
+                unifiedCacheMaxBytes,
+                unifiedCacheRevKey,
+                Math.max(latestRev, latestSnapshot.loadedRev),
+            );
+            return;
+        }
+
+        persistUnifiedCache(env, cache, unifiedCacheKey, unifiedCacheSchemaVersion, unifiedCacheMaxBytes, unifiedCacheRevKey, latestRev);
     } catch (error) {
         env.log(`Trakt unified cache save failed: ${error}`);
     }
@@ -241,19 +564,31 @@ function loadCache(env) {
 }
 
 function saveCache(env, cache) {
+    const normalizedCache = commonUtils.ensureObject(cache);
     const unifiedCache = loadUnifiedCache(env);
-    unifiedCache.trakt.translation = commonUtils.ensureObject(cache);
-    saveUnifiedCache(env, unifiedCache);
+    unifiedCache.trakt.translation = normalizedCache;
+    saveUnifiedCache(env, unifiedCache, UNIFIED_CACHE_KEY, UNIFIED_CACHE_SCHEMA_VERSION, UNIFIED_CACHE_MAX_BYTES, {
+        owner: {
+            path: ["trakt", "translation"],
+            value: normalizedCache,
+        },
+    });
 }
 
-function loadHistoryEpisodesMergedByShowCache(env) {
-    return commonUtils.ensureObject(loadUnifiedCache(env).trakt.historyEpisodesMergedByShow);
+function loadHistoryShowsCache(env) {
+    return commonUtils.ensureObject(loadUnifiedCache(env).persistent.historyShows);
 }
 
-function saveHistoryEpisodesMergedByShowCache(env, cache) {
+function saveHistoryShowsCache(env, cache) {
+    const normalizedCache = normalizeEntryMap(cache, normalizeHistoryShowsEntry);
     const unifiedCache = loadUnifiedCache(env);
-    unifiedCache.trakt.historyEpisodesMergedByShow = normalizeUpdatedAtEntryMap(cache);
-    saveUnifiedCache(env, unifiedCache);
+    unifiedCache.persistent.historyShows = normalizedCache;
+    saveUnifiedCache(env, unifiedCache, UNIFIED_CACHE_KEY, UNIFIED_CACHE_SCHEMA_VERSION, UNIFIED_CACHE_MAX_BYTES, {
+        owner: {
+            path: ["persistent", "historyShows"],
+            value: normalizedCache,
+        },
+    });
 }
 
 function loadLinkIdsCache(env) {
@@ -261,9 +596,15 @@ function loadLinkIdsCache(env) {
 }
 
 function saveLinkIdsCache(env, cache) {
+    const normalizedCache = normalizeEntryMap(cache, normalizeLinkIdsEntry);
     const unifiedCache = loadUnifiedCache(env);
-    unifiedCache.trakt.linkIds = normalizeUpdatedAtEntryMap(cache);
-    saveUnifiedCache(env, unifiedCache);
+    unifiedCache.trakt.linkIds = normalizedCache;
+    saveUnifiedCache(env, unifiedCache, UNIFIED_CACHE_KEY, UNIFIED_CACHE_SCHEMA_VERSION, UNIFIED_CACHE_MAX_BYTES, {
+        owner: {
+            path: ["trakt", "linkIds"],
+            value: normalizedCache,
+        },
+    });
 }
 
 function loadTranslationOverridesCache(env) {
@@ -271,9 +612,15 @@ function loadTranslationOverridesCache(env) {
 }
 
 function saveTranslationOverridesCache(env, cache) {
+    const normalizedCache = normalizeTranslationOverrides(cache);
     const unifiedCache = loadUnifiedCache(env);
-    unifiedCache.persistent.translationOverrides = normalizeTranslationOverrides(cache);
-    saveUnifiedCache(env, unifiedCache);
+    unifiedCache.persistent.translationOverrides = normalizedCache;
+    saveUnifiedCache(env, unifiedCache, UNIFIED_CACHE_KEY, UNIFIED_CACHE_SCHEMA_VERSION, UNIFIED_CACHE_MAX_BYTES, {
+        owner: {
+            path: ["persistent", "translationOverrides"],
+            value: normalizedCache,
+        },
+    });
 }
 
 function loadCommentTranslationCache(env) {
@@ -282,8 +629,14 @@ function loadCommentTranslationCache(env) {
 
 function saveCommentTranslationCache(env, cache) {
     const unifiedCache = loadUnifiedCache(env);
-    unifiedCache.google.comments = normalizeUpdatedAtEntryMap(cache);
-    saveUnifiedCache(env, unifiedCache);
+    const normalizedCache = normalizeUnifiedCache({ google: { comments: cache } }, unifiedCache.version, unifiedCache.maxBytes).google.comments;
+    unifiedCache.google.comments = normalizedCache;
+    saveUnifiedCache(env, unifiedCache, UNIFIED_CACHE_KEY, UNIFIED_CACHE_SCHEMA_VERSION, UNIFIED_CACHE_MAX_BYTES, {
+        owner: {
+            path: ["google", "comments"],
+            value: normalizedCache,
+        },
+    });
 }
 
 function loadSentimentTranslationCache(env) {
@@ -291,9 +644,15 @@ function loadSentimentTranslationCache(env) {
 }
 
 function saveSentimentTranslationCache(env, cache) {
+    const normalizedCache = normalizeEntryMap(cache, normalizeSentimentTranslationEntry);
     const unifiedCache = loadUnifiedCache(env);
-    unifiedCache.google.sentiments = normalizeUpdatedAtEntryMap(cache);
-    saveUnifiedCache(env, unifiedCache);
+    unifiedCache.google.sentiments = normalizedCache;
+    saveUnifiedCache(env, unifiedCache, UNIFIED_CACHE_KEY, UNIFIED_CACHE_SCHEMA_VERSION, UNIFIED_CACHE_MAX_BYTES, {
+        owner: {
+            path: ["google", "sentiments"],
+            value: normalizedCache,
+        },
+    });
 }
 
 function loadPeopleTranslationCache(env) {
@@ -301,9 +660,15 @@ function loadPeopleTranslationCache(env) {
 }
 
 function savePeopleTranslationCache(env, cache) {
+    const normalizedCache = normalizeEntryMap(cache, normalizePersonTranslationEntry);
     const unifiedCache = loadUnifiedCache(env);
-    unifiedCache.google.people = normalizeUpdatedAtEntryMap(cache);
-    saveUnifiedCache(env, unifiedCache);
+    unifiedCache.google.people = normalizedCache;
+    saveUnifiedCache(env, unifiedCache, UNIFIED_CACHE_KEY, UNIFIED_CACHE_SCHEMA_VERSION, UNIFIED_CACHE_MAX_BYTES, {
+        owner: {
+            path: ["google", "people"],
+            value: normalizedCache,
+        },
+    });
 }
 
 function loadListTranslationCache(env) {
@@ -312,8 +677,14 @@ function loadListTranslationCache(env) {
 
 function saveListTranslationCache(env, cache) {
     const unifiedCache = loadUnifiedCache(env);
-    unifiedCache.google.list = normalizeUpdatedAtEntryMap(cache);
-    saveUnifiedCache(env, unifiedCache);
+    const normalizedCache = normalizeUnifiedCache({ google: { list: cache } }, unifiedCache.version, unifiedCache.maxBytes).google.list;
+    unifiedCache.google.list = normalizedCache;
+    saveUnifiedCache(env, unifiedCache, UNIFIED_CACHE_KEY, UNIFIED_CACHE_SCHEMA_VERSION, UNIFIED_CACHE_MAX_BYTES, {
+        owner: {
+            path: ["google", "list"],
+            value: normalizedCache,
+        },
+    });
 }
 
 function setCurrentSeason(env, showId, seasonNumber) {
@@ -322,17 +693,30 @@ function setCurrentSeason(env, showId, seasonNumber) {
     }
 
     const unifiedCache = loadUnifiedCache(env);
-    unifiedCache.persistent.currentSeason = {
+    const nextCurrentSeason = {
         showId: String(showId),
         seasonNumber: Number(seasonNumber),
     };
-    saveUnifiedCache(env, unifiedCache);
+    unifiedCache.persistent.currentSeason = {
+        ...nextCurrentSeason,
+    };
+    saveUnifiedCache(env, unifiedCache, UNIFIED_CACHE_KEY, UNIFIED_CACHE_SCHEMA_VERSION, UNIFIED_CACHE_MAX_BYTES, {
+        owner: {
+            path: ["persistent", "currentSeason"],
+            value: nextCurrentSeason,
+        },
+    });
 }
 
 function clearCurrentSeason(env) {
     const unifiedCache = loadUnifiedCache(env);
     unifiedCache.persistent.currentSeason = null;
-    saveUnifiedCache(env, unifiedCache);
+    saveUnifiedCache(env, unifiedCache, UNIFIED_CACHE_KEY, UNIFIED_CACHE_SCHEMA_VERSION, UNIFIED_CACHE_MAX_BYTES, {
+        owner: {
+            path: ["persistent", "currentSeason"],
+            value: null,
+        },
+    });
 }
 
 function getCurrentSeason(env, showId) {
@@ -358,6 +742,7 @@ function getCurrentSeason(env, showId) {
 export {
     UNIFIED_CACHE_KEY,
     UNIFIED_CACHE_MAX_BYTES,
+    UNIFIED_CACHE_REV_KEY,
     UNIFIED_CACHE_SCHEMA_VERSION,
     clearCurrentSeason,
     buildFieldTranslationCacheKey,
@@ -366,7 +751,7 @@ export {
     getHashedFieldTranslation,
     loadCache,
     loadCommentTranslationCache,
-    loadHistoryEpisodesMergedByShowCache,
+    loadHistoryShowsCache,
     loadLinkIdsCache,
     loadListTranslationCache,
     loadTranslationOverridesCache,
@@ -375,12 +760,12 @@ export {
     loadUnifiedCache,
     normalizeUnifiedCache,
     normalizeTranslationOverrides,
-    normalizeUpdatedAtEntryMap,
+    normalizeRevlessEntryMap,
     pruneUnifiedCacheToLimit,
     saveCache,
     setHashedFieldTranslation,
     saveCommentTranslationCache,
-    saveHistoryEpisodesMergedByShowCache,
+    saveHistoryShowsCache,
     saveLinkIdsCache,
     saveListTranslationCache,
     saveTranslationOverridesCache,

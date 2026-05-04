@@ -123,7 +123,6 @@ function setPeopleTranslationCacheEntry(cache, personId, payload) {
         return false;
     }
 
-    nextEntry.updatedAt = Date.now();
     cache[key] = nextEntry;
     return true;
 }

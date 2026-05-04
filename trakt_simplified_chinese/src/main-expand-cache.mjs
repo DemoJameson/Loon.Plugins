@@ -24,8 +24,9 @@ function loadCache() {
 
 function saveCache(cache) {
     try {
-        cache.updatedAt = Date.now();
-        return env.setjson(cache, cacheUtils.UNIFIED_CACHE_KEY);
+        cache.rev = Date.now();
+        cacheUtils.saveUnifiedCache(env, cache);
+        return true;
     } catch (error) {
         env.log(`Trakt cache save failed: ${error}`);
         return false;
@@ -68,17 +69,16 @@ function buildStressTestEntry(previousEntry) {
         testChunkCount: nextChunkCount,
         testChunkSizeBytes: CHUNK_SIZE_BYTES,
         chunksPerRun: appendedChunkCount,
-        updatedAt: Date.now(),
     };
 }
 
 (function () {
     const cache = loadCache();
     const beforeBytes = estimateBytes(cache);
-    const linkIdsCache = ensureObject(cache.trakt?.linkIds);
-    const nextEntry = buildStressTestEntry(linkIdsCache[STRESS_TEST_KEY]);
-    linkIdsCache[STRESS_TEST_KEY] = nextEntry;
-    cache.trakt.linkIds = linkIdsCache;
+    const translationCache = ensureObject(cache.trakt?.translation);
+    const nextEntry = buildStressTestEntry(translationCache[STRESS_TEST_KEY]);
+    translationCache[STRESS_TEST_KEY] = nextEntry;
+    cache.trakt.translation = translationCache;
     const saved = saveCache(cache);
     const afterBytes = estimateBytes(cache);
 

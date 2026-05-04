@@ -46,11 +46,10 @@ function createMediaTranslationCache(entries = {}) {
 function createUnifiedCache(overrides = {}) {
     return JSON.stringify({
         version: UNIFIED_CACHE_SCHEMA_VERSION,
-        updatedAt: Number(overrides.updatedAt ?? Date.now()),
+        rev: Number(overrides.rev ?? Date.now()),
         maxBytes: Number(overrides.maxBytes ?? UNIFIED_CACHE_MAX_BYTES),
         trakt: {
             translation: overrides.traktTranslation ?? {},
-            historyEpisodesMergedByShow: overrides.traktHistoryEpisodesMergedByShow ?? {},
             linkIds: overrides.traktLinkIds ?? {},
         },
         google: {
@@ -61,6 +60,7 @@ function createUnifiedCache(overrides = {}) {
         },
         persistent: {
             currentSeason: overrides.persistentCurrentSeason ?? null,
+            historyShows: overrides.persistentHistoryShows ?? {},
             translationOverrides: overrides.translationOverrides ?? {
                 fetchedAt: 0,
                 shows: {},
@@ -114,7 +114,6 @@ function createCommentTranslationCache(overrides = {}) {
                 sourceTextHash: computeStringHash("Great movie"),
                 translatedText: "很棒的电影",
             },
-            updatedAt: Date.now(),
         },
         ...overrides,
     });
@@ -174,7 +173,6 @@ function createEpisodeWatchnowIdsEntry(overrides = {}) {
         },
         showIds: {
             trakt: 555,
-            imdb: "tt-show",
         },
         seasonNumber: 1,
         episodeNumber: 2,

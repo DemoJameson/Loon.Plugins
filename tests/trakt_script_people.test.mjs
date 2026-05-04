@@ -622,7 +622,6 @@ test("search person 列表会用 Google 翻译未命中的姓名和 biography �
             sourceTextHash: computeStringHash("Chinese-born Singaporean actress."),
             translatedText: "华裔新加坡女演员。",
         },
-        updatedAt: cache["99"].updatedAt,
     });
 });
 

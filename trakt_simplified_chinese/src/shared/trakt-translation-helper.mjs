@@ -34,7 +34,7 @@ const PREFERRED_TRANSLATION_LANGUAGE = "zh-CN";
 const BACKEND_FETCH_MIN_REFS = 3;
 const BACKEND_WRITE_BATCH_SIZE = 50;
 const TRANSLATION_OVERRIDES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const TRANSLATION_OVERRIDES_REFRESH_INTERVAL_MS_DEBUG = 10 * 1000;
+const TRANSLATION_OVERRIDES_REFRESH_INTERVAL_MS_DEBUG = 0;
 
 const DIRECT_MEDIA_TYPE_SHOW_STATUSES = ["returning series", "ended", "canceled"];
 
@@ -45,7 +45,7 @@ const SCRIPT_TRANSLATION_REQUEST_HEADER = "x-script-trakt-translation-request";
 const SCRIPT_TRANSLATION_REQUEST_VALUE = "true";
 
 function buildTranslationCacheEntry(status, translation) {
-    return { status, translation, updatedAt: Date.now() };
+    return translation ? { status, translation } : { status };
 }
 
 function getOverrideGroupName(mediaType) {

@@ -63,7 +63,7 @@ function buildRipppleHistoryRequestUrl(url, shouldApply) {
     return shouldApply ? buildMinimumLimitRequestUrl(url, RIPPPLE_HISTORY_MIN_LIMIT) : String(url.href);
 }
 
-function getHistoryEpisodesMergedByShowCacheBucketKey(url) {
+function getHistoryShowBucketKey(url) {
     const searchParams = url && url.searchParams;
     const queryEntries = searchParams && typeof searchParams.entries === "function" ? Array.from(searchParams.entries()) : [];
     const query = queryEntries
@@ -76,7 +76,7 @@ function getHistoryEpisodesMergedByShowCacheBucketKey(url) {
     return `${url.origin}${pathname ? `/${pathname}` : ""}${query ? `?${query}` : ""}`;
 }
 
-function getHistoryEpisodesMergedByShowPageNumber(url) {
+function getHistoryPageNumber(url) {
     const page = Number(url.searchParams.get("page"));
     return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
 }
@@ -94,34 +94,14 @@ function getHistoryEpisodeSortKey(item) {
     };
 }
 
-function createHistoryEpisodeCacheSnapshot(item) {
-    const showId = getHistoryEpisodeShowKey(item);
-    const sortKey = getHistoryEpisodeSortKey(item);
-
-    return {
-        id: item && item.id ? Number(item.id) : 0,
-        watched_at: item?.watched_at ?? null,
-        listed_at: item?.listed_at ?? null,
-        show: {
-            ids: {
-                trakt: showId || null,
-            },
-        },
-        episode: {
-            season: sortKey.season,
-            number: sortKey.number,
-        },
-    };
-}
-
 function filterHistoryEpisodesAcrossPages(arr, url, cache) {
     if (commonUtils.isNotArray(arr) || arr.length === 0 || !isHistoryEpisodesListUrl(url)) {
         return arr;
     }
 
     const nextCache = commonUtils.ensureObject(cache);
-    const bucketKey = getHistoryEpisodesMergedByShowCacheBucketKey(url);
-    const pageNumber = getHistoryEpisodesMergedByShowPageNumber(url);
+    const bucketKey = getHistoryShowBucketKey(url);
+    const pageNumber = getHistoryPageNumber(url);
     if (pageNumber === 1) {
         delete nextCache[bucketKey];
     }
@@ -136,7 +116,7 @@ function filterHistoryEpisodesAcrossPages(arr, url, cache) {
     filtered.forEach((item) => {
         const showKey = getHistoryEpisodeShowKey(item);
         if (showKey && !cachedShows[showKey]) {
-            cachedShows[showKey] = createHistoryEpisodeCacheSnapshot(item);
+            cachedShows[showKey] = true;
         }
     });
 
@@ -195,12 +175,12 @@ function mergeHistoryEpisodesByShow(arr) {
     });
 }
 
-function filterHistoryEpisodesAcrossPagesWithPersistence(arr, url) {
+function filterHistoryPagesWithCache(arr, url) {
     const context = globalThis.$ctx;
     const resolvedUrl = url ?? context.url;
-    const result = filterHistoryEpisodesAcrossPages(arr, resolvedUrl, cacheUtils.loadHistoryEpisodesMergedByShowCache(context.env));
+    const result = filterHistoryEpisodesAcrossPages(arr, resolvedUrl, cacheUtils.loadHistoryShowsCache(context.env));
     if (result?.cache && result?.filtered) {
-        cacheUtils.saveHistoryEpisodesMergedByShowCache(context.env, result.cache);
+        cacheUtils.saveHistoryShowsCache(context.env, result.cache);
         return result.filtered;
     }
 
@@ -215,7 +195,7 @@ function processMergedHistoryEpisodeListBody(sourceBody, url) {
     }
 
     try {
-        return JSON.stringify(filterHistoryEpisodesAcrossPagesWithPersistence(mergeHistoryEpisodesByShow(JSON.parse(sourceBody)), resolvedUrl));
+        return JSON.stringify(filterHistoryPagesWithCache(mergeHistoryEpisodesByShow(JSON.parse(sourceBody)), resolvedUrl));
     } catch (error) {
         context.env.log(`Trakt history episodes merge-by-show failed: ${error}`);
         return sourceBody;

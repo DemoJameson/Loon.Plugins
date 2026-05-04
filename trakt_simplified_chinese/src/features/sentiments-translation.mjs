@@ -305,7 +305,6 @@ function storeSentimentTranslationCacheEntry(cache, mediaType, traktId, payload)
 
     cache[cacheKey] = {
         translation: buildSentimentTranslationPayload(payload),
-        updatedAt: Date.now(),
     };
 }
 

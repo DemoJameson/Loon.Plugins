@@ -186,7 +186,7 @@ test("/translations/zh 排序后会把 zh-CN 条目放在最前", async () => {
         assert.equal(payload[0].movie.title, "Original Title");
 
         const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["movie:123"];
-        assert.deepEqual(cacheEntry.translation, null);
+        assert.equal(cacheEntry.translation, undefined);
         assert.equal(cacheEntry.status, 3);
         assert.equal(backendPostQueue.length, 0);
     });
@@ -209,8 +209,6 @@ test("episode 数字占位标题无中文简介时会生成标题但保持 NOT_F
     assert.equal(cacheEntry.status, 3);
     assert.deepEqual(cacheEntry.translation, {
         title: "第12集",
-        overview: null,
-        tagline: null,
     });
     assert.equal(backendPostQueue.length, 0);
 });
@@ -289,7 +287,7 @@ test("episode 非数字占位标题不会生成中文集数标题", async () => 
 
     const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["episode:555:1:12"];
     assert.equal(cacheEntry.status, 3);
-    assert.equal(cacheEntry.translation, null);
+    assert.equal(cacheEntry.translation, undefined);
 });
 
 test("movie 的 Episode 数字标题不会生成中文集数标题", async () => {
@@ -366,7 +364,7 @@ test("/movies/:id 会把缓存中的中文翻译应用到详情响应", async ()
 
 test("媒体列表已有缓存翻译时不会重复写入统一缓存", async () => {
     const persistentData = createUnifiedPersistentData({
-        updatedAt: 123,
+        rev: 123,
         traktTranslation: JSON.parse(createMediaTranslationCache()),
     });
     const beforeCache = persistentData[UNIFIED_CACHE_KEY];
@@ -381,7 +379,7 @@ test("媒体列表已有缓存翻译时不会重复写入统一缓存", async ()
     assert.equal(afterPersistentData[UNIFIED_CACHE_KEY], beforeCache);
 });
 
-test("/translations/zh 写回媒体缓存时只保留状态、翻译和更新时间", async () => {
+test("/translations/zh 写回媒体缓存时只保留状态和翻译", async () => {
     const { persistentData } = await runResponseCase({
         url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
         body: readFixture("translations.json"),
@@ -389,7 +387,7 @@ test("/translations/zh 写回媒体缓存时只保留状态、翻译和更新时
 
     const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["movie:123"];
     assert.ok(cacheEntry);
-    assert.deepEqual(Object.keys(cacheEntry).sort(), ["status", "translation", "updatedAt"]);
+    assert.deepEqual(Object.keys(cacheEntry).sort(), ["status", "translation"]);
 });
 
 test("/movies/:id 遇到损坏的媒体缓存字符串时会安全降级", async () => {
@@ -428,30 +426,43 @@ test("统一缓存 version 不匹配时会清空旧内容并重建后正常写�
     });
 
     const unifiedCache = parseUnifiedCache(persistentData);
-    assert.equal(unifiedCache.version, 2);
+    assert.equal(unifiedCache.version, 5);
     assert.equal(unifiedCache.trakt.translation["movie:123"].translation.title, "港版标题");
 });
 
-test("统一缓存超过上限时会按 updatedAt 裁剪 google 分区旧条目并保留较新项", async () => {
+test("统一缓存超过上限时会优先保留媒体翻译和历史分页去重缓存", async () => {
     const largeText = "A".repeat(600 * 1024);
     const { persistentData } = await runResponseCase({
         url: "https://api.trakt.tv/comments/123/replies",
         body: readFixture("comments.json"),
         persistentData: createUnifiedPersistentData({
+            traktTranslation: {
+                "movie:123": createMediaTranslationEntry({
+                    translation: {
+                        title: "保留标题",
+                        overview: "保留简介",
+                    },
+                }),
+            },
+            persistentHistoryShows: {
+                "https://api.trakt.tv/users/me/history/episodes": {
+                    shows: {
+                        555: true,
+                    },
+                },
+            },
             googleComments: {
                 old: {
                     comment: {
                         sourceTextHash: computeStringHash("old"),
                         translatedText: largeText,
                     },
-                    updatedAt: 1,
                 },
                 newer: {
                     comment: {
                         sourceTextHash: computeStringHash("newer"),
                         translatedText: largeText,
                     },
-                    updatedAt: 2,
                 },
             },
         }),
@@ -461,9 +472,13 @@ test("统一缓存超过上限时会按 updatedAt 裁剪 google 分区旧条目�
     });
 
     const unifiedCache = parseUnifiedCache(persistentData);
-    assert.equal(unifiedCache.google.comments.old, undefined);
-    assert.equal(typeof unifiedCache.google.comments.newer?.comment?.translatedText, "string");
-    assert.equal(unifiedCache.google.comments["9001"].comment.translatedText, "很棒的电影");
+    assert.equal(Object.keys(unifiedCache.google.comments).length, 2);
+    assert.equal(unifiedCache.trakt.translation["movie:123"].translation.title, "保留标题");
+    assert.deepEqual(unifiedCache.persistent.historyShows["https://api.trakt.tv/users/me/history/episodes"], {
+        shows: {
+            555: true,
+        },
+    });
     assert.equal(unifiedCache.persistent.currentSeason, null);
 });
 
@@ -530,16 +545,62 @@ test("merged history episodes 列表会按 show 保留最新一条并应用缓�
     assert.equal(payload[0].episode.title, "第二集中文");
     assert.equal(payload[1].episode.title, "其他剧中文");
 
-    const historyCache = parseUnifiedCache(persistentData).trakt.historyEpisodesMergedByShow;
+    const historyCache = parseUnifiedCache(persistentData).persistent.historyShows;
     const bucketKey = "https://api.trakt.tv/users/me/history/episodes";
     assert.ok(historyCache[bucketKey]);
-    assert.ok(historyCache[bucketKey].shows["555"]);
-    assert.ok(historyCache[bucketKey].shows["777"]);
+    assert.deepEqual(historyCache[bucketKey].shows, {
+        555: true,
+        777: true,
+    });
+});
+
+test("historyEpisodesMergedByShow 启用时历史剧集只缓存合并后剧集和对应电视剧翻译", async () => {
+    const translationsBody = readFixture("translations.json");
+    const { result, persistentData, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/users/me/history/episodes?page=1&limit=10",
+        body: readFixture("history-episodes.json"),
+        headers: {
+            "user-agent": "Infuse/8.0",
+        },
+        httpGetMocks: {
+            "https://api.trakt.tv/shows/555/translations/zh?extended=all": translationsBody,
+            "https://api.trakt.tv/shows/777/translations/zh?extended=all": translationsBody,
+            "https://api.trakt.tv/shows/555/seasons/1/episodes/2/translations/zh?extended=all": translationsBody,
+            "https://api.trakt.tv/shows/777/seasons/2/episodes/1/translations/zh?extended=all": translationsBody,
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.deepEqual(
+        payload.map((item) => item.id),
+        [2, 3],
+    );
+    assert.equal(payload[0].show.title, "港版标题");
+    assert.equal(payload[0].episode.title, "港版标题");
+    assert.equal(payload[1].show.title, "港版标题");
+    assert.equal(payload[1].episode.title, "港版标题");
+
+    const translationCache = parseUnifiedCache(persistentData).trakt.translation;
+    assert.deepEqual(Object.keys(translationCache).sort(), ["episode:555:1:2", "episode:777:2:1", "show:555", "show:777"]);
+    assert.equal(translationCache["show:555"].translation.title, "港版标题");
+    assert.equal(translationCache["show:777"].translation.title, "港版标题");
+    assert.equal(translationCache["episode:555:1:2"].translation.title, "港版标题");
+    assert.equal(translationCache["episode:777:2:1"].translation.title, "港版标题");
+    assert.equal(translationCache["episode:555:1:1"], undefined);
+    assert.equal(
+        httpLogs.some((entry) => entry.method === "GET" && entry.url === "https://proxy-modules.demojameson.de5.net/api/trakt/translations?shows=555,777&episodes=555:1:2,777:2:1"),
+        true,
+    );
+
+    assert.equal(
+        httpLogs.some((entry) => entry.method === "GET" && entry.url === "https://api.trakt.tv/shows/555/seasons/1/episodes/1/translations/zh?extended=all"),
+        false,
+    );
 });
 
 test("comments 列表会应用缓存中的评论翻译", async () => {
     const persistentData = createUnifiedPersistentData({
-        updatedAt: 123,
+        rev: 123,
         googleComments: JSON.parse(createCommentTranslationCache()),
     });
     const beforeCache = persistentData[UNIFIED_CACHE_KEY];
@@ -604,7 +665,6 @@ test("comments 写回缓存时会保留其他 comment 项", async () => {
                         sourceTextHash: "cafebabe",
                         translatedText: "其他评论",
                     },
-                    updatedAt: 1,
                 },
             },
         }),
@@ -699,7 +759,6 @@ test("comments 列表遇到 hash 不匹配的旧缓存时会忽略旧值并刷�
                             sourceTextHash: "deadbeef",
                             translatedText: "旧错误翻译",
                         },
-                        updatedAt: 1,
                     },
                 }),
             ),
@@ -787,12 +846,11 @@ test("googleTranslationEnabled=false 时 list descriptions 不触发 Google 翻�
                     sourceTextHash: computeStringHash("A good list"),
                     translatedText: "一个不错的列表",
                 },
-                updatedAt: 1,
             },
         }),
     );
     const persistentData = createUnifiedPersistentData({
-        updatedAt: 123,
+        rev: 123,
         googleList: cachedList,
     });
     const beforeCache = persistentData[UNIFIED_CACHE_KEY];

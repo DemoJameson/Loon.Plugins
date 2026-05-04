@@ -2,6 +2,19 @@ import * as commonUtils from "../utils/common.mjs";
 
 import * as mediaTypes from "./media-types.mjs";
 
+const ALLOWED_ID_FIELDS = ["trakt", "tmdb"];
+
+function normalizeIds(ids) {
+    const source = commonUtils.ensureObject(ids);
+    const normalized = {};
+    ALLOWED_ID_FIELDS.forEach((field) => {
+        if (commonUtils.isNonNullish(source[field])) {
+            normalized[field] = source[field];
+        }
+    });
+    return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
 function getLinkIdsCacheEntry(cache, traktId) {
     if (!cache || commonUtils.isNullish(traktId)) {
         return null;
@@ -15,14 +28,14 @@ function mergeLinkIdsCacheEntry(currentEntry, nextEntry) {
     const current = commonUtils.ensureObject(currentEntry);
     const incoming = commonUtils.ensureObject(nextEntry);
     const merged = {};
-    const mergedIds = { ...commonUtils.ensureObject(current.ids), ...commonUtils.ensureObject(incoming.ids) };
-    const mergedShowIds = { ...commonUtils.ensureObject(current.showIds), ...commonUtils.ensureObject(incoming.showIds) };
+    const mergedIds = normalizeIds({ ...commonUtils.ensureObject(current.ids), ...commonUtils.ensureObject(incoming.ids) });
+    const mergedShowIds = normalizeIds({ ...commonUtils.ensureObject(current.showIds), ...commonUtils.ensureObject(incoming.showIds) });
 
-    if (Object.keys(mergedIds).length > 0) {
+    if (mergedIds) {
         merged.ids = mergedIds;
     }
 
-    if (Object.keys(mergedShowIds).length > 0) {
+    if (mergedShowIds) {
         merged.showIds = mergedShowIds;
     }
 
@@ -56,7 +69,6 @@ function setLinkIdsCacheEntry(cache, traktId, entry) {
         return false;
     }
 
-    next.updatedAt = Date.now();
     cache[key] = next;
     return true;
 }
@@ -68,7 +80,7 @@ function buildFallbackShowIds(showTraktId, linkCache) {
 
     const showEntry = getLinkIdsCacheEntry(linkCache, showTraktId);
     if (commonUtils.isPlainObject(showEntry?.ids)) {
-        return commonUtils.cloneObject(showEntry.ids);
+        return normalizeIds(showEntry.ids);
     }
 
     return {
@@ -84,7 +96,7 @@ function cacheMediaIdsFromDetailResponse(linkCache, mediaType, ref, data) {
     if (mediaType === mediaTypes.MEDIA_TYPE.MOVIE || mediaType === mediaTypes.MEDIA_TYPE.SHOW) {
         const traktId = data?.ids?.trakt ?? null;
         return setLinkIdsCacheEntry(linkCache, traktId, {
-            ids: commonUtils.cloneObject(data.ids),
+            ids: normalizeIds(data.ids),
         });
     }
 
@@ -95,7 +107,7 @@ function cacheMediaIdsFromDetailResponse(linkCache, mediaType, ref, data) {
         }
 
         return setLinkIdsCacheEntry(linkCache, episodeTraktId, {
-            ids: commonUtils.cloneObject(data.ids),
+            ids: normalizeIds(data.ids),
             showIds: buildFallbackShowIds(ref?.showId, linkCache),
             seasonNumber: commonUtils.isNonNullish(data.season) ? data.season : ref?.seasonNumber,
             episodeNumber: commonUtils.isNonNullish(data.number) ? data.number : ref?.episodeNumber,
@@ -123,7 +135,7 @@ function cacheEpisodeIdsFromSeasonList(linkCache, showId, seasons) {
 
             if (
                 setLinkIdsCacheEntry(linkCache, episodeTraktId, {
-                    ids: commonUtils.cloneObject(episode.ids),
+                    ids: normalizeIds(episode.ids),
                     showIds: commonUtils.cloneObject(showIds),
                     seasonNumber: episode?.season ?? null,
                     episodeNumber: episode?.number ?? null,
@@ -150,7 +162,7 @@ async function ensureMediaIdsCacheEntry(fetchMediaDetail, saveLinkIdsCache, link
     const payload = await fetchMediaDetail(mediaType, traktId);
     if (commonUtils.isPlainObject(payload)) {
         setLinkIdsCacheEntry(linkCache, traktId, {
-            ids: commonUtils.cloneObject(payload.ids),
+            ids: normalizeIds(payload.ids),
         });
         saveLinkIdsCache(linkCache);
         entry = getLinkIdsCacheEntry(linkCache, traktId);

@@ -106,7 +106,9 @@ function pickPreferredZhTranslation(translations) {
     return (
         normalizedTranslations.find((item) => {
             return String(item?.language ?? "").toLowerCase() === "zh" && String(item?.country ?? "").toLowerCase() === "cn";
-        }) ?? normalizedTranslations[0] ?? null
+        }) ??
+        normalizedTranslations[0] ??
+        null
     );
 }
 
@@ -241,8 +243,7 @@ test("live script: /movies/:id 会在 /translations/zh 写入本地缓存后应�
         httpLogs.every((log) => {
             return (
                 log.method === "GET" &&
-                (log.url.startsWith(`${config.backendBaseUrl}/api/trakt/translations`) ||
-                    log.url.startsWith(`${config.backendBaseUrl}/api/trakt/translation-overrides`))
+                (log.url.startsWith(`${config.backendBaseUrl}/api/trakt/translations`) || log.url.startsWith(`${config.backendBaseUrl}/api/trakt/translation-overrides`))
             );
         }),
         true,
@@ -1791,7 +1792,10 @@ test("live script: request route coverage matrix covers all request phase routes
             url: "https://image.tmdb.org/t/p/w342/forward_logo.webp",
             assertResult(result) {
                 assert.equal(result.response.status, 302);
-                assert.equal(result.response.headers.Location, "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/images/forward_logo.webp");
+                assert.equal(
+                    result.response.headers.Location,
+                    "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/images/forward_logo.webp",
+                );
             },
         },
         {
