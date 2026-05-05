@@ -589,6 +589,33 @@ test("handleWrapperMediaList 按 wrapper 路由分组生效", async (t) => {
             },
         },
         {
+            name: "users list items all route",
+            url: "https://api.trakt.tv/users/me/lists/321/items/movie,show,season,episode",
+            body: createMixedMovieBody(),
+            persistentData: createMoviePersistentData(),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "中文电影");
+            },
+        },
+        {
+            name: "list items all route with alternate order",
+            url: "https://api.trakt.tv/lists/321/items/movie,show,episode,season",
+            body: createMixedMovieBody(),
+            persistentData: createMoviePersistentData(),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "中文电影");
+            },
+        },
+        {
+            name: "users ratings typed route",
+            url: "https://api.trakt.tv/users/me/ratings/movies",
+            body: createWrappedMovieBody(),
+            persistentData: createMoviePersistentData(),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "中文电影");
+            },
+        },
+        {
             name: "up-next wrapper route",
             url: "https://api.trakt.tv/sync/progress/up_next_nitro",
             body: createUpNextBody(),

@@ -1174,6 +1174,19 @@ test("live script: response route coverage matrix covers all response phase rout
             },
         },
         {
+            url: "https://api.trakt.tv/users/me/lists/1/items/movie,show,season,episode",
+            body: JSON.stringify([
+                {
+                    type: "movie",
+                    movie: movieSample.movie,
+                },
+            ]),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            },
+        },
+        {
             url: "https://api.trakt.tv/lists/1/items",
             body: JSON.stringify(wrappedMovieItems),
             persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
@@ -1203,7 +1216,28 @@ test("live script: response route coverage matrix covers all response phase rout
             },
         },
         {
+            url: "https://api.trakt.tv/lists/1/items/movie,show,episode,season",
+            body: JSON.stringify([
+                {
+                    type: "movie",
+                    movie: movieSample.movie,
+                },
+            ]),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            },
+        },
+        {
             url: "https://api.trakt.tv/users/me/ratings/all",
+            body: JSON.stringify(wrappedMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "覆盖中文电影");
+            },
+        },
+        {
+            url: "https://api.trakt.tv/users/me/ratings/movies",
             body: JSON.stringify(wrappedMovieItems),
             persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
             assertPayload(payload) {

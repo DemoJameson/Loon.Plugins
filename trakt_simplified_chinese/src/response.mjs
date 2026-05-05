@@ -51,13 +51,18 @@ function createResponsePhaseRoutes() {
         createRoute({ pattern: /^users\/[^/]+\/following\/activities$/i, id: "users.following.activities", handler: mediaTranslationHandler.handleWrapperMediaList }),
         createRoute({ pattern: /^users\/[^/]+\/lists\/\d+\/items$/i, id: "users.listItems.all", handler: mediaTranslationHandler.handleWrapperMediaList }),
         createRoute({
-            pattern: /^users\/[^/]+\/lists\/\d+\/items\/(movie|show|movie,show)$/i,
+            pattern: /^users\/[^/]+\/lists\/\d+\/items\/(?:movie|show|season|episode)(?:,(?:movie|show|season|episode))*$/i,
             id: "users.listItems.filtered",
             handler: mediaTranslationHandler.handleWrapperMediaList,
         }),
         createRoute({ pattern: /^lists\/\d+\/items$/i, id: "lists.items.all", handler: mediaTranslationHandler.handleWrapperMediaList }),
-        createRoute({ pattern: /^lists\/\d+\/items\/(movie|show|movie,show)$/i, id: "lists.items.filtered", handler: mediaTranslationHandler.handleWrapperMediaList }),
+        createRoute({
+            pattern: /^lists\/\d+\/items\/(?:movie|show|season|episode)(?:,(?:movie|show|season|episode))*$/i,
+            id: "lists.items.filtered",
+            handler: mediaTranslationHandler.handleWrapperMediaList,
+        }),
         createRoute({ pattern: /^users\/[^/]+\/ratings\/all$/i, id: "users.ratings.all", handler: mediaTranslationHandler.handleWrapperMediaList }),
+        createRoute({ pattern: /^users\/[^/]+\/ratings\/(movies|shows|episodes)$/i, id: "users.ratings.mediaTyped", handler: mediaTranslationHandler.handleWrapperMediaList }),
         createRoute({ pattern: /^users\/[^/]+\/favorites\/media(\/[^/]+)?$/i, id: "users.favorites.media", handler: mediaTranslationHandler.handleWrapperMediaList }),
         createRoute({
             pattern: /^users\/[^/]+\/favorites\/(shows|movies)(\/[^/]+)?$/i,
