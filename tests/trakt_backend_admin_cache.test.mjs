@@ -119,6 +119,17 @@ function createKvFetch(store) {
                         store.ttlByKey.delete(key);
                     }
                     results.push(store.delete(key) ? 1 : 0);
+                } else if (name === "SCAN") {
+                    store.scanCommands = [...(store.scanCommands || []), command];
+                    const cursor = Number.parseInt(command[1] || "0", 10) || 0;
+                    const matchIndex = command.indexOf("MATCH");
+                    const countIndex = command.indexOf("COUNT");
+                    const match = matchIndex >= 0 ? command[matchIndex + 1] || "" : "";
+                    const count = countIndex >= 0 ? Number.parseInt(command[countIndex + 1] || "10", 10) || 10 : 10;
+                    const prefix = match.endsWith("*") ? match.slice(0, -1) : match;
+                    const keys = Array.from(store.keys()).filter((itemKey) => itemKey.startsWith(prefix));
+                    const nextCursor = cursor + count >= keys.length ? "0" : String(cursor + count);
+                    results.push([nextCursor, keys.slice(cursor, cursor + count)]);
                 } else {
                     results.push(null);
                 }
@@ -350,9 +361,17 @@ test("backend translations GET reads many entries with JSON.MGET", async () => {
         assert.equal(res.jsonBody.movies["123"].translation.title, "批量电影标题");
         assert.equal(res.jsonBody.episodes["123:1:2"].translation.title, "批量剧集单集标题");
         assert.equal(res.jsonBody.movies["456"], undefined);
-        assert.equal(store.mgetCommands.length, 3);
-        assert.deepEqual(store.mgetCommands[0], ["JSON.MGET", "trakt:translation:shows:123", "trakt:translation:shows:404", "$"]);
-        assert.deepEqual(store.mgetCommands[1], ["JSON.MGET", "trakt:translation:movies:123", "trakt:translation:movies:456", "$"]);
+        assert.equal(store.mgetCommands.length, 1);
+        assert.deepEqual(store.mgetCommands[0], [
+            "JSON.MGET",
+            "trakt:translation:shows:123",
+            "trakt:translation:shows:404",
+            "trakt:translation:movies:123",
+            "trakt:translation:movies:456",
+            "trakt:translation:episodes:123:1:2",
+            "trakt:translation:episodes:999:1:1",
+            "$",
+        ]);
         assert.equal(store.getCommands, undefined);
     });
 });

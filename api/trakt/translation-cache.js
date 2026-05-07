@@ -474,6 +474,18 @@ async function pipelineKv(config, commands) {
     });
 }
 
+async function scanManyKvKeys(config, requests) {
+    if (!config || requests.length === 0) {
+        return [];
+    }
+
+    const results = await pipelineKv(
+        config,
+        requests.map((request) => ["SCAN", request.cursor, "MATCH", request.pattern, "COUNT", request.count]),
+    );
+    return results.map((result) => parseScanResult(result));
+}
+
 async function readManyEffectiveFromKv(config, mediaType, ids, options = {}) {
     if (!config || ids.length === 0) {
         return {};
@@ -511,6 +523,29 @@ async function readManyAutoFromKv(config, mediaType, ids) {
         const autoEntry = parseCachedEntry(autoResults[index]);
         if (autoEntry) {
             entries[id] = autoEntry;
+        }
+    });
+    return entries;
+}
+
+async function readManyAutoGroupsFromKv(config, groupsByMediaType) {
+    if (!config) {
+        return createEmptyTranslationOverridesStore();
+    }
+
+    const refs = MEDIA_TYPES.flatMap((mediaType) => {
+        const ids = groupsByMediaType[mediaType] || [];
+        return ids.map((id) => ({ mediaType, id, key: buildCacheKey(mediaType, id) }));
+    });
+    const results = await jsonGetManyKv(
+        config,
+        refs.map((ref) => ref.key),
+    );
+    const entries = createEmptyTranslationOverridesStore();
+    refs.forEach((ref, index) => {
+        const autoEntry = parseCachedEntry(results[index]);
+        if (autoEntry) {
+            entries[ref.mediaType][ref.id] = autoEntry;
         }
     });
     return entries;
@@ -657,8 +692,7 @@ async function deleteCacheEntriesFromKv(config, mediaType, id, target) {
     return commands.length;
 }
 
-function parseScanPayload(payload) {
-    const result = payload?.result;
+function parseScanResult(result) {
     if (Array.isArray(result)) {
         return {
             cursor: String(result[0] || "0"),
@@ -677,10 +711,6 @@ function parseScanPayload(payload) {
         cursor: "0",
         keys: [],
     };
-}
-
-async function scanKvKeys(config, cursor, pattern, count) {
-    return parseScanPayload(await kvRequest(config, `/scan/${encodeURIComponent(cursor)}/match/${encodeURIComponent(pattern)}/count/${encodeURIComponent(String(count))}`));
 }
 
 function getIdFromCacheKey(key, mediaType) {
@@ -850,13 +880,17 @@ async function listCacheItemsFromKv(config, options) {
     const cursorByType = parseAdminListCursor(options.cursor, types);
     const scanLimit = limit + 1;
     const translationOverrides = await readAllTranslationOverridesFromKv(config);
-    const scanEntries = await Promise.all(
-        types.map(async (type) => {
-            const cursor = cursorByType[type] || { autoCursor: "0", overrideCursor: "0" };
-            const autoScan = await scanKvKeys(config, cursor.autoCursor, `${buildCacheKey(type, "")}*`, scanLimit);
-            return { type, autoScan };
-        }),
-    );
+    const scanRequests = types.map((type) => {
+        const cursor = cursorByType[type] || { autoCursor: "0", overrideCursor: "0" };
+        return {
+            type,
+            cursor: cursor.autoCursor,
+            pattern: `${buildCacheKey(type, "")}*`,
+            count: scanLimit,
+        };
+    });
+    const scanResults = await scanManyKvKeys(config, scanRequests);
+    const scanEntries = scanRequests.map((request, index) => ({ type: request.type, autoScan: scanResults[index] || { cursor: "0", keys: [] } }));
 
     const idEntries = [];
     const seen = new Set();
@@ -953,6 +987,7 @@ module.exports = {
     parseIds,
     readAllTranslationOverridesFromKv,
     readManyAutoFromKv,
+    readManyAutoGroupsFromKv,
     readCachePairFromKv,
     readJsonBody,
     readManyEffectiveFromKv,

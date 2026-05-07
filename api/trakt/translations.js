@@ -3,7 +3,7 @@ const {
     getResponseCacheStatus,
     parseEpisodeKeys,
     parseIds,
-    readManyAutoFromKv,
+    readManyAutoGroupsFromKv,
     readJsonBody,
     sendKvNotConfigured,
     setResponseCacheHeaders,
@@ -25,11 +25,11 @@ async function handleGet(req, res, kvConfig) {
         return;
     }
 
-    const [shows, movies, episodes] = await Promise.all([
-        readManyAutoFromKv(kvConfig, "shows", showIds),
-        readManyAutoFromKv(kvConfig, "movies", movieIds),
-        readManyAutoFromKv(kvConfig, "episodes", episodeKeys),
-    ]);
+    const { shows, movies, episodes } = await readManyAutoGroupsFromKv(kvConfig, {
+        shows: showIds,
+        movies: movieIds,
+        episodes: episodeKeys,
+    });
 
     setResponseCacheHeaders(res, getResponseCacheStatus(shows, movies, episodes));
     res.status(200).json({
