@@ -224,6 +224,7 @@ test("live script: /movies/:id 会在 /translations/zh 写入本地缓存后应�
         url: `https://api.trakt.tv/movies/${sample.traktId}`,
         argument: {
             backendBaseUrl: config.backendBaseUrl,
+            chineseImageEnabled: false,
         },
         headers: createScriptRequestHeaders(config, {
             "user-agent": "Rippple/1.0",
@@ -941,6 +942,14 @@ test("live script: response route coverage matrix covers all response phase rout
         },
         {
             url: "https://api.trakt.tv/recommendations/movies",
+            body: JSON.stringify(directMovieItems),
+            persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
+            assertPayload(payload) {
+                assert.equal(payload[0].title, "覆盖直出中文电影");
+            },
+        },
+        {
+            url: `https://api.trakt.tv/movies/${movieSample.traktId}/related`,
             body: JSON.stringify(directMovieItems),
             persistentData: createUnifiedPersistentData({ traktTranslation: movieTranslation }),
             assertPayload(payload) {
@@ -1840,6 +1849,18 @@ test("live script: request route coverage matrix covers all request phase routes
                     result.response.headers.Location,
                     "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/images/forward_logo.webp",
                 );
+            },
+        },
+        {
+            url: "https://image.tmdb.org/t/p/w780/poster.jpg",
+            headers: {
+                "user-agent": "Trakt/1.0",
+                accept: "image/jpeg",
+            },
+            assertResult(result) {
+                assert.equal(result.url, "https://image.tmdb.org/t/p/w780/poster.jpg");
+                assert.equal(result.headers.Accept, "image/webp");
+                assert.equal(Object.hasOwn(result.headers, "accept"), false);
             },
         },
         {

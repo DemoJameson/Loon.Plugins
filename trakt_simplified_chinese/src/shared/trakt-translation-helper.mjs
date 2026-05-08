@@ -1,3 +1,4 @@
+import * as tmdbClientModule from "../outbound/tmdb-client.mjs";
 import * as traktApiClientModule from "../outbound/trakt-api-client.mjs";
 import * as vercelBackendClientModule from "../outbound/vercel-backend-client.mjs";
 import * as cacheUtils from "../utils/cache.mjs";
@@ -35,6 +36,8 @@ const BACKEND_FETCH_MIN_REFS = 3;
 const BACKEND_WRITE_BATCH_SIZE = 50;
 const TRANSLATION_OVERRIDES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const TRANSLATION_OVERRIDES_REFRESH_INTERVAL_MS_DEBUG = 0;
+const IMAGE_PARTIAL_FOUND_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const IMAGE_NOT_FOUND_TTL_MS = 5 * 24 * 60 * 60 * 1000;
 
 const DIRECT_MEDIA_TYPE_SHOW_STATUSES = ["returning series", "ended", "canceled"];
 
@@ -43,6 +46,20 @@ const DIRECT_MEDIA_TYPE_MOVIE_STATUSES = ["released", "post production", "in pro
 const DIRECT_MEDIA_ORIGINAL_KEY = "__directOriginal";
 const SCRIPT_TRANSLATION_REQUEST_HEADER = "x-script-trakt-translation-request";
 const SCRIPT_TRANSLATION_REQUEST_VALUE = "true";
+const IMAGE_REGION_PRIORITY = ["cn", "sg", "tw", "hk"];
+const IMAGE_FIELD = {
+    POSTER: "poster",
+    LOGO: "logo",
+};
+const IMAGE_BACKEND_CONFIG = {
+    [mediaTypes.MEDIA_TYPE.MOVIE]: "movies",
+    [mediaTypes.MEDIA_TYPE.SHOW]: "shows",
+    season: "seasons",
+};
+const IMAGE_FIELD_SIZE = {
+    [IMAGE_FIELD.POSTER]: "w780",
+    [IMAGE_FIELD.LOGO]: "w500",
+};
 
 function buildTranslationCacheEntry(status, translation) {
     return translation ? { status, translation } : { status };
@@ -138,6 +155,418 @@ function storeTranslationEntry(cache, mediaType, ref, entry) {
 function getCachedTranslation(cache, mediaType, ref) {
     const cacheKey = buildMediaCacheKey(mediaType, ref);
     return cacheKey ? cache[cacheKey] : null;
+}
+
+function buildImageCacheLookupKey(mediaType, ref) {
+    if (mediaType === "season") {
+        return commonUtils.isNonNullish(ref?.showId) && commonUtils.isNonNullish(ref?.seasonNumber) ? `${ref.showId}:${ref.seasonNumber}` : "";
+    }
+    if ((mediaType !== mediaTypes.MEDIA_TYPE.MOVIE && mediaType !== mediaTypes.MEDIA_TYPE.SHOW) || commonUtils.isNullish(ref?.traktId)) {
+        return "";
+    }
+    return String(ref.traktId);
+}
+
+function buildImageCacheKey(mediaType, ref) {
+    const lookupKey = buildImageCacheLookupKey(mediaType, ref);
+    return lookupKey ? `${mediaType}:${lookupKey}` : "";
+}
+
+function getImageCacheEntry(cache, mediaType, ref) {
+    const cacheKey = buildImageCacheKey(mediaType, ref);
+    return cacheKey ? cache[cacheKey] : null;
+}
+
+function normalizeImageFieldEntry(entry) {
+    const url = String(entry?.url ?? "").trim();
+    const status =
+        entry?.status === translationCache.CACHE_STATUS.FOUND && url
+            ? translationCache.CACHE_STATUS.FOUND
+            : entry?.status === translationCache.CACHE_STATUS.PARTIAL_FOUND && url
+              ? translationCache.CACHE_STATUS.PARTIAL_FOUND
+              : translationCache.CACHE_STATUS.NOT_FOUND;
+    const expiresAt =
+        status === translationCache.CACHE_STATUS.FOUND
+            ? null
+            : Number.isFinite(Number(entry?.expiresAt))
+              ? Number(entry.expiresAt)
+              : Date.now() + (status === translationCache.CACHE_STATUS.PARTIAL_FOUND ? IMAGE_PARTIAL_FOUND_TTL_MS : IMAGE_NOT_FOUND_TTL_MS);
+    if (status !== translationCache.CACHE_STATUS.FOUND && expiresAt <= Date.now()) {
+        return null;
+    }
+    return status === translationCache.CACHE_STATUS.FOUND || status === translationCache.CACHE_STATUS.PARTIAL_FOUND ? { status, url, expiresAt } : { status, expiresAt };
+}
+
+function storeImageCacheEntry(cache, mediaType, ref, entry) {
+    const cacheKey = buildImageCacheKey(mediaType, ref);
+    if (!cacheKey) {
+        return null;
+    }
+
+    const current = commonUtils.ensureObject(cache[cacheKey]);
+    const next = { ...current };
+    [IMAGE_FIELD.POSTER, IMAGE_FIELD.LOGO].forEach((field) => {
+        if (commonUtils.isPlainObject(entry?.[field])) {
+            const normalizedField = normalizeImageFieldEntry(entry[field]);
+            if (normalizedField) {
+                next[field] = normalizedField;
+            } else {
+                delete next[field];
+            }
+        }
+    });
+    cache[cacheKey] = next;
+    return cache[cacheKey];
+}
+
+function getApplicableImageFields(target, mediaType, ref) {
+    if (mediaType === "season") {
+        return commonUtils.isNonNullish(ref?.showId) &&
+            commonUtils.isNonNullish(ref?.showTmdbId) &&
+            commonUtils.isNonNullish(ref?.seasonNumber) &&
+            commonUtils.isArray(target?.images?.poster) &&
+            target.images.poster.length > 0
+            ? [IMAGE_FIELD.POSTER]
+            : [];
+    }
+
+    if ((mediaType !== mediaTypes.MEDIA_TYPE.MOVIE && mediaType !== mediaTypes.MEDIA_TYPE.SHOW) || commonUtils.isNullish(ref?.traktId) || commonUtils.isNullish(ref?.tmdbId)) {
+        return [];
+    }
+
+    return [IMAGE_FIELD.POSTER, IMAGE_FIELD.LOGO].filter((field) => commonUtils.isArray(target?.images?.[field]) && target.images[field].length > 0);
+}
+
+function getFetchImageFields(target, mediaType, ref) {
+    if (mediaType === "season") {
+        return getApplicableImageFields(target, mediaType, ref);
+    }
+
+    return (mediaType === mediaTypes.MEDIA_TYPE.MOVIE || mediaType === mediaTypes.MEDIA_TYPE.SHOW) &&
+        commonUtils.isNonNullish(ref?.traktId) &&
+        commonUtils.isNonNullish(ref?.tmdbId)
+        ? [IMAGE_FIELD.POSTER, IMAGE_FIELD.LOGO]
+        : [];
+}
+
+function getImageLanguageScore(image) {
+    const language = String(image?.iso_639_1 ?? "")
+        .trim()
+        .toLowerCase();
+    return language === "zh" ? 1 : 0;
+}
+
+function getImageRegionScore(image) {
+    const region = String(image?.iso_3166_1 ?? "")
+        .trim()
+        .toLowerCase();
+    const index = IMAGE_REGION_PRIORITY.indexOf(region);
+    return index >= 0 ? IMAGE_REGION_PRIORITY.length - index : 0;
+}
+
+function pickPreferredImage(images) {
+    return (
+        commonUtils
+            .ensureArray(images)
+            .filter((image) => getImageLanguageScore(image) > 0 && String(image?.file_path ?? "").trim())
+            .sort((left, right) => {
+                const languageDiff = getImageLanguageScore(right) - getImageLanguageScore(left);
+                if (languageDiff !== 0) {
+                    return languageDiff;
+                }
+
+                const regionDiff = getImageRegionScore(right) - getImageRegionScore(left);
+                if (regionDiff !== 0) {
+                    return regionDiff;
+                }
+
+                const voteAverageDiff = Number(right?.vote_average ?? 0) - Number(left?.vote_average ?? 0);
+                if (voteAverageDiff !== 0) {
+                    return voteAverageDiff;
+                }
+
+                return Number(right?.vote_count ?? 0) - Number(left?.vote_count ?? 0);
+            })[0] ?? null
+    );
+}
+
+function getPickedImageStatus(image) {
+    if (!image) {
+        return translationCache.CACHE_STATUS.NOT_FOUND;
+    }
+    return getImageRegionScore(image) === IMAGE_REGION_PRIORITY.length ? translationCache.CACHE_STATUS.FOUND : translationCache.CACHE_STATUS.PARTIAL_FOUND;
+}
+
+function buildImageFieldEntry(image) {
+    const url = tmdbClientModule.buildImageUrl(image?.file_path, "original");
+    if (!url) {
+        return {
+            status: translationCache.CACHE_STATUS.NOT_FOUND,
+            expiresAt: Date.now() + IMAGE_NOT_FOUND_TTL_MS,
+        };
+    }
+    const status = getPickedImageStatus(image);
+    return {
+        status,
+        url,
+        expiresAt: status === translationCache.CACHE_STATUS.FOUND ? null : Date.now() + IMAGE_PARTIAL_FOUND_TTL_MS,
+    };
+}
+
+async function fetchImageEntry(mediaType, ref, fields) {
+    const requestedFields =
+        mediaType === mediaTypes.MEDIA_TYPE.MOVIE || mediaType === mediaTypes.MEDIA_TYPE.SHOW
+            ? [IMAGE_FIELD.POSTER, IMAGE_FIELD.LOGO]
+            : commonUtils.ensureArray(fields).filter((field) => field === IMAGE_FIELD.POSTER || field === IMAGE_FIELD.LOGO);
+    if (requestedFields.length === 0) {
+        return null;
+    }
+
+    const payload =
+        mediaType === "season" ? await tmdbClientModule.fetchSeasonImages(ref?.showTmdbId, ref?.seasonNumber) : await tmdbClientModule.fetchImages(mediaType, ref?.tmdbId);
+    const entry = {};
+    if (requestedFields.includes(IMAGE_FIELD.POSTER)) {
+        const poster = pickPreferredImage(payload?.posters);
+        entry.poster = buildImageFieldEntry(poster);
+    }
+    if (mediaType !== "season" && requestedFields.includes(IMAGE_FIELD.LOGO)) {
+        const logo = pickPreferredImage(payload?.logos);
+        entry.logo = buildImageFieldEntry(logo);
+    }
+    return entry;
+}
+
+function applyImages(target, entry, fields) {
+    let changed = false;
+    commonUtils.ensureArray(fields).forEach((field) => {
+        const url = tmdbClientModule.resizeImageUrl(entry?.[field]?.url, IMAGE_FIELD_SIZE[field] ?? "original");
+        if (!url || !commonUtils.isArray(target?.images?.[field]) || target.images[field].length === 0 || target.images[field][0] === url) {
+            return;
+        }
+        target.images[field][0] = url;
+        changed = true;
+    });
+    return changed;
+}
+
+function createImageBackendState() {
+    return {
+        pendingBackendWrites: {
+            movies: {},
+            shows: {},
+            seasons: {},
+        },
+        backendWriteBatchSize: BACKEND_WRITE_BATCH_SIZE,
+    };
+}
+
+function getImageBackendGroup(mediaType) {
+    return IMAGE_BACKEND_CONFIG[mediaType] ?? "";
+}
+
+function getMissingImageFields(cache, mediaType, ref, fields) {
+    const entry = getImageCacheEntry(cache, mediaType, ref);
+    return commonUtils.ensureArray(fields).filter((field) => !entry?.[field]);
+}
+
+function queueImageBackendWrite(backendState, mediaType, ref, entry) {
+    const group = getImageBackendGroup(mediaType);
+    const lookupKey = buildImageCacheLookupKey(mediaType, ref);
+    if (!group || !lookupKey || !entry) {
+        return;
+    }
+    backendState.pendingBackendWrites[group][lookupKey] = {
+        ...commonUtils.ensureObject(backendState.pendingBackendWrites[group][lookupKey]),
+        ...entry,
+    };
+    if (getImagePendingBackendWriteCount(backendState) >= backendState.backendWriteBatchSize) {
+        flushImageBackendWriteBatch(backendState, backendState.backendWriteBatchSize);
+    }
+}
+
+function getImagePendingBackendWriteCount(backendState) {
+    return Object.keys(backendState.pendingBackendWrites).reduce(
+        (count, group) => count + Object.keys(commonUtils.ensureObject(backendState.pendingBackendWrites[group])).length,
+        0,
+    );
+}
+
+function extractImageBackendWritePayload(backendState, maxBatchSize) {
+    const payload = { movies: {}, shows: {}, seasons: {} };
+    const batchSize = Number(maxBatchSize) > 0 ? Number(maxBatchSize) : backendState.backendWriteBatchSize;
+    let count = 0;
+    for (const group of Object.keys(backendState.pendingBackendWrites)) {
+        const entries = commonUtils.ensureObject(backendState.pendingBackendWrites[group]);
+        for (const lookupKey of Object.keys(entries)) {
+            if (count >= batchSize) {
+                return payload;
+            }
+            payload[group][lookupKey] = entries[lookupKey];
+            delete backendState.pendingBackendWrites[group][lookupKey];
+            count += 1;
+        }
+    }
+    return payload;
+}
+
+function flushImageBackendWriteBatch(backendState, maxBatchSize) {
+    if (!vercelBackendClientModule.resolveBackendBaseUrl() || getImagePendingBackendWriteCount(backendState) === 0) {
+        return false;
+    }
+
+    vercelBackendClientModule.postImages(extractImageBackendWritePayload(backendState, maxBatchSize)).catch(() => {});
+    return true;
+}
+
+function flushImageBackendWrites(backendState) {
+    flushImageBackendWriteBatch(backendState, getImagePendingBackendWriteCount(backendState));
+}
+
+async function hydrateImagesFromBackend(cache, targets) {
+    if (!vercelBackendClientModule.resolveBackendBaseUrl()) {
+        return false;
+    }
+
+    const groups = { movies: new Set(), shows: new Set(), seasons: new Set() };
+    targets.forEach(({ mediaType, ref, fields }) => {
+        if (getMissingImageFields(cache, mediaType, ref, fields).length === 0) {
+            return;
+        }
+        const group = getImageBackendGroup(mediaType);
+        const lookupKey = buildImageCacheLookupKey(mediaType, ref);
+        if (group && lookupKey) {
+            groups[group].add(lookupKey);
+        }
+    });
+    const query = Object.entries(groups)
+        .map(([group, ids]) =>
+            ids.size > 0
+                ? `${group}=${Array.from(ids)
+                      .sort((left, right) => String(left).localeCompare(String(right), "en", { numeric: true }))
+                      .join(",")}`
+                : "",
+        )
+        .filter(Boolean);
+    if (query.length === 0) {
+        return false;
+    }
+
+    const payload = await vercelBackendClientModule.fetchImages(query.join("&"));
+    let cacheChanged = false;
+    Object.entries(IMAGE_BACKEND_CONFIG).forEach(([mediaType, group]) => {
+        const entries = commonUtils.ensureObject(payload?.[group]);
+        Object.keys(entries).forEach((lookupKey) => {
+            const ref =
+                mediaType === "season"
+                    ? {
+                          showId: lookupKey.split(":")[0],
+                          seasonNumber: lookupKey.split(":")[1],
+                      }
+                    : { traktId: lookupKey };
+            storeImageCacheEntry(cache, mediaType, ref, entries[lookupKey]);
+            cacheChanged = true;
+        });
+    });
+    return cacheChanged;
+}
+
+async function fetchAndPersistMissingImages(cache, targets, backendState = createImageBackendState()) {
+    let cacheChanged = false;
+    await processInBatches(targets, async ({ mediaType, ref, fields }) => {
+        const missingFields = getMissingImageFields(cache, mediaType, ref, fields);
+        if (missingFields.length === 0) {
+            return;
+        }
+        try {
+            const entry = await fetchImageEntry(mediaType, ref, missingFields);
+            storeImageCacheEntry(cache, mediaType, ref, entry);
+            queueImageBackendWrite(backendState, mediaType, ref, entry);
+            cacheChanged = true;
+        } catch (error) {
+            globalThis.$ctx.env.log(`Trakt image fetch failed for key=${buildImageCacheKey(mediaType, ref)}: ${error}`);
+        }
+    });
+    return cacheChanged;
+}
+
+async function hydrateAndFetchImages(cache, targets, backendState) {
+    const context = globalThis.$ctx;
+    let cacheChanged = false;
+    try {
+        cacheChanged = (await hydrateImagesFromBackend(cache, targets)) || cacheChanged;
+    } catch (error) {
+        context.env.log(`Trakt backend image cache read failed: ${error}`);
+    }
+    cacheChanged = (await fetchAndPersistMissingImages(cache, targets, backendState)) || cacheChanged;
+    return cacheChanged;
+}
+
+async function enhanceImagesInPlace(target, mediaType, ref) {
+    // 不用补齐详情页无图片字段时的缓存写回
+    const fields = getApplicableImageFields(target, mediaType, ref);
+    if (fields.length === 0) {
+        return false;
+    }
+
+    const context = globalThis.$ctx;
+    const imageCache = cacheUtils.loadImageCache(context.env);
+    const backendState = createImageBackendState();
+    if (await hydrateAndFetchImages(imageCache, [{ mediaType, ref, fields }], backendState)) {
+        cacheUtils.saveImageCache(context.env, imageCache);
+    }
+    flushImageBackendWrites(backendState);
+
+    return applyImages(target, getImageCacheEntry(imageCache, mediaType, ref), fields);
+}
+
+function buildSeasonPosterRef(showId, showTmdbId, season) {
+    const seasonNumber = season?.number ?? commonUtils.ensureArray(season?.episodes)[0]?.season ?? null;
+    return {
+        showId,
+        showTmdbId,
+        seasonNumber,
+    };
+}
+
+async function enhanceSeasonImagesInPlace(seasons, showId, showTmdbId) {
+    if (commonUtils.isNotArray(seasons) || commonUtils.isNullish(showId) || commonUtils.isNullish(showTmdbId)) {
+        return false;
+    }
+
+    const context = globalThis.$ctx;
+    const imageCache = cacheUtils.loadImageCache(context.env);
+    const targets = seasons
+        .map((season) => ({
+            season,
+            mediaType: "season",
+            ref: buildSeasonPosterRef(showId, showTmdbId, season),
+        }))
+        .map((target) => ({
+            ...target,
+            fields: getFetchImageFields(target.season, target.mediaType, target.ref),
+        }))
+        .filter(({ fields }) => fields.length > 0);
+    const seen = {};
+    const missingTargets = targets.filter(({ mediaType, ref, fields }) => {
+        const key = buildImageCacheKey(mediaType, ref);
+        if (!key || seen[key] || getMissingImageFields(imageCache, mediaType, ref, fields).length === 0) {
+            return false;
+        }
+        seen[key] = true;
+        return true;
+    });
+
+    const backendState = createImageBackendState();
+    if (await hydrateAndFetchImages(imageCache, missingTargets, backendState)) {
+        cacheUtils.saveImageCache(context.env, imageCache);
+    }
+    flushImageBackendWrites(backendState);
+
+    let changed = false;
+    targets.forEach(({ season, mediaType, ref, fields }) => {
+        changed = applyImages(season, getImageCacheEntry(imageCache, mediaType, ref), fields) || changed;
+    });
+    return changed;
 }
 
 function hasZhAvailableTranslation(availableTranslations) {
@@ -537,6 +966,7 @@ function buildMediaRef(item, mediaType) {
         mediaType,
         traktId,
         backendLookupKey: String(traktId),
+        tmdbId: target?.ids?.tmdb ?? null,
         availableTranslations: commonUtils.isArray(target.available_translations) ? target.available_translations : null,
     };
 }
@@ -559,6 +989,37 @@ function applyTranslationsToItems(arr, cache, mediaConfig, applyTranslationFn) {
             const ref = buildMediaRef(item, mediaType);
             if (ref) {
                 applyTranslationFn(target, getCachedTranslation(cache, mediaType, ref), ref);
+            }
+        });
+    });
+}
+
+function collectImageTargets(items, mediaConfig) {
+    const seen = {};
+    const targets = [];
+    items.forEach((item) => {
+        Object.keys(mediaConfig).forEach((mediaType) => {
+            const target = getItemMediaTarget(item, mediaType);
+            const ref = buildMediaRef(item, mediaType);
+            const fields = getFetchImageFields(target, mediaType, ref);
+            const key = buildImageCacheKey(mediaType, ref);
+            if (key && fields.length > 0 && !seen[key]) {
+                seen[key] = true;
+                targets.push({ mediaType, ref, fields });
+            }
+        });
+    });
+    return targets;
+}
+
+function applyImagesToItems(items, cache, mediaConfig) {
+    items.forEach((item) => {
+        Object.keys(mediaConfig).forEach((mediaType) => {
+            const target = getItemMediaTarget(item, mediaType);
+            const ref = buildMediaRef(item, mediaType);
+            const fields = getApplicableImageFields(target, mediaType, ref);
+            if (fields.length > 0) {
+                applyImages(target, getImageCacheEntry(cache, mediaType, ref), fields);
             }
         });
     });
@@ -656,6 +1117,17 @@ async function translateMediaItemsInPlace(items, bodyOverride) {
 
     const cache = cacheUtils.loadCache(context.env);
     const refsByType = collectMediaRefs(items, MEDIA_CONFIG);
+    const shouldEnhanceImages = context.argument.chineseImageEnabled;
+    const imageCache = shouldEnhanceImages ? cacheUtils.loadImageCache(context.env) : {};
+    const imageBackendState = shouldEnhanceImages ? createImageBackendState() : null;
+    const imageTargets = shouldEnhanceImages ? collectImageTargets(items, MEDIA_CONFIG) : [];
+    const imageEnhancementPromise = shouldEnhanceImages
+        ? hydrateAndFetchImages(imageCache, imageTargets, imageBackendState).catch((error) => {
+              context.env.log(`Trakt image enhancement failed: ${error}`);
+              return false;
+          })
+        : Promise.resolve(false);
+
     let cacheChanged = await hydrateFromBackend(cache, refsByType, MEDIA_CONFIG, backendState);
 
     let remainingDirectTranslationBudget = TRAKT_DIRECT_TRANSLATION_MAX_REFS;
@@ -672,6 +1144,14 @@ async function translateMediaItemsInPlace(items, bodyOverride) {
         cacheUtils.saveCache(context.env, cache);
     }
     flushBackendWrites(backendState);
+
+    if (await imageEnhancementPromise) {
+        cacheUtils.saveImageCache(context.env, imageCache);
+    }
+    if (imageBackendState) {
+        flushImageBackendWrites(imageBackendState);
+    }
+
     let overridesTable = null;
     try {
         overridesTable = await loadTranslationOverrides(context.env);
@@ -682,6 +1162,9 @@ async function translateMediaItemsInPlace(items, bodyOverride) {
         applyTranslation(context.userAgent, target, entry, ref.mediaType);
         applyOverrideToTarget(target, getOverrideFromTable(overridesTable, ref));
     });
+    if (shouldEnhanceImages) {
+        applyImagesToItems(items, imageCache, MEDIA_CONFIG);
+    }
     return items;
 }
 
@@ -704,7 +1187,10 @@ export {
     buildEpisodeCompositeKey,
     buildMediaCacheLookupKey,
     createBackendState,
+    enhanceImagesInPlace,
+    enhanceSeasonImagesInPlace,
     fetchAndPersistMissing,
+    fetchAndPersistMissingImages,
     fetchMediaDetail,
     flushBackendWrites,
     getCachedTranslation,

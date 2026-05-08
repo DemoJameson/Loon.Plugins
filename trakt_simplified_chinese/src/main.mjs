@@ -14,7 +14,11 @@ function applyResult(env, result) {
     const normalized = result && typeof result === "object" ? result : { type: "passThrough" };
 
     if (normalized.type === "rewriteRequest") {
-        env.done({ url: normalized.url });
+        const payload = { url: normalized.url };
+        if (Object.hasOwn(normalized, "headers")) {
+            payload.headers = normalized.headers;
+        }
+        env.done(payload);
         return;
     }
 

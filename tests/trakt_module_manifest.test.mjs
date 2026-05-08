@@ -37,5 +37,7 @@ test("module manifest generates current BoxJs keys from argument fields", async 
         app.settings.map((setting) => setting.id),
         expectedKeys,
     );
+    assert.equal(app.keys[0], `@${BOXJS_CONFIG_KEY}.chineseImageEnabled`);
+    assert.equal(app.settings[0].id, `@${BOXJS_CONFIG_KEY}.chineseImageEnabled`);
     assert.ok(app.keys.includes(`@${BOXJS_CONFIG_KEY}.historyEpisodesMergedByShow`));
 });

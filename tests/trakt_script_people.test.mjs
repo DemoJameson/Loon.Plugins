@@ -534,7 +534,7 @@ test("person media credits 列表会应用缓存中的中文翻译", async () =>
     assert.equal(payload.cast[0].movie.tagline, "中文标语");
 });
 
-test("person media credits 列表在非 Rippple UA 下不会翻译", async () => {
+test("person media credits 列表在普通 UA 下也会应用中文翻译", async () => {
     const { result } = await runResponseCase({
         url: "https://api.trakt.tv/people/42/movies",
         body: readFixture("people-credits.json"),
@@ -547,9 +547,9 @@ test("person media credits 列表在非 Rippple UA 下不会翻译", async () =>
     });
 
     const payload = JSON.parse(result.body);
-    assert.equal(payload.cast[0].movie.title, "Original Movie");
-    assert.equal(payload.cast[0].movie.overview, "Original Overview");
-    assert.equal(payload.cast[0].movie.tagline, "Original Tagline");
+    assert.equal(payload.cast[0].movie.title, "中文电影");
+    assert.equal(payload.cast[0].movie.overview, "中文简介");
+    assert.equal(payload.cast[0].movie.tagline, "中文标语");
 });
 
 test("search person 列表会优先应用缓存中的中文姓名和 biography", async () => {

@@ -63,6 +63,13 @@ async function handleMediaDetail() {
         context.env.log(`Trakt backend override read failed: ${error}`);
     }
 
+    if (context.argument.chineseImageEnabled) {
+        await traktTranslationHelper.enhanceImagesInPlace(data, mediaType, {
+            ...ref,
+            tmdbId: data?.ids?.tmdb ?? null,
+        });
+    }
+
     return { type: "respond", body: JSON.stringify(data) };
 }
 
@@ -118,13 +125,42 @@ async function handleSeasonEpisodesList() {
     if (traktLinkIds.cacheEpisodeIdsFromSeasonList(linkCache, target.showId, seasons)) {
         cacheUtils.saveLinkIdsCache(context.env, linkCache);
     }
+    const shouldEnhanceSeasonImages =
+        context.argument.chineseImageEnabled && seasons.some((season) => commonUtils.isArray(season?.images?.poster) && season.images.poster.length > 0);
+    let showTmdbId = shouldEnhanceSeasonImages ? (traktLinkIds.getLinkIdsCacheEntry(linkCache, target.showId)?.ids?.tmdb ?? null) : null;
+    if (shouldEnhanceSeasonImages && commonUtils.isNullish(showTmdbId)) {
+        try {
+            const showEntry = await traktLinkIds.ensureMediaIdsCacheEntry(
+                traktTranslationHelper.fetchMediaDetail,
+                (cache) => cacheUtils.saveLinkIdsCache(context.env, cache),
+                linkCache,
+                mediaTypes.MEDIA_TYPE.SHOW,
+                target.showId,
+            );
+            showTmdbId = showEntry?.ids?.tmdb ?? null;
+        } catch (error) {
+            context.env.log(`Trakt show TMDb id lookup failed for show=${target.showId}: ${error}`);
+        }
+    }
+
+    const seasonImagePromise = shouldEnhanceSeasonImages
+        ? traktTranslationHelper.enhanceSeasonImagesInPlace(seasons, target.showId, showTmdbId).catch((error) => {
+              context.env.log(`Trakt season image enhancement failed for show=${target.showId}: ${error}`);
+              return false;
+          })
+        : Promise.resolve(false);
 
     const currentSeasonNumber = cacheUtils.getCurrentSeason(context.env, target.showId);
     const targetSeason = seasons.find((item) => {
         return commonUtils.ensureArray(item?.episodes).some((episode) => Number(episode?.season) === currentSeasonNumber);
     });
     if (!targetSeason) {
-        return { type: "passThrough" };
+        await seasonImagePromise;
+        try {
+            return { type: "respond", body: JSON.stringify(seasons) };
+        } finally {
+            cacheUtils.clearCurrentSeason(context.env);
+        }
     }
 
     const backendState = traktTranslationHelper.createBackendState(traktTranslationHelper.MEDIA_CONFIG);
@@ -202,6 +238,7 @@ async function handleSeasonEpisodesList() {
             traktTranslationHelper.applyOverrideToTarget(episode, traktTranslationHelper.getOverrideFromTable(overridesTable, ref));
         });
     });
+    await seasonImagePromise;
 
     try {
         return { type: "respond", body: JSON.stringify(seasons) };

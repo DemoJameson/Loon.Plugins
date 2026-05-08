@@ -1,9 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { applyArgumentStringConfig, createDefaultArgumentConfig, normalizeArgument } from "../trakt_simplified_chinese/src/argument.mjs";
 import { WATCHNOW_REDIRECT_URL } from "../trakt_simplified_chinese/src/features/player-injection-trakt.mjs";
 
 import { createUnifiedPersistentData, parseUnifiedCache, readFixture, runRequestCase, runResponseCase } from "./helpers/trakt-test-helpers.mjs";
+
+test("字符串参数第一位解析为 chineseImageEnabled，不兼容旧顺序", () => {
+    const parsed = normalizeArgument(applyArgumentStringConfig(createDefaultArgumentConfig(), "[false,true,true,false]"));
+
+    assert.equal(parsed.chineseImageEnabled, false);
+    assert.equal(parsed.historyEpisodesMergedByShow, true);
+    assert.equal(parsed.googleTranslationEnabled, true);
+    assert.equal(parsed.playerButtonEnabled.eplayerx, false);
+});
 
 test("historyEpisodesMergedByShow=false 时历史剧集请求不改写 limit", async () => {
     const { result } = await runRequestCase({

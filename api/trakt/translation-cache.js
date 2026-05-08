@@ -6,9 +6,11 @@ const CACHE_STATUS = {
 
 const OVERRIDE_FIELDS = ["title", "overview", "tagline"];
 const MEDIA_TYPES = ["shows", "movies", "episodes"];
+const IMAGE_GROUPS = ["shows", "movies", "seasons"];
+const IMAGE_FIELDS = ["poster", "logo"];
 const TRANSLATION_OVERRIDES_KEY = "trakt:translation:overrides";
 const PARTIAL_FOUND_TTL_SECONDS = 30 * 24 * 60 * 60;
-const NOT_FOUND_TTL_SECONDS = 7 * 24 * 60 * 60;
+const NOT_FOUND_TTL_SECONDS = 5 * 24 * 60 * 60;
 
 const RESPONSE_CACHE_HEADERS = {
     [CACHE_STATUS.FOUND]: {
@@ -66,6 +68,25 @@ function parseEpisodeKeys(value) {
     return Array.from(unique);
 }
 
+function parseSeasonKeys(value) {
+    if (!value) {
+        return [];
+    }
+
+    const parts = Array.isArray(value) ? value.join(",").split(",") : String(value).split(",");
+    const unique = new Set();
+
+    for (const part of parts) {
+        const normalized = String(part).trim();
+        if (!/^\d+:\d+$/.test(normalized)) {
+            continue;
+        }
+        unique.add(normalized);
+    }
+
+    return Array.from(unique);
+}
+
 function isSupportedMediaType(type) {
     return MEDIA_TYPES.includes(type);
 }
@@ -112,6 +133,31 @@ function normalizeEntry(entry) {
     }
 
     return normalized;
+}
+
+function normalizeImageField(entry, now = Date.now()) {
+    const status = entry?.status === CACHE_STATUS.FOUND ? CACHE_STATUS.FOUND : entry?.status === CACHE_STATUS.PARTIAL_FOUND ? CACHE_STATUS.PARTIAL_FOUND : CACHE_STATUS.NOT_FOUND;
+    const url = String(entry?.url || "").trim();
+    if (status === CACHE_STATUS.FOUND && url) {
+        return { status, url, expiresAt: null };
+    }
+    if (status === CACHE_STATUS.PARTIAL_FOUND && url) {
+        const expiresAt = Number.isFinite(Number(entry?.expiresAt)) ? Number(entry.expiresAt) : now + PARTIAL_FOUND_TTL_SECONDS * 1000;
+        return { status, url, expiresAt };
+    }
+    const expiresAt = Number.isFinite(Number(entry?.expiresAt)) ? Number(entry.expiresAt) : now + NOT_FOUND_TTL_SECONDS * 1000;
+    return { status: CACHE_STATUS.NOT_FOUND, expiresAt };
+}
+
+function normalizeImageEntry(entry, now = Date.now()) {
+    const source = entry && typeof entry === "object" ? entry : {};
+    const normalized = {};
+    IMAGE_FIELDS.forEach((field) => {
+        if (source[field] && typeof source[field] === "object") {
+            normalized[field] = normalizeImageField(source[field], now);
+        }
+    });
+    return Object.keys(normalized).length > 0 ? normalized : null;
 }
 
 function getWriteExpiresAt(status, now = Date.now()) {
@@ -231,6 +277,13 @@ async function kvRequest(config, path, init) {
 
 function buildCacheKey(mediaType, lookupKey) {
     return `trakt:translation:${mediaType}:${lookupKey}`;
+}
+
+function buildImageCacheKey(group, lookupKey) {
+    if (group === "seasons") {
+        return `trakt:image:shows:${lookupKey}`;
+    }
+    return `trakt:image:${group}:${lookupKey}`;
 }
 
 function buildOverrideCacheKey(mediaType, lookupKey) {
@@ -371,6 +424,11 @@ function parseCachedEntry(value) {
     return normalizeEntry(parsed);
 }
 
+function parseCachedImageEntry(value) {
+    const parsed = parseRedisJsonValue(value);
+    return parsed ? normalizeImageEntry(parsed) : null;
+}
+
 function parseCachedTranslationOverridesStore(value) {
     const parsed = parseRedisJsonValue(value);
     return parsed ? normalizeTranslationOverridesStore(parsed) : createEmptyTranslationOverridesStore();
@@ -392,11 +450,16 @@ function getResponseCacheStatus(...groups) {
                 return CACHE_STATUS.NOT_FOUND;
             }
 
-            if (entry.status === CACHE_STATUS.NOT_FOUND) {
+            const statuses = Number.isFinite(entry.status)
+                ? [entry.status]
+                : Object.values(entry)
+                      .map((field) => field?.status)
+                      .filter(Number.isFinite);
+            if (statuses.length === 0 || statuses.includes(CACHE_STATUS.NOT_FOUND)) {
                 return CACHE_STATUS.NOT_FOUND;
             }
 
-            if (entry.status === CACHE_STATUS.PARTIAL_FOUND) {
+            if (statuses.includes(CACHE_STATUS.PARTIAL_FOUND)) {
                 hasPartialFound = true;
             }
         }
@@ -551,6 +614,29 @@ async function readManyAutoGroupsFromKv(config, groupsByMediaType) {
     return entries;
 }
 
+async function readManyImageGroupsFromKv(config, groupsByGroup) {
+    if (!config) {
+        return Object.fromEntries(IMAGE_GROUPS.map((group) => [group, {}]));
+    }
+
+    const refs = IMAGE_GROUPS.flatMap((group) => {
+        const ids = groupsByGroup[group] || [];
+        return ids.map((id) => ({ group, id, key: buildImageCacheKey(group, id) }));
+    });
+    const results = await jsonGetManyKv(
+        config,
+        refs.map((ref) => ref.key),
+    );
+    const entries = Object.fromEntries(IMAGE_GROUPS.map((group) => [group, {}]));
+    refs.forEach((ref, index) => {
+        const imageEntry = parseCachedImageEntry(results[index]);
+        if (imageEntry) {
+            entries[ref.group][ref.id] = imageEntry;
+        }
+    });
+    return entries;
+}
+
 async function readCachePairsFromKv(config, entries) {
     if (!config || entries.length === 0) {
         return [];
@@ -638,6 +724,42 @@ async function writeManyGroupsToKv(config, groupsByMediaType) {
     }
 
     const commands = Object.entries(groupsByMediaType).flatMap(([mediaType, entriesById]) => buildWriteManyCommands(mediaType, entriesById || {}));
+    if (commands.length === 0) {
+        return;
+    }
+
+    await pipelineKv(config, commands);
+}
+
+function buildWriteManyImageCommands(group, entriesById) {
+    const msetArgs = [];
+    const ttlCommands = [];
+    const now = Date.now();
+    Object.entries(entriesById).forEach(([id, rawEntry]) => {
+        const entry = normalizeImageEntry(rawEntry, now);
+        if (!entry) {
+            return;
+        }
+        const key = buildImageCacheKey(group, id);
+        msetArgs.push(key, "$", JSON.stringify(entry));
+        const fields = Object.values(entry);
+        const hasNotFound = fields.some((field) => field?.status === CACHE_STATUS.NOT_FOUND);
+        const hasPartialFound = fields.some((field) => field?.status === CACHE_STATUS.PARTIAL_FOUND);
+        if (hasNotFound) {
+            ttlCommands.push(["EXPIRE", key, NOT_FOUND_TTL_SECONDS]);
+        } else if (hasPartialFound) {
+            ttlCommands.push(["EXPIRE", key, PARTIAL_FOUND_TTL_SECONDS]);
+        }
+    });
+    return msetArgs.length > 0 ? [["JSON.MSET", ...msetArgs], ...ttlCommands] : [];
+}
+
+async function writeManyImageGroupsToKv(config, groupsByGroup) {
+    if (!config) {
+        return;
+    }
+
+    const commands = Object.entries(groupsByGroup).flatMap(([group, entriesById]) => (IMAGE_GROUPS.includes(group) ? buildWriteManyImageCommands(group, entriesById || {}) : []));
     if (commands.length === 0) {
         return;
     }
@@ -974,7 +1096,9 @@ module.exports = {
     OVERRIDE_FIELDS,
     TRANSLATION_OVERRIDES_KEY,
     MEDIA_TYPES,
+    IMAGE_GROUPS,
     buildCacheKey,
+    buildImageCacheKey,
     buildOverrideCacheKey,
     buildTranslationOverridesKey,
     deleteCacheEntriesFromKv,
@@ -985,9 +1109,11 @@ module.exports = {
     normalizeTranslationOverrideEntry,
     parseEpisodeKeys,
     parseIds,
+    parseSeasonKeys,
     readAllTranslationOverridesFromKv,
     readManyAutoFromKv,
     readManyAutoGroupsFromKv,
+    readManyImageGroupsFromKv,
     readCachePairFromKv,
     readJsonBody,
     readManyEffectiveFromKv,
@@ -995,5 +1121,6 @@ module.exports = {
     setResponseCacheHeaders,
     writeTranslationOverrideEntryToKv,
     writeManyGroupsToKv,
+    writeManyImageGroupsToKv,
     writeManyToKv,
 };

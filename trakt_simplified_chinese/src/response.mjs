@@ -49,16 +49,26 @@ function createResponsePhaseRoutes() {
         }),
         createRoute({ pattern: /^users\/[^/]+\/collection\/media$/i, id: "users.collection.media", handler: mediaTranslationHandler.handleWrapperMediaList }),
         createRoute({ pattern: /^people\/[^/]+\/known_for$/i, id: "people.knownFor", handler: mediaTranslationHandler.handleWrapperMediaList }),
+        createRoute({
+            pattern: /^search\/(movie|show|episode)(,(movie|show|episode))*(\/exact)?$/i,
+            id: "search.media",
+            handler: mediaTranslationHandler.handleWrapperMediaList,
+        }),
+        createRoute({
+            pattern: /^search\/recent_by_id\/global\/(movies|shows|episodes)(,(movies|shows|episodes))*$/i,
+            id: "search.recentById",
+            handler: mediaTranslationHandler.handleWrapperMediaList,
+        }),
         createRoute({ pattern: /^users\/[^/]+\/following\/activities$/i, id: "users.following.activities", handler: mediaTranslationHandler.handleWrapperMediaList }),
         createRoute({ pattern: /^users\/[^/]+\/lists\/\d+\/items$/i, id: "users.listItems.all", handler: mediaTranslationHandler.handleWrapperMediaList }),
         createRoute({
-            pattern: /^users\/[^/]+\/lists\/\d+\/items\/(?:movie|show|season|episode)(?:,(?:movie|show|season|episode))*$/i,
+            pattern: /^users\/[^/]+\/lists\/\d+\/items\/(movie|show|season|episode)(,(movie|show|season|episode))*$/i,
             id: "users.listItems.filtered",
             handler: mediaTranslationHandler.handleWrapperMediaList,
         }),
         createRoute({ pattern: /^lists\/\d+\/items$/i, id: "lists.items.all", handler: mediaTranslationHandler.handleWrapperMediaList }),
         createRoute({
-            pattern: /^lists\/\d+\/items\/(?:movie|show|season|episode)(?:,(?:movie|show|season|episode))*$/i,
+            pattern: /^lists\/\d+\/items\/(movie|show|season|episode)(,(movie|show|season|episode))*$/i,
             id: "lists.items.filtered",
             handler: mediaTranslationHandler.handleWrapperMediaList,
         }),

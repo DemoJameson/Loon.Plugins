@@ -9,7 +9,7 @@ const DEFAULT_BACKEND_BASE_URL = "https://proxy-modules.demojameson.de5.net";
 const metadata = {
     name: "Trakt 增强",
     description:
-        "Trakt App 各页面从英文改为简体中文；历史页面剧集类别的已观看记录按电视剧合并，方便以电视剧为单位查看；Trakt 和 SofaTime 的影片详情页添加 EplayerX、Forward、Infuse 跳转按钮；部分兼容其它使用了 Trakt API 的应用。",
+        "Trakt App 各页面从英文改为简体中文，支持中文标题、简介和海报；历史页面剧集类别的已观看记录按电视剧合并；Trakt 和 SofaTime 的影片详情页添加 EplayerX、Forward、Infuse 跳转按钮；部分兼容其它使用了 Trakt API 的应用。",
     icon: `${RAW_BASE_URL}/${TRAKT_MODULE_PATH}/images/trakt.webp`,
     homepage: REPOSITORY_URL,
     openUrl: "https://apps.apple.com/app/id1514873602",
@@ -23,6 +23,13 @@ const metadata = {
 const BOXJS_CONFIG_KEY = "dj_trakt_boxjs_configs";
 
 const argumentFields = [
+    {
+        key: "chineseImageEnabled",
+        defaultValue: true,
+        type: "boolean",
+        tag: "中文海报",
+        desc: "启用后会使用 TMDb 中文图片替换电影、剧集和季的海报",
+    },
     {
         key: "historyEpisodesMergedByShow",
         defaultValue: true,
@@ -83,7 +90,7 @@ const argumentFields = [
 
 const ALL_ARGUMENT_KEYS = argumentFields.map((field) => field.key);
 const PLAYER_ARGUMENT_KEYS = ["eplayerxEnabled", "forwardEnabled", "infuseEnabled"];
-const CORE_ARGUMENT_KEYS = ["historyEpisodesMergedByShow", "googleTranslationEnabled", "useShortcutsJumpEnabled", "backendBaseUrl", "debugEnabled"];
+const CORE_ARGUMENT_KEYS = ["chineseImageEnabled", "historyEpisodesMergedByShow", "googleTranslationEnabled", "useShortcutsJumpEnabled", "backendBaseUrl", "debugEnabled"];
 const CORE_WITH_PLAYER_ARGUMENT_KEYS = CORE_ARGUMENT_KEYS.flatMap((key) => (key === "useShortcutsJumpEnabled" ? [...PLAYER_ARGUMENT_KEYS, key] : key));
 
 const scriptRules = [
@@ -157,7 +164,7 @@ const scriptRules = [
         phase: "http-response",
         pattern: String.raw`^https:\/\/apiz?\.trakt\.tv\/.*$`,
         scriptFile: TRAKT_SCRIPT_FILE,
-        timeout: { plugin: 40, sgmodule: 20 },
+        timeout: 60,
         requiresBody: true,
         maxSize: 0,
         argumentKeys: ALL_ARGUMENT_KEYS,
@@ -168,7 +175,7 @@ const scriptRules = [
         phase: "http-response",
         pattern: String.raw`^https:\/\/api\.themoviedb\.org\/3\/watch\/providers\/(?:movie|tv)(\?.*)?$`,
         scriptFile: TRAKT_SCRIPT_FILE,
-        timeout: { plugin: 40, sgmodule: 20 },
+        timeout: 60,
         requiresBody: true,
         maxSize: 0,
         argumentKeys: CORE_ARGUMENT_KEYS,
@@ -179,7 +186,7 @@ const scriptRules = [
         phase: "http-response",
         pattern: String.raw`^https:\/\/streaming-availability\.p\.rapidapi\.com\/shows\/tt\d+(\?.*)?$`,
         scriptFile: TRAKT_SCRIPT_FILE,
-        timeout: { plugin: 40, sgmodule: 20 },
+        timeout: 60,
         requiresBody: true,
         maxSize: 0,
         argumentKeys: CORE_WITH_PLAYER_ARGUMENT_KEYS,
@@ -190,7 +197,7 @@ const scriptRules = [
         phase: "http-response",
         pattern: String.raw`^https:\/\/streaming-availability\.p\.rapidapi\.com\/countries\/[a-z]{2}(\?.*)?$`,
         scriptFile: TRAKT_SCRIPT_FILE,
-        timeout: { plugin: 40, sgmodule: 20 },
+        timeout: 60,
         requiresBody: true,
         maxSize: 0,
         argumentKeys: CORE_ARGUMENT_KEYS,

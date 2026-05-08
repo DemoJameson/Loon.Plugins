@@ -10,6 +10,10 @@ function fetchTranslations(query) {
     return httpUtils.fetchJson(`${resolveBackendBaseUrl()}/api/trakt/translations?${query}`, null, false);
 }
 
+function fetchImages(query) {
+    return httpUtils.fetchJson(`${resolveBackendBaseUrl()}/api/trakt/images?${query}`, null, false);
+}
+
 function fetchTranslationOverrides() {
     return httpUtils.fetchJson(`${resolveBackendBaseUrl()}/api/trakt/translation-overrides`, null, false);
 }
@@ -25,4 +29,15 @@ function postTranslations(payload) {
     );
 }
 
-export { DEFAULT_BACKEND_BASE_URL, fetchTranslationOverrides, fetchTranslations, postTranslations, resolveBackendBaseUrl };
+function postImages(payload) {
+    return httpUtils.postJson(
+        `${resolveBackendBaseUrl()}/api/trakt/images`,
+        payload,
+        {
+            "content-type": "application/json",
+        },
+        false,
+    );
+}
+
+export { DEFAULT_BACKEND_BASE_URL, fetchImages, fetchTranslationOverrides, fetchTranslations, postImages, postTranslations, resolveBackendBaseUrl };

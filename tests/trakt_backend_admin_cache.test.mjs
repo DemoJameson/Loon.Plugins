@@ -4,6 +4,7 @@ import test from "node:test";
 
 const require = createRequire(import.meta.url);
 const translationsHandler = require("../api/trakt/translations.js");
+const imagesHandler = require("../api/trakt/images.js");
 const adminHandler = require("../api/trakt/translations/admin.js");
 const translationOverridesHandler = require("../api/trakt/translation-overrides.js");
 
@@ -11,6 +12,9 @@ const AUTO_MOVIE_123 = "trakt:translation:movies:123";
 const TRANSLATION_OVERRIDES_KEY = "trakt:translation:overrides";
 const AUTO_MOVIE_456 = "trakt:translation:movies:456";
 const AUTO_EPISODE_123_1_2 = "trakt:translation:episodes:123:1:2";
+const IMAGE_MOVIE_123 = "trakt:image:movies:123";
+const IMAGE_SHOW_555 = "trakt:image:shows:555";
+const IMAGE_SEASON_555_1 = "trakt:image:shows:555:1";
 
 function createResponse() {
     return {
@@ -328,6 +332,183 @@ test("backend translations GET returns auto entries while translation-overrides 
     });
 });
 
+test("backend images GET 批量读取 movie/show/season 图片缓存", async () => {
+    const store = new Map();
+    store.set(
+        IMAGE_MOVIE_123,
+        jsonValue({
+            poster: {
+                status: 1,
+                url: "https://image.tmdb.org/t/p/original/movie.jpg",
+            },
+            logo: {
+                status: 1,
+                url: "https://image.tmdb.org/t/p/original/movie-logo.png",
+            },
+        }),
+    );
+    store.set(
+        IMAGE_SHOW_555,
+        jsonValue({
+            poster: {
+                status: 3,
+            },
+        }),
+    );
+    store.set(
+        IMAGE_SEASON_555_1,
+        jsonValue({
+            poster: {
+                status: 1,
+                url: "https://image.tmdb.org/t/p/original/season.jpg",
+            },
+        }),
+    );
+
+    await withBackend(store, async () => {
+        const res = await invoke(imagesHandler, {
+            query: {
+                movies: "123",
+                shows: "555",
+                seasons: "555:1",
+            },
+        });
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.jsonBody.movies["123"].poster.url, "https://image.tmdb.org/t/p/original/movie.jpg");
+        assert.equal(res.jsonBody.movies["123"].logo.url, "https://image.tmdb.org/t/p/original/movie-logo.png");
+        assert.equal(res.jsonBody.shows["555"].poster.status, 3);
+        assert.ok(Number.isFinite(res.jsonBody.shows["555"].poster.expiresAt));
+        assert.equal(res.jsonBody.seasons["555:1"].poster.url, "https://image.tmdb.org/t/p/original/season.jpg");
+        assert.deepEqual(store.mgetCommands[0], ["JSON.MGET", IMAGE_SHOW_555, IMAGE_MOVIE_123, IMAGE_SEASON_555_1, "$"]);
+    });
+});
+
+test("backend images POST 写入 FOUND/NOT_FOUND 并为任一 NOT_FOUND 设置 5 天 TTL", async () => {
+    const store = new Map();
+
+    await withBackend(store, async () => {
+        const res = await invoke(imagesHandler, {
+            method: "POST",
+            body: {
+                movies: {
+                    123: {
+                        poster: {
+                            status: 1,
+                            url: "https://image.tmdb.org/t/p/original/movie.jpg",
+                        },
+                        logo: {
+                            status: 3,
+                        },
+                    },
+                },
+                seasons: {
+                    "555:1": {
+                        poster: {
+                            status: 3,
+                        },
+                    },
+                },
+            },
+        });
+
+        assert.equal(res.statusCode, 200);
+        assert.deepEqual(res.jsonBody.counts, {
+            shows: 0,
+            movies: 1,
+            seasons: 1,
+        });
+        assert.equal(getJsonValue(store, IMAGE_MOVIE_123).poster.url, "https://image.tmdb.org/t/p/original/movie.jpg");
+        assert.equal(getJsonValue(store, IMAGE_MOVIE_123).logo.status, 3);
+        assert.ok(Number.isFinite(getJsonValue(store, IMAGE_MOVIE_123).logo.expiresAt));
+        assert.equal(getJsonValue(store, IMAGE_SEASON_555_1).poster.status, 3);
+        assert.ok(Number.isFinite(getJsonValue(store, IMAGE_SEASON_555_1).poster.expiresAt));
+        assert.ok(store.expireCommands.some((command) => command[1] === IMAGE_MOVIE_123 && command[2] === 5 * 24 * 60 * 60));
+        assert.ok(store.expireCommands.some((command) => command[1] === IMAGE_SEASON_555_1 && command[2] === 5 * 24 * 60 * 60));
+    });
+});
+
+test("backend images POST 为 PARTIAL_FOUND 设置 30 天 TTL，NOT_FOUND 优先", async () => {
+    const store = new Map();
+
+    await withBackend(store, async () => {
+        const res = await invoke(imagesHandler, {
+            method: "POST",
+            body: {
+                movies: {
+                    123: {
+                        poster: {
+                            status: 1,
+                            url: "https://image.tmdb.org/t/p/original/movie.jpg",
+                        },
+                        logo: {
+                            status: 2,
+                            url: "https://image.tmdb.org/t/p/original/logo.png",
+                        },
+                    },
+                },
+                seasons: {
+                    "555:1": {
+                        poster: {
+                            status: 2,
+                            url: "https://image.tmdb.org/t/p/original/season.jpg",
+                        },
+                    },
+                },
+                shows: {
+                    555: {
+                        poster: {
+                            status: 2,
+                            url: "https://image.tmdb.org/t/p/original/show.jpg",
+                        },
+                        logo: {
+                            status: 3,
+                        },
+                    },
+                },
+            },
+        });
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(getJsonValue(store, IMAGE_MOVIE_123).logo.status, 2);
+        assert.ok(Number.isFinite(getJsonValue(store, IMAGE_MOVIE_123).logo.expiresAt));
+        assert.ok(store.expireCommands.some((command) => command[1] === IMAGE_MOVIE_123 && command[2] === 30 * 24 * 60 * 60));
+        assert.ok(store.expireCommands.some((command) => command[1] === IMAGE_SEASON_555_1 && command[2] === 30 * 24 * 60 * 60));
+        assert.ok(store.expireCommands.some((command) => command[1] === IMAGE_SHOW_555 && command[2] === 5 * 24 * 60 * 60));
+    });
+});
+
+test("backend images POST 在全部字段 FOUND 时不设置 TTL", async () => {
+    const store = new Map();
+
+    await withBackend(store, async () => {
+        const res = await invoke(imagesHandler, {
+            method: "POST",
+            body: {
+                movies: {
+                    123: {
+                        poster: {
+                            status: 1,
+                            url: "https://image.tmdb.org/t/p/original/movie.jpg",
+                        },
+                        logo: {
+                            status: 1,
+                            url: "https://image.tmdb.org/t/p/original/logo.png",
+                        },
+                    },
+                },
+            },
+        });
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(store.persistCommands, undefined);
+        assert.equal(
+            (store.expireCommands || []).some((command) => command[1] === IMAGE_MOVIE_123),
+            false,
+        );
+    });
+});
+
 test("backend translations GET reads many entries with JSON.MGET", async () => {
     const store = new Map();
     seedAuto(store, "trakt:translation:shows:123", {
@@ -533,7 +714,7 @@ test("backend POST writes grouped auto entries with JSON.MSET and keeps TTL rule
         assert.equal(store.persistCommands, undefined);
         assert.deepEqual(store.expireCommands, [
             ["EXPIRE", "trakt:translation:movies:201", 2592000],
-            ["EXPIRE", "trakt:translation:episodes:301:1:1", 604800],
+            ["EXPIRE", "trakt:translation:episodes:301:1:1", 432000],
         ]);
         assert.equal(store.setCommands, undefined);
         assert.equal(getJsonValue(store, "trakt:translation:shows:101").expiresAt, null);

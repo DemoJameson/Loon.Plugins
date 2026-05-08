@@ -444,3 +444,30 @@ test("useShortcutsJumpEnabled 不会影响 tmdb logo redirect 的目标地址", 
     assert.equal(result.response.status, 302);
     assert.equal(result.response.headers.Location, "https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/images/forward_logo.webp");
 });
+
+test("普通 TMDb 图片请求会添加 Accept image/webp 请求头", async () => {
+    const { result } = await runRequestCase({
+        url: "https://image.tmdb.org/t/p/w780/poster.jpg",
+        headers: {
+            "user-agent": "Trakt/1.0",
+            accept: "image/jpeg",
+        },
+    });
+
+    assert.equal(result.url, "https://image.tmdb.org/t/p/w780/poster.jpg");
+    assert.equal(result.headers.Accept, "image/webp");
+    assert.equal(result.headers["user-agent"], "Trakt/1.0");
+    assert.equal(Object.hasOwn(result.headers, "accept"), false);
+});
+
+test("非 Trakt UA 的普通 TMDb 图片请求不会添加 WebP 请求头", async () => {
+    const { result } = await runRequestCase({
+        url: "https://image.tmdb.org/t/p/w780/poster.jpg",
+        headers: {
+            "user-agent": "UnitTest/1.0",
+            accept: "image/jpeg",
+        },
+    });
+
+    assert.equal(Object.keys(result).length, 0);
+});

@@ -51,6 +51,8 @@ function createUnifiedCache(overrides = {}) {
         trakt: {
             translation: overrides.traktTranslation ?? {},
             linkIds: overrides.traktLinkIds ?? {},
+            image: overrides.traktImage ?? {},
+            ...(Object.hasOwn(overrides, "traktPoster") ? { poster: overrides.traktPoster ?? {} } : {}),
         },
         google: {
             comments: overrides.googleComments ?? {},
@@ -227,6 +229,15 @@ function createTmdbMovieCreditsResponse(names = ["汤姆·汉克斯"]) {
     });
 }
 
+function createTmdbImagesResponse(posters = [], logos = []) {
+    return JSON.stringify({
+        id: 456,
+        backdrops: [],
+        logos,
+        posters,
+    });
+}
+
 function createWrappedMovieBody() {
     return JSON.stringify([
         {
@@ -264,6 +275,7 @@ export {
     createMovieTranslationCache,
     createPeopleTranslationCache,
     createSentimentTranslationCache,
+    createTmdbImagesResponse,
     createTmdbMovieCreditsResponse,
     createUnifiedCache,
     createUnifiedPersistentData,

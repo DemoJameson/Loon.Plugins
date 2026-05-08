@@ -395,4 +395,24 @@ async function handleDirectRedirectRequest() {
     return location ? { type: "redirect", location } : { type: "passThrough" };
 }
 
-export { handleDirectRedirectRequest, handleUserSettings, handleWatchnow, handleWatchnowSources, WATCHNOW_REDIRECT_URL };
+async function handleTmdbImageWebpRequest() {
+    const context = globalThis.$ctx;
+    if (!/^(Trakt|Rippple)/i.test(context.userAgent)) {
+        return { type: "passThrough" };
+    }
+
+    const headers = {};
+    Object.entries(commonUtils.ensureObject(context.env.request.headers)).forEach(([key, value]) => {
+        if (String(key).toLowerCase() !== "accept") {
+            headers[key] = value;
+        }
+    });
+    headers.Accept = "image/webp";
+    return {
+        type: "rewriteRequest",
+        url: context.env.request.url,
+        headers,
+    };
+}
+
+export { handleDirectRedirectRequest, handleTmdbImageWebpRequest, handleUserSettings, handleWatchnow, handleWatchnowSources, WATCHNOW_REDIRECT_URL };

@@ -555,6 +555,42 @@ test("handleWrapperMediaList 按 wrapper 路由分组生效", async (t) => {
             },
         },
         {
+            name: "mixed search wrapper route",
+            url: "https://apiz.trakt.tv/search/movie,show?extended=cloud9,full&limit=100&page=1&query=%E5%AE%B6%E5%BC%91%E6%9C%8D%E5%8A%A1",
+            body: createMixedMovieBody(),
+            persistentData: createMoviePersistentData(),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "中文电影");
+            },
+        },
+        {
+            name: "mixed exact search wrapper route",
+            url: "https://apiz.trakt.tv/search/movie,show/exact?extended=cloud9,full&limit=100&page=1&query=%E5%AE%B6%E5%BC%91%E6%9C%8D%E5%8A%A1",
+            body: createMixedMovieBody(),
+            persistentData: createMoviePersistentData(),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "中文电影");
+            },
+        },
+        {
+            name: "mixed reordered search wrapper route",
+            url: "https://apiz.trakt.tv/search/show,movie?extended=cloud9,full&limit=100&page=1&query=%E5%AE%B6%E5%BC%91%E6%9C%8D%E5%8A%A1",
+            body: createMixedMovieBody(),
+            persistentData: createMoviePersistentData(),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "中文电影");
+            },
+        },
+        {
+            name: "recent by id search wrapper route",
+            url: "https://apiz.trakt.tv/search/recent_by_id/global/movies,shows?extended=cloud9,full,images&limit=50",
+            body: createMixedMovieBody(),
+            persistentData: createMoviePersistentData(),
+            assertPayload(payload) {
+                assert.equal(payload[0].movie.title, "中文电影");
+            },
+        },
+        {
             name: "watchlist mixed route",
             url: "https://api.trakt.tv/users/me/watchlist/movie,show/rank",
             body: createMixedMovieBody(),
@@ -1370,6 +1406,10 @@ test("response phase migrated conditions 逐条覆盖且互斥", () => {
         ["directMedia.related", "https://apiz.trakt.tv/movies/531178/related?extended=cloud9,full"],
         ["directMedia.related", "https://apiz.trakt.tv/shows/531178/related?extended=cloud9,full"],
         ["wrapperMedia.popularNext", "https://api.trakt.tv/media/popular/next"],
+        ["search.media", "https://apiz.trakt.tv/search/movie,show?extended=cloud9,full&limit=100&page=1&query=%E5%AE%B6%E5%BC%91%E6%9C%8D%E5%8A%A1"],
+        ["search.media", "https://apiz.trakt.tv/search/movie,show/exact?extended=cloud9,full&limit=100&page=1&query=%E5%AE%B6%E5%BC%91%E6%9C%8D%E5%8A%A1"],
+        ["search.media", "https://apiz.trakt.tv/search/show,movie?extended=cloud9,full&limit=100&page=1&query=%E5%AE%B6%E5%BC%91%E6%9C%8D%E5%8A%A1"],
+        ["search.recentById", "https://apiz.trakt.tv/search/recent_by_id/global/movies,shows?extended=cloud9,full,images&limit=50"],
         ["users.settings", "https://api.trakt.tv/users/settings"],
         ["tmdb.watchProviders", "https://api.themoviedb.org/3/watch/providers/movie"],
         ["tmdb.watchProviders", "https://api.themoviedb.org/3/watch/providers/tv"],

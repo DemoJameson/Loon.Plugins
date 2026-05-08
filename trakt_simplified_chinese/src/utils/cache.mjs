@@ -3,7 +3,7 @@ import * as commonUtils from "../utils/common.mjs";
 
 const UNIFIED_CACHE_KEY = "dj_trakt_unified_cache";
 const UNIFIED_CACHE_REV_KEY = "dj_trakt_unified_cache_rev";
-const UNIFIED_CACHE_SCHEMA_VERSION = 5;
+const UNIFIED_CACHE_SCHEMA_VERSION = 7;
 const UNIFIED_CACHE_MAX_BYTES = 1024 * 1024 - 8 * 1024;
 const LINK_ID_FIELDS = ["trakt", "tmdb"];
 const UNIFIED_CACHE_SNAPSHOT_RETRY_LIMIT = 3;
@@ -13,9 +13,12 @@ const PRUNE_PRIORITY = {
     "google.list": 1,
     "google.people": 2,
     "trakt.linkIds": 3,
-    "trakt.translation.not_found": 4,
-    "trakt.translation.partial_found": 5,
-    "trakt.translation.found": 6,
+    "trakt.image.not_found": 4,
+    "trakt.image.partial_found": 5,
+    "trakt.image.found": 6,
+    "trakt.translation.not_found": 6,
+    "trakt.translation.partial_found": 7,
+    "trakt.translation.found": 8,
 };
 
 function buildFieldTranslationCacheKey(id) {
@@ -91,6 +94,53 @@ function normalizeMediaTranslationEntry(entry) {
         status,
         translation,
     };
+}
+
+function normalizeImageField(entry) {
+    const status =
+        entry?.status === translationCache.CACHE_STATUS.FOUND
+            ? translationCache.CACHE_STATUS.FOUND
+            : entry?.status === translationCache.CACHE_STATUS.PARTIAL_FOUND
+              ? translationCache.CACHE_STATUS.PARTIAL_FOUND
+              : translationCache.CACHE_STATUS.NOT_FOUND;
+    const url = String(entry?.url ?? "").trim();
+    const expiresAt = entry?.expiresAt === null ? null : Number(entry?.expiresAt);
+    if (status === translationCache.CACHE_STATUS.FOUND && url) {
+        return {
+            status,
+            url,
+            expiresAt: null,
+        };
+    }
+    if (status === translationCache.CACHE_STATUS.PARTIAL_FOUND && url && Number.isFinite(expiresAt) && expiresAt > Date.now()) {
+        return {
+            status,
+            url,
+            expiresAt,
+        };
+    }
+    if (status === translationCache.CACHE_STATUS.NOT_FOUND && Number.isFinite(expiresAt) && expiresAt > Date.now()) {
+        return {
+            status,
+            expiresAt,
+        };
+    }
+
+    return null;
+}
+
+function normalizeImageEntry(entry) {
+    const source = commonUtils.ensureObject(entry);
+    const normalized = {};
+    ["poster", "logo"].forEach((field) => {
+        if (commonUtils.isPlainObject(source[field])) {
+            const normalizedField = normalizeImageField(source[field]);
+            if (normalizedField) {
+                normalized[field] = normalizedField;
+            }
+        }
+    });
+    return Object.keys(normalized).length > 0 ? normalized : null;
 }
 
 function normalizeSentimentTranslationEntry(entry) {
@@ -184,6 +234,7 @@ function createEmptyUnifiedCache(schemaVersion = UNIFIED_CACHE_SCHEMA_VERSION, m
         trakt: {
             translation: {},
             linkIds: {},
+            image: {},
         },
         google: {
             comments: {},
@@ -239,6 +290,7 @@ function normalizeUnifiedCache(rawCache, schemaVersion = UNIFIED_CACHE_SCHEMA_VE
     const traktCache = commonUtils.ensureObject(cache.trakt);
     nextCache.trakt.translation = normalizeEntryMap(traktCache.translation, normalizeMediaTranslationEntry);
     nextCache.trakt.linkIds = normalizeEntryMap(traktCache.linkIds, normalizeLinkIdsEntry);
+    nextCache.trakt.image = normalizeEntryMap(traktCache.image, normalizeImageEntry);
 
     const googleCache = commonUtils.ensureObject(cache.google);
     nextCache.google.comments = normalizeEntryMap(googleCache.comments, (entry) => {
@@ -316,7 +368,7 @@ function loadUnifiedCacheSnapshot(
 ) {
     const rawCache = env.getjson(unifiedCacheKey, null);
     const sidecarRev = readUnifiedCacheRev(env, unifiedCacheRevKey);
-    if (!commonUtils.isPlainObject(rawCache) || Number(rawCache.version) !== unifiedCacheSchemaVersion) {
+    if (!commonUtils.isPlainObject(rawCache)) {
         return {
             rawCache,
             normalizedCache: null,
@@ -331,6 +383,18 @@ function loadUnifiedCacheSnapshot(
 
     const normalizedCache = normalizeUnifiedCache(rawCache, unifiedCacheSchemaVersion, unifiedCacheMaxBytes);
     const bodyRev = readBodyRev(normalizedCache);
+    if (Number(rawCache.version) !== unifiedCacheSchemaVersion) {
+        return {
+            rawCache,
+            normalizedCache,
+            bodyRev,
+            sidecarRev,
+            loadedRev: Math.max(bodyRev, sidecarRev),
+            isValid: true,
+            needsRepair: true,
+            snapshotConsistent: bodyRev >= sidecarRev,
+        };
+    }
     if (bodyRev < sidecarRev && retryCount + 1 < UNIFIED_CACHE_SNAPSHOT_RETRY_LIMIT) {
         return loadUnifiedCacheSnapshot(env, unifiedCacheKey, unifiedCacheSchemaVersion, unifiedCacheMaxBytes, unifiedCacheRevKey, retryCount + 1);
     }
@@ -440,6 +504,19 @@ function pruneUnifiedCacheToLimit(env, cache, schemaVersion = UNIFIED_CACHE_SCHE
             bucket: "linkIds",
             key,
             priority: PRUNE_PRIORITY["trakt.linkIds"],
+            estimatedBytes: estimatePrunableEntryBytes(env, key, entry),
+        });
+    });
+    Object.entries(commonUtils.ensureObject(nextCache.trakt.image)).forEach(([key, entry]) => {
+        const fields = Object.values(commonUtils.ensureObject(entry));
+        const hasNotFound = fields.some((field) => field?.status === translationCache.CACHE_STATUS.NOT_FOUND);
+        const hasPartialFound = fields.some((field) => field?.status === translationCache.CACHE_STATUS.PARTIAL_FOUND);
+        const status = hasNotFound ? "not_found" : hasPartialFound ? "partial_found" : "found";
+        prunableEntries.push({
+            scope: "trakt",
+            bucket: "image",
+            key,
+            priority: PRUNE_PRIORITY[`trakt.image.${status}`],
             estimatedBytes: estimatePrunableEntryBytes(env, key, entry),
         });
     });
@@ -607,6 +684,30 @@ function saveLinkIdsCache(env, cache) {
     });
 }
 
+function loadImageCache(env) {
+    return commonUtils.ensureObject(loadUnifiedCache(env).trakt.image);
+}
+
+function saveImageCache(env, cache) {
+    const normalizedCache = normalizeEntryMap(cache, normalizeImageEntry);
+    const unifiedCache = loadUnifiedCache(env);
+    unifiedCache.trakt.image = normalizedCache;
+    saveUnifiedCache(env, unifiedCache, UNIFIED_CACHE_KEY, UNIFIED_CACHE_SCHEMA_VERSION, UNIFIED_CACHE_MAX_BYTES, {
+        owner: {
+            path: ["trakt", "image"],
+            value: normalizedCache,
+        },
+    });
+}
+
+function loadPosterCache(env) {
+    return commonUtils.ensureObject(loadImageCache(env));
+}
+
+function savePosterCache(env, cache) {
+    saveImageCache(env, Object.fromEntries(Object.entries(commonUtils.ensureObject(cache)).map(([key, entry]) => [key, { poster: entry?.poster ?? entry }])));
+}
+
 function loadTranslationOverridesCache(env) {
     return normalizeTranslationOverrides(loadUnifiedCache(env).persistent.translationOverrides);
 }
@@ -748,9 +849,11 @@ export {
     loadCache,
     loadCommentTranslationCache,
     loadHistoryShowsCache,
+    loadImageCache,
     loadLinkIdsCache,
     loadListTranslationCache,
     loadPeopleTranslationCache,
+    loadPosterCache,
     loadSentimentTranslationCache,
     loadTranslationOverridesCache,
     loadUnifiedCache,
@@ -761,9 +864,11 @@ export {
     saveCache,
     saveCommentTranslationCache,
     saveHistoryShowsCache,
+    saveImageCache,
     saveLinkIdsCache,
     saveListTranslationCache,
     savePeopleTranslationCache,
+    savePosterCache,
     saveSentimentTranslationCache,
     saveTranslationOverridesCache,
     saveUnifiedCache,

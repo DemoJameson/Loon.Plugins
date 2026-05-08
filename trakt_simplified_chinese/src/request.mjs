@@ -21,6 +21,12 @@ function createRequestPhaseRoutes() {
             handler: playerInjectionTraktHandler.handleDirectRedirectRequest,
         }),
         createRoute({
+            id: "tmdb.image.webp",
+            host: /^image\.tmdb\.org$/i,
+            pattern: /^t\/p\/.+/,
+            handler: playerInjectionTraktHandler.handleTmdbImageWebpRequest,
+        }),
+        createRoute({
             id: "media.currentSeason",
             pattern: /^shows\/[^/]+\/seasons\/\d+$/,
             handler: mediaTranslationHandler.handleCurrentSeasonRequest,

@@ -13,10 +13,6 @@ const PEOPLE_NAME_SOURCE = {
 };
 const PEOPLE_LIST_ORIGINAL_NAME_KEY = "__traktOriginalName";
 
-function isRipppleUserAgent() {
-    return /^Rippple/i.test(globalThis.$ctx.userAgent);
-}
-
 function ensurePeopleMediaIdsCacheEntry(linkCache, mediaType, traktId) {
     return traktLinkIds.ensureMediaIdsCacheEntry(
         (requestMediaType, requestTraktId) => mediaTranslationHelper.fetchMediaDetail(requestMediaType, requestTraktId),
@@ -666,10 +662,6 @@ async function handlePersonMediaCreditsList() {
 
     if (items.length === 0) {
         return { type: "passThrough" };
-    }
-
-    if (!isRipppleUserAgent()) {
-        return { type: "respond", body: JSON.stringify(data) };
     }
 
     await mediaTranslationHelper.translateMediaItemsInPlace(items);

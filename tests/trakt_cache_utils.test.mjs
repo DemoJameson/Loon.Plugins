@@ -98,6 +98,61 @@ test("cache utils: normalizeUnifiedCache keeps comments cache in current nested 
     assert.equal(normalized.google.comments["9001"].rev, undefined);
 });
 
+test("cache utils: normalizeUnifiedCache 不迁移旧 poster 图片缓存", () => {
+    const normalized = normalizeUnifiedCache({
+        version: 6,
+        trakt: {
+            poster: {
+                "movie:123": {
+                    status: 1,
+                    url: "https://image.tmdb.org/t/p/w780/old-poster.jpg",
+                },
+            },
+        },
+    });
+
+    assert.deepEqual(normalized.trakt.image, {});
+});
+
+test("cache utils: normalizeUnifiedCache 保留未过期图片 TTL 并移除过期字段", () => {
+    const now = Date.now();
+    const normalized = normalizeUnifiedCache({
+        version: 7,
+        trakt: {
+            image: {
+                "movie:123": {
+                    poster: {
+                        status: 2,
+                        url: "https://image.tmdb.org/t/p/original/partial.jpg",
+                        expiresAt: now + 30 * 24 * 60 * 60 * 1000,
+                    },
+                    logo: {
+                        status: 3,
+                        expiresAt: now - 1000,
+                    },
+                },
+                "movie:124": {
+                    poster: {
+                        status: 3,
+                        expiresAt: now - 1000,
+                    },
+                },
+                "movie:125": {
+                    poster: {
+                        status: 1,
+                        url: "https://image.tmdb.org/t/p/original/found.jpg",
+                    },
+                },
+            },
+        },
+    });
+
+    assert.equal(normalized.trakt.image["movie:123"].poster.status, 2);
+    assert.equal(normalized.trakt.image["movie:123"].logo, undefined);
+    assert.equal(normalized.trakt.image["movie:124"], undefined);
+    assert.equal(normalized.trakt.image["movie:125"].poster.expiresAt, null);
+});
+
 test("cache utils: pruneUnifiedCacheToLimit removes lower-priority entries first", () => {
     const env = createEnv();
     const cache = createEmptyUnifiedCache(3, 700);

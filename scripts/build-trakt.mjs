@@ -243,9 +243,7 @@ function renderPlugin() {
         .forEach((rule) => {
             lines.push(`# ${rule.comment}`);
             if (rule.kind === "cron") {
-                lines.push(
-                    `cron "${rule.cron}" script-path=${buildScriptUrl(rule.scriptFile)}, timeout=${getTargetValue(rule.timeout, "plugin")}, enable=${rule.enable}, tag=${rule.title}`,
-                );
+                lines.push(`cron "${rule.cron}" script-path=${buildScriptUrl(rule.scriptFile)}, timeout=${rule.timeout}, enable=${rule.enable}, tag=${rule.title}`);
                 return;
             }
 
@@ -253,7 +251,7 @@ function renderPlugin() {
             if (rule.requiresBody) {
                 parts.push("requires-body=true");
             }
-            parts.push(`timeout=${getTargetValue(rule.timeout, "plugin")}`);
+            parts.push(`timeout=${rule.timeout}`);
             if (rule.argumentKeys?.length) {
                 parts.push(`argument=[${buildArgumentList(rule.argumentKeys, (key) => `{${key}}`)}]`);
             }
@@ -293,7 +291,7 @@ function renderSgmodule() {
             if (Number.isFinite(Number(rule.maxSize))) {
                 parts.push(`max-size=${rule.maxSize}`);
             }
-            parts.push(`timeout=${getTargetValue(rule.timeout, "sgmodule")}`);
+            parts.push(`timeout=${rule.timeout}`);
             if (rule.argumentKeys?.length) {
                 parts.push(`argument=${buildArgumentList(rule.argumentKeys, (key) => `{{{${key}}}}`)}`);
             }
