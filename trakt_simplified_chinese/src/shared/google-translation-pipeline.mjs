@@ -53,44 +53,57 @@ async function translateTextFieldTargets(targets, options = {}) {
         pendingByLanguage[sourceLanguage].push({ ...target, sourceText });
     });
 
-    for (const language of Object.keys(pendingByLanguage)) {
-        const languageTargets = pendingByLanguage[language];
-        try {
+    const pendingEntries = Object.entries(pendingByLanguage);
+    const translationResults = await Promise.allSettled(
+        pendingEntries.map(([language, languageTargets]) => {
             const sourceTexts = languageTargets.map((target) => target.sourceText);
-            const translatedTexts = await translateTexts(sourceTexts, language);
-            languageTargets.forEach((target, index) => {
-                const translatedText = normalizeTranslation(translatedTexts[index]);
-                if (!translatedText) {
-                    return;
-                }
+            return translateTexts(sourceTexts, language);
+        }),
+    );
+    let firstError = null;
 
-                if (typeof target.shouldAcceptTranslation === "function" && !target.shouldAcceptTranslation(translatedText, target)) {
-                    return;
-                }
-
-                if (typeof target.setCachedTranslation === "function") {
-                    const targetCacheChanged = target.setCachedTranslation(translatedText, target);
-                    cacheChanged = targetCacheChanged || cacheChanged;
-                    changed = targetCacheChanged || changed;
-                }
-                if (typeof target.applyTranslation === "function") {
-                    changed =
-                        target.applyTranslation(translatedText, {
-                            source: "google",
-                            sourceText: target.sourceText,
-                            target,
-                        }) !== false || changed;
-                }
-                translatedCount += 1;
-            });
-        } catch (error) {
+    pendingEntries.forEach(([language, languageTargets], resultIndex) => {
+        const result = translationResults[resultIndex];
+        if (result.status === "rejected") {
             if (typeof options.logFailure === "function") {
-                options.logFailure(language, error);
+                options.logFailure(language, result.reason);
             }
-            if (options.throwOnFailure) {
-                throw error;
+            if (!firstError) {
+                firstError = result.reason;
             }
+            return;
         }
+
+        const translatedTexts = result.value;
+        languageTargets.forEach((target, index) => {
+            const translatedText = normalizeTranslation(translatedTexts[index]);
+            if (!translatedText) {
+                return;
+            }
+
+            if (typeof target.shouldAcceptTranslation === "function" && !target.shouldAcceptTranslation(translatedText, target)) {
+                return;
+            }
+
+            if (typeof target.setCachedTranslation === "function") {
+                const targetCacheChanged = target.setCachedTranslation(translatedText, target);
+                cacheChanged = targetCacheChanged || cacheChanged;
+                changed = targetCacheChanged || changed;
+            }
+            if (typeof target.applyTranslation === "function") {
+                changed =
+                    target.applyTranslation(translatedText, {
+                        source: "google",
+                        sourceText: target.sourceText,
+                        target,
+                    }) !== false || changed;
+            }
+            translatedCount += 1;
+        });
+    });
+
+    if (options.throwOnFailure && firstError) {
+        throw firstError;
     }
 
     return {

@@ -54,14 +54,13 @@ async function translateTextsWithGoogle(texts, sourceLanguage) {
         return [];
     }
 
-    const translatedTexts = [];
+    const batches = [];
     for (let index = 0; index < normalizedTexts.length; index += GOOGLE_TRANSLATE_BATCH_SIZE) {
-        const batch = normalizedTexts.slice(index, index + GOOGLE_TRANSLATE_BATCH_SIZE);
-        const payload = await translateTextBatch(batch, sourceLanguage);
-        translatedTexts.push(...extractTranslatedTexts(payload, batch));
+        batches.push(normalizedTexts.slice(index, index + GOOGLE_TRANSLATE_BATCH_SIZE));
     }
 
-    return translatedTexts;
+    const batchPayloads = await Promise.all(batches.map((batch) => translateTextBatch(batch, sourceLanguage)));
+    return batchPayloads.flatMap((payload, index) => extractTranslatedTexts(payload, batches[index]));
 }
 
 export { translateTextsWithGoogle };
