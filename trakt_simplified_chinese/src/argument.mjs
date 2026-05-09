@@ -97,9 +97,26 @@ function normalizeBackendBaseUrl(argument) {
     return value.replace(/\/+$/, "");
 }
 
+function normalizePosterImageMode(value) {
+    const normalized = String(value ?? "")
+        .trim()
+        .toLowerCase();
+    const labelMap = {
+        默认: "default",
+        原图: "default",
+        中文: "chinese",
+        原片语言: "original",
+    };
+    if (labelMap[normalized]) {
+        return labelMap[normalized];
+    }
+    return ["default", "chinese", "original"].includes(normalized) ? normalized : "chinese";
+}
+
 function normalizeArgument(argument) {
     return {
         ...argument,
+        posterImageMode: normalizePosterImageMode(argument.posterImageMode),
         backendBaseUrl: normalizeBackendBaseUrl(argument),
         enabledPlayerTypes: Object.values(playerDefinitions.PLAYER_TYPE).filter((source) => {
             return argument.playerButtonEnabled[source];

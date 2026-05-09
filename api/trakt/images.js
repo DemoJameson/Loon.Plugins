@@ -19,6 +19,7 @@ async function handleGet(req, res, kvConfig) {
     const showIds = parseIds(req.query.shows);
     const movieIds = parseIds(req.query.movies);
     const seasonKeys = parseSeasonKeys(req.query.seasons);
+    const mode = req.query.mode;
 
     if (showIds.length === 0 && movieIds.length === 0 && seasonKeys.length === 0) {
         res.status(400).json({ error: "Missing shows, movies, or seasons query" });
@@ -26,6 +27,7 @@ async function handleGet(req, res, kvConfig) {
     }
 
     const { shows, movies, seasons } = await readManyImageGroupsFromKv(kvConfig, {
+        mode,
         shows: showIds,
         movies: movieIds,
         seasons: seasonKeys,
@@ -46,17 +48,15 @@ async function handlePost(req, res, kvConfig) {
     }
 
     const payload = await readJsonBody(req);
-    const shows = payload?.shows && typeof payload.shows === "object" ? payload.shows : {};
-    const movies = payload?.movies && typeof payload.movies === "object" ? payload.movies : {};
-    const seasons = payload?.seasons && typeof payload.seasons === "object" ? payload.seasons : {};
+    const modes = payload?.modes && typeof payload.modes === "object" ? payload.modes : {};
 
-    await writeManyImageGroupsToKv(kvConfig, { shows, movies, seasons });
+    await writeManyImageGroupsToKv(kvConfig, { modes });
 
     res.status(200).json({
         counts: {
-            shows: Object.keys(shows).length,
-            movies: Object.keys(movies).length,
-            seasons: Object.keys(seasons).length,
+            shows: Object.values(modes).reduce((count, groups) => count + Object.keys(groups?.shows || {}).length, 0),
+            movies: Object.values(modes).reduce((count, groups) => count + Object.keys(groups?.movies || {}).length, 0),
+            seasons: Object.values(modes).reduce((count, groups) => count + Object.keys(groups?.seasons || {}).length, 0),
         },
     });
 }

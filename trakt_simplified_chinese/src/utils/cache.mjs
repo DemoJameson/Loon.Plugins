@@ -3,7 +3,7 @@ import * as commonUtils from "../utils/common.mjs";
 
 const UNIFIED_CACHE_KEY = "dj_trakt_unified_cache";
 const UNIFIED_CACHE_REV_KEY = "dj_trakt_unified_cache_rev";
-const UNIFIED_CACHE_SCHEMA_VERSION = 7;
+const UNIFIED_CACHE_SCHEMA_VERSION = 8;
 const UNIFIED_CACHE_MAX_BYTES = 1024 * 1024 - 8 * 1024;
 const LINK_ID_FIELDS = ["trakt", "tmdb"];
 const UNIFIED_CACHE_SNAPSHOT_RETRY_LIMIT = 3;
@@ -174,6 +174,16 @@ function normalizeLinkIdsEntry(entry) {
         normalized.showIds = showIds;
         normalized.seasonNumber = seasonNumber;
         normalized.episodeNumber = episodeNumber;
+    }
+
+    const language = String(source.language ?? "").trim();
+    if (language) {
+        normalized.language = language;
+    }
+
+    const country = String(source.country ?? "").trim();
+    if (country) {
+        normalized.country = country;
     }
 
     return ids ? normalized : null;

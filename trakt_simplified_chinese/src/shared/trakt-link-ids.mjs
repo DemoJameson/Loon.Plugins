@@ -51,6 +51,18 @@ function mergeLinkIdsCacheEntry(currentEntry, nextEntry) {
         merged.episodeNumber = Number(current.episodeNumber);
     }
 
+    if (commonUtils.isNonNullish(incoming.language)) {
+        merged.language = incoming.language;
+    } else if (commonUtils.isNonNullish(current.language)) {
+        merged.language = current.language;
+    }
+
+    if (commonUtils.isNonNullish(incoming.country)) {
+        merged.country = incoming.country;
+    } else if (commonUtils.isNonNullish(current.country)) {
+        merged.country = current.country;
+    }
+
     return merged;
 }
 
@@ -97,6 +109,8 @@ function cacheMediaIdsFromDetailResponse(linkCache, mediaType, ref, data) {
         const traktId = data?.ids?.trakt ?? null;
         return setLinkIdsCacheEntry(linkCache, traktId, {
             ids: normalizeIds(data.ids),
+            language: data?.language ?? null,
+            country: data?.country ?? null,
         });
     }
 
@@ -163,6 +177,8 @@ async function ensureMediaIdsCacheEntry(fetchMediaDetail, saveLinkIdsCache, link
     if (commonUtils.isPlainObject(payload)) {
         setLinkIdsCacheEntry(linkCache, traktId, {
             ids: normalizeIds(payload.ids),
+            language: payload?.language ?? null,
+            country: payload?.country ?? null,
         });
         saveLinkIdsCache(linkCache);
         entry = getLinkIdsCacheEntry(linkCache, traktId);

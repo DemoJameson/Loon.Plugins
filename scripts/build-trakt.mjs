@@ -118,14 +118,6 @@ function getRuleTargets(rule) {
     return Array.isArray(rule.targets) && rule.targets.length > 0 ? rule.targets : ["plugin", "sgmodule", "snippet"];
 }
 
-function getTargetValue(value, targetName) {
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-        return value[targetName] ?? value.default ?? value.plugin ?? "";
-    }
-
-    return value;
-}
-
 function formatDefaultValue(value) {
     return typeof value === "boolean" ? String(value) : String(value ?? "");
 }
@@ -134,8 +126,43 @@ function formatPluginArgumentValue(value) {
     return `"${formatDefaultValue(value)}"`;
 }
 
+function formatPluginArgumentValues(field) {
+    const optionItems = getFieldOptionItems(field);
+    const values = optionItems.length > 0 ? optionItems.map((item) => item.label) : [field.defaultValue];
+    return values.map((value) => formatPluginArgumentValue(value)).join(", ");
+}
+
+function renderPluginArgumentLine(field) {
+    if (field.type === "select") {
+        return `${field.key} = ${inferPluginArgumentType(field.type)},${formatPluginArgumentValues(field).replaceAll(", ", ",")},tag=${field.tag},desc=${field.desc}`;
+    }
+    return `${field.key} = ${inferPluginArgumentType(field.type)}, ${formatPluginArgumentValues(field)}, tag=${field.tag}, desc=${field.desc}`;
+}
+
 function formatSgmoduleArgumentValue(value) {
     return `"${formatDefaultValue(value)}"`;
+}
+
+function formatSgmoduleDefaultArgumentValue(field) {
+    if (field.type !== "select") {
+        return formatSgmoduleArgumentValue(field.defaultValue);
+    }
+
+    const optionItems = getFieldOptionItems(field);
+    const defaultItem = optionItems.find((item) => item.key === field.defaultValue);
+    return formatSgmoduleArgumentValue(defaultItem?.label ?? field.defaultValue);
+}
+
+function getFieldOptionItems(field) {
+    if (!Array.isArray(field.options) || field.options.length === 0) {
+        return [];
+    }
+
+    const values = Array.isArray(field.optionValues) ? field.optionValues : [];
+    return field.options.map((label, index) => ({
+        key: values[index] ?? label,
+        label,
+    }));
 }
 
 function inferPluginArgumentType(fieldType) {
@@ -145,11 +172,14 @@ function inferPluginArgumentType(fieldType) {
     if (fieldType === "text") {
         return "input";
     }
+    if (fieldType === "select") {
+        return "select";
+    }
     throw new Error(`Unsupported plugin argument type: ${fieldType}`);
 }
 
 function inferBoxjsSettingType(fieldType) {
-    if (fieldType === "boolean" || fieldType === "text") {
+    if (fieldType === "boolean" || fieldType === "text" || fieldType === "select") {
         return fieldType;
     }
     throw new Error(`Unsupported BoxJs setting type: ${fieldType}`);
@@ -233,7 +263,7 @@ function renderPlugin() {
     ];
 
     argumentFields.forEach((field) => {
-        lines.push(`${field.key} = ${inferPluginArgumentType(field.type)}, ${formatPluginArgumentValue(field.defaultValue)}, tag=${field.tag}, desc=${field.desc}`);
+        lines.push(renderPluginArgumentLine(field));
     });
 
     lines.push("", "[Script]");
@@ -265,7 +295,7 @@ function renderPlugin() {
 }
 
 function renderSgmodule() {
-    const argumentPairs = argumentFields.map((field) => `${field.key}:${formatSgmoduleArgumentValue(field.defaultValue)}`).join(", ");
+    const argumentPairs = argumentFields.map((field) => `${field.key}:${formatSgmoduleDefaultArgumentValue(field)}`).join(", ");
     const argumentDescriptions = argumentFields.map((field) => `${field.key}: ${field.desc}`).join("\\n");
     const lines = [
         `#!name=${metadata.name}`,
@@ -344,6 +374,7 @@ function renderBoxjs() {
             val: field.defaultValue,
             type: inferBoxjsSettingType(field.type),
             desc: field.desc,
+            ...(getFieldOptionItems(field).length > 0 ? { items: getFieldOptionItems(field) } : {}),
         })),
         descs_html: boxjs.app.descsHtml,
     };

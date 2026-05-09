@@ -24,11 +24,13 @@ const BOXJS_CONFIG_KEY = "dj_trakt_boxjs_configs";
 
 const argumentFields = [
     {
-        key: "chineseImageEnabled",
-        defaultValue: true,
-        type: "boolean",
-        tag: "中文海报",
-        desc: "启用后会使用 TMDb 中文图片替换电影、剧集和季的海报",
+        key: "posterImageMode",
+        defaultValue: "chinese",
+        type: "select",
+        options: ["中文", "原片语言", "原图"],
+        optionValues: ["chinese", "original", "default"],
+        tag: "海报语言",
+        desc: "中文使用 TMDb 中文图片；原片语言使用 TMDb 影片原始语言图片；原图保留 Trakt 原图",
     },
     {
         key: "historyEpisodesMergedByShow",
@@ -90,7 +92,7 @@ const argumentFields = [
 
 const ALL_ARGUMENT_KEYS = argumentFields.map((field) => field.key);
 const PLAYER_ARGUMENT_KEYS = ["eplayerxEnabled", "forwardEnabled", "infuseEnabled"];
-const CORE_ARGUMENT_KEYS = ["chineseImageEnabled", "historyEpisodesMergedByShow", "googleTranslationEnabled", "useShortcutsJumpEnabled", "backendBaseUrl", "debugEnabled"];
+const CORE_ARGUMENT_KEYS = ["posterImageMode", "historyEpisodesMergedByShow", "googleTranslationEnabled", "useShortcutsJumpEnabled", "backendBaseUrl", "debugEnabled"];
 const CORE_WITH_PLAYER_ARGUMENT_KEYS = CORE_ARGUMENT_KEYS.flatMap((key) => (key === "useShortcutsJumpEnabled" ? [...PLAYER_ARGUMENT_KEYS, key] : key));
 
 const scriptRules = [

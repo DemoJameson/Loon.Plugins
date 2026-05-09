@@ -280,10 +280,27 @@ function buildCacheKey(mediaType, lookupKey) {
 }
 
 function buildImageCacheKey(group, lookupKey) {
-    if (group === "seasons") {
-        return `trakt:image:shows:${lookupKey}`;
+    return buildImageCacheKeyForMode("chinese", group, lookupKey);
+}
+
+function normalizeImageCacheMode(mode) {
+    const normalized = String(mode || "")
+        .trim()
+        .toLowerCase();
+    return normalized === "original" ? "original" : "chinese";
+}
+
+function buildImageCacheKeyForMode(mode, group, lookupKey) {
+    const normalizedMode = normalizeImageCacheMode(mode);
+    const normalizedGroup = IMAGE_GROUPS.includes(group) ? group : "";
+    const normalizedLookupKey = String(lookupKey || "").trim();
+    if (!normalizedGroup || !normalizedLookupKey) {
+        return "";
     }
-    return `trakt:image:${group}:${lookupKey}`;
+    if (normalizedMode === "chinese") {
+        return `trakt:image:${normalizedGroup}:${normalizedLookupKey}`;
+    }
+    return `${normalizedMode}:${normalizedGroup}:${normalizedLookupKey}`;
 }
 
 function buildOverrideCacheKey(mediaType, lookupKey) {
@@ -621,7 +638,7 @@ async function readManyImageGroupsFromKv(config, groupsByGroup) {
 
     const refs = IMAGE_GROUPS.flatMap((group) => {
         const ids = groupsByGroup[group] || [];
-        return ids.map((id) => ({ group, id, key: buildImageCacheKey(group, id) }));
+        return ids.map((id) => ({ group, id, key: buildImageCacheKeyForMode(groupsByGroup.mode, group, id) }));
     });
     const results = await jsonGetManyKv(
         config,
@@ -731,7 +748,7 @@ async function writeManyGroupsToKv(config, groupsByMediaType) {
     await pipelineKv(config, commands);
 }
 
-function buildWriteManyImageCommands(group, entriesById) {
+function buildWriteManyImageCommands(group, entriesById, mode = "chinese") {
     const msetArgs = [];
     const ttlCommands = [];
     const now = Date.now();
@@ -740,7 +757,10 @@ function buildWriteManyImageCommands(group, entriesById) {
         if (!entry) {
             return;
         }
-        const key = buildImageCacheKey(group, id);
+        const key = buildImageCacheKeyForMode(mode, group, id);
+        if (!key) {
+            return;
+        }
         msetArgs.push(key, "$", JSON.stringify(entry));
         const fields = Object.values(entry);
         const hasNotFound = fields.some((field) => field?.status === CACHE_STATUS.NOT_FOUND);
@@ -759,7 +779,10 @@ async function writeManyImageGroupsToKv(config, groupsByGroup) {
         return;
     }
 
-    const commands = Object.entries(groupsByGroup).flatMap(([group, entriesById]) => (IMAGE_GROUPS.includes(group) ? buildWriteManyImageCommands(group, entriesById || {}) : []));
+    const modes = groupsByGroup?.modes && typeof groupsByGroup.modes === "object" ? groupsByGroup.modes : null;
+    const commands = (modes ? Object.entries(modes) : []).flatMap(([mode, groups]) =>
+        Object.entries(groups || {}).flatMap(([group, entriesById]) => (IMAGE_GROUPS.includes(group) ? buildWriteManyImageCommands(group, entriesById || {}, mode) : [])),
+    );
     if (commands.length === 0) {
         return;
     }
@@ -1099,6 +1122,7 @@ module.exports = {
     IMAGE_GROUPS,
     buildCacheKey,
     buildImageCacheKey,
+    buildImageCacheKeyForMode,
     buildOverrideCacheKey,
     buildTranslationOverridesKey,
     deleteCacheEntriesFromKv,

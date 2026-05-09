@@ -14,7 +14,8 @@ const AUTO_MOVIE_456 = "trakt:translation:movies:456";
 const AUTO_EPISODE_123_1_2 = "trakt:translation:episodes:123:1:2";
 const IMAGE_MOVIE_123 = "trakt:image:movies:123";
 const IMAGE_SHOW_555 = "trakt:image:shows:555";
-const IMAGE_SEASON_555_1 = "trakt:image:shows:555:1";
+const IMAGE_SEASON_555_1 = "trakt:image:seasons:555:1";
+const ORIGINAL_IMAGE_MOVIE_123 = "original:movies:123";
 
 function createResponse() {
     return {
@@ -391,21 +392,35 @@ test("backend images POST 写入 FOUND/NOT_FOUND 并为任一 NOT_FOUND 设置 5
         const res = await invoke(imagesHandler, {
             method: "POST",
             body: {
-                movies: {
-                    123: {
-                        poster: {
-                            status: 1,
-                            url: "https://image.tmdb.org/t/p/original/movie.jpg",
+                modes: {
+                    chinese: {
+                        movies: {
+                            123: {
+                                poster: {
+                                    status: 1,
+                                    url: "https://image.tmdb.org/t/p/original/movie.jpg",
+                                },
+                                logo: {
+                                    status: 3,
+                                },
+                            },
                         },
-                        logo: {
-                            status: 3,
+                        seasons: {
+                            "555:1": {
+                                poster: {
+                                    status: 3,
+                                },
+                            },
                         },
                     },
-                },
-                seasons: {
-                    "555:1": {
-                        poster: {
-                            status: 3,
+                    original: {
+                        movies: {
+                            123: {
+                                poster: {
+                                    status: 1,
+                                    url: "https://image.tmdb.org/t/p/original/original-movie.jpg",
+                                },
+                            },
                         },
                     },
                 },
@@ -415,7 +430,7 @@ test("backend images POST 写入 FOUND/NOT_FOUND 并为任一 NOT_FOUND 设置 5
         assert.equal(res.statusCode, 200);
         assert.deepEqual(res.jsonBody.counts, {
             shows: 0,
-            movies: 1,
+            movies: 2,
             seasons: 1,
         });
         assert.equal(getJsonValue(store, IMAGE_MOVIE_123).poster.url, "https://image.tmdb.org/t/p/original/movie.jpg");
@@ -423,6 +438,7 @@ test("backend images POST 写入 FOUND/NOT_FOUND 并为任一 NOT_FOUND 设置 5
         assert.ok(Number.isFinite(getJsonValue(store, IMAGE_MOVIE_123).logo.expiresAt));
         assert.equal(getJsonValue(store, IMAGE_SEASON_555_1).poster.status, 3);
         assert.ok(Number.isFinite(getJsonValue(store, IMAGE_SEASON_555_1).poster.expiresAt));
+        assert.equal(getJsonValue(store, ORIGINAL_IMAGE_MOVIE_123).poster.url, "https://image.tmdb.org/t/p/original/original-movie.jpg");
         assert.ok(store.expireCommands.some((command) => command[1] === IMAGE_MOVIE_123 && command[2] === 5 * 24 * 60 * 60));
         assert.ok(store.expireCommands.some((command) => command[1] === IMAGE_SEASON_555_1 && command[2] === 5 * 24 * 60 * 60));
     });
@@ -435,34 +451,38 @@ test("backend images POST 为 PARTIAL_FOUND 设置 30 天 TTL，NOT_FOUND 优先
         const res = await invoke(imagesHandler, {
             method: "POST",
             body: {
-                movies: {
-                    123: {
-                        poster: {
-                            status: 1,
-                            url: "https://image.tmdb.org/t/p/original/movie.jpg",
+                modes: {
+                    chinese: {
+                        movies: {
+                            123: {
+                                poster: {
+                                    status: 1,
+                                    url: "https://image.tmdb.org/t/p/original/movie.jpg",
+                                },
+                                logo: {
+                                    status: 2,
+                                    url: "https://image.tmdb.org/t/p/original/logo.png",
+                                },
+                            },
                         },
-                        logo: {
-                            status: 2,
-                            url: "https://image.tmdb.org/t/p/original/logo.png",
+                        seasons: {
+                            "555:1": {
+                                poster: {
+                                    status: 2,
+                                    url: "https://image.tmdb.org/t/p/original/season.jpg",
+                                },
+                            },
                         },
-                    },
-                },
-                seasons: {
-                    "555:1": {
-                        poster: {
-                            status: 2,
-                            url: "https://image.tmdb.org/t/p/original/season.jpg",
-                        },
-                    },
-                },
-                shows: {
-                    555: {
-                        poster: {
-                            status: 2,
-                            url: "https://image.tmdb.org/t/p/original/show.jpg",
-                        },
-                        logo: {
-                            status: 3,
+                        shows: {
+                            555: {
+                                poster: {
+                                    status: 2,
+                                    url: "https://image.tmdb.org/t/p/original/show.jpg",
+                                },
+                                logo: {
+                                    status: 3,
+                                },
+                            },
                         },
                     },
                 },
@@ -485,15 +505,19 @@ test("backend images POST 在全部字段 FOUND 时不设置 TTL", async () => {
         const res = await invoke(imagesHandler, {
             method: "POST",
             body: {
-                movies: {
-                    123: {
-                        poster: {
-                            status: 1,
-                            url: "https://image.tmdb.org/t/p/original/movie.jpg",
-                        },
-                        logo: {
-                            status: 1,
-                            url: "https://image.tmdb.org/t/p/original/logo.png",
+                modes: {
+                    chinese: {
+                        movies: {
+                            123: {
+                                poster: {
+                                    status: 1,
+                                    url: "https://image.tmdb.org/t/p/original/movie.jpg",
+                                },
+                                logo: {
+                                    status: 1,
+                                    url: "https://image.tmdb.org/t/p/original/logo.png",
+                                },
+                            },
                         },
                     },
                 },

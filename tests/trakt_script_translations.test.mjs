@@ -30,9 +30,12 @@ const TEST_BACKEND_TRANSLATIONS_URL = `${TEST_BACKEND_BASE_URL}/api/trakt/transl
 const TEST_BACKEND_IMAGES_URL = `${TEST_BACKEND_BASE_URL}/api/trakt/images`;
 const TEST_DIRECT_TRANSLATION_URL = "https://api.trakt.tv/movies/123/translations/zh?extended=all";
 const TEST_DIRECT_EPISODE_TRANSLATION_URL = "https://api.trakt.tv/shows/555/seasons/1/episodes/12/translations/zh?extended=all";
-const TEST_TMDB_MOVIE_IMAGES_URL = "https://api.tmdb.org/3/movie/456/images?language=zh&api_key=a0a4d50000eeb10604c5f9342c8b3f62";
-const TEST_TMDB_SHOW_IMAGES_URL = "https://api.tmdb.org/3/tv/777/images?language=zh&api_key=a0a4d50000eeb10604c5f9342c8b3f62";
-const TEST_TMDB_SEASON_IMAGES_URL = "https://api.tmdb.org/3/tv/777/season/1/images?language=zh&api_key=a0a4d50000eeb10604c5f9342c8b3f62";
+const TEST_TMDB_MOVIE_IMAGES_URL = "https://api.tmdb.org/3/movie/456/images?language=zh%2Cen&api_key=a0a4d50000eeb10604c5f9342c8b3f62";
+const TEST_TMDB_MOVIE_IMAGES_ZH_URL = "https://api.tmdb.org/3/movie/456/images?language=zh&api_key=a0a4d50000eeb10604c5f9342c8b3f62";
+const TEST_TMDB_SHOW_IMAGES_URL = "https://api.tmdb.org/3/tv/777/images?language=zh%2Cen&api_key=a0a4d50000eeb10604c5f9342c8b3f62";
+const TEST_TMDB_SEASON_IMAGES_URL = "https://api.tmdb.org/3/tv/777/season/1/images?language=zh%2Cen&api_key=a0a4d50000eeb10604c5f9342c8b3f62";
+const TEST_TMDB_MOVIE_IMAGES_JA_URL = "https://api.tmdb.org/3/movie/456/images?language=zh%2Cja&api_key=a0a4d50000eeb10604c5f9342c8b3f62";
+const TEST_TMDB_MOVIE_DETAIL_URL = "https://api.tmdb.org/3/movie/456?api_key=a0a4d50000eeb10604c5f9342c8b3f62";
 
 function createPendingBackendPostMocks() {
     return {
@@ -88,6 +91,8 @@ function createMovieWithPoster(overrides = {}) {
             trakt: 123,
             tmdb: 456,
         },
+        language: "en",
+        country: "US",
         available_translations: ["en", "zh"],
         images: {
             poster: ["https://walter.trakt.tv/images/movies/000/000/123/posters/original.jpg"],
@@ -106,6 +111,8 @@ function createShowWithPoster(overrides = {}) {
             trakt: 555,
             tmdb: 777,
         },
+        language: "en",
+        country: "US",
         available_translations: ["en", "zh"],
         images: {
             poster: ["https://walter.trakt.tv/images/shows/000/000/555/posters/original.jpg"],
@@ -486,6 +493,9 @@ test("/movies/:id 会用 TMDb 中文 w780 海报替换 images.poster[0]", async 
     const { result, persistentData, httpLogs } = await runResponseCase({
         url: "https://api.trakt.tv/movies/123",
         body: JSON.stringify(createMovieWithPoster()),
+        argument: {
+            posterImageMode: "chinese",
+        },
         persistentData: createUnifiedPersistentData(),
         httpGetMocks: {
             [TEST_TMDB_MOVIE_IMAGES_URL]: createTmdbImagesResponse([
@@ -523,18 +533,18 @@ test("/movies/:id 会用 TMDb 中文 w780 海报替换 images.poster[0]", async 
     assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === TEST_TMDB_MOVIE_IMAGES_URL));
 });
 
-test("chineseImageEnabled=false 时 movie/show 不请求也不替换中文图片", async () => {
+test("posterImageMode=default 时 movie/show 不请求也不替换中文图片", async () => {
     const original = createMovieWithPoster();
     const { result, persistentData, httpLogs } = await runResponseCase({
         url: "https://api.trakt.tv/movies/123",
         body: JSON.stringify(original),
         argument: {
             backendBaseUrl: TEST_BACKEND_BASE_URL,
-            chineseImageEnabled: false,
+            posterImageMode: "default",
         },
         persistentData: createUnifiedPersistentData(),
         httpGetMocks: {
-            [`${TEST_BACKEND_IMAGES_URL}?movies=123`]: JSON.stringify({
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&movies=123`]: JSON.stringify({
                 movies: {
                     123: {
                         poster: {
@@ -574,6 +584,9 @@ test("TMDb 图片选择会优先 iso_3166_1 中文地区再比较评分", async 
     const { result } = await runResponseCase({
         url: "https://api.trakt.tv/shows/555",
         body: JSON.stringify(createShowWithPoster()),
+        argument: {
+            posterImageMode: "chinese",
+        },
         persistentData: createUnifiedPersistentData(),
         httpGetMocks: {
             [TEST_TMDB_SHOW_IMAGES_URL]: createTmdbImagesResponse([
@@ -599,18 +612,273 @@ test("TMDb 图片选择会优先 iso_3166_1 中文地区再比较评分", async 
     assert.equal(payload.images.poster[0], "https://image.tmdb.org/t/p/w780/cn-lower-score-poster.jpg");
 });
 
-test("/movies/:id 会用 TMDb 中文 logo 替换 images.logo[0] 并写回后端图片缓存", async () => {
+test("posterImageMode=original 时按响应 language/country 请求并优先地区海报", async () => {
+    const movie = createMovieWithPoster({
+        language: "ja",
+        country: "JP",
+    });
     const { result, persistentData, httpLogs } = await runResponseCase({
         url: "https://api.trakt.tv/movies/123",
-        body: JSON.stringify(createMovieWithPoster()),
+        body: JSON.stringify(movie),
         argument: {
-            backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "original",
         },
         persistentData: createUnifiedPersistentData(),
         httpGetMocks: {
-            [`${TEST_BACKEND_IMAGES_URL}?movies=123`]: "{}",
-            [TEST_TMDB_MOVIE_IMAGES_URL]: createTmdbImagesResponse(
+            [TEST_TMDB_MOVIE_IMAGES_JA_URL]: createTmdbImagesResponse([
+                {
+                    iso_639_1: "ja",
+                    iso_3166_1: "US",
+                    file_path: "/ja-us-poster.jpg",
+                    vote_average: 10,
+                    vote_count: 100,
+                },
+                {
+                    iso_639_1: "ja",
+                    iso_3166_1: "JP",
+                    file_path: "/ja-jp-poster.jpg",
+                    vote_average: 1,
+                    vote_count: 1,
+                },
+            ]),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.images.poster[0], "https://image.tmdb.org/t/p/w780/ja-jp-poster.jpg");
+    assert.equal(parseUnifiedCache(persistentData).trakt.image["original:movies:123"].poster.url, "https://image.tmdb.org/t/p/original/ja-jp-poster.jpg");
+    assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === TEST_TMDB_MOVIE_IMAGES_JA_URL));
+});
+
+test("posterImageMode=original 且 language=en 时不替换图片", async () => {
+    const movie = createMovieWithPoster({
+        language: "en",
+        country: "US",
+    });
+    const { result, persistentData, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(movie),
+        argument: {
+            posterImageMode: "original",
+        },
+        persistentData: createUnifiedPersistentData(),
+        httpGetMocks: {
+            [TEST_TMDB_MOVIE_IMAGES_URL]: createTmdbImagesResponse([
+                {
+                    iso_639_1: "en",
+                    iso_3166_1: "US",
+                    file_path: "/en-us-poster.jpg",
+                    vote_average: 10,
+                    vote_count: 100,
+                },
+            ]),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.images.poster[0], movie.images.poster[0]);
+    assert.equal(parseUnifiedCache(persistentData).trakt.image["original:movies:123"], undefined);
+    assert.equal(
+        httpLogs.some((entry) => entry.method === "GET" && entry.url.startsWith("https://api.tmdb.org/3/")),
+        false,
+    );
+});
+
+test("posterImageMode=original 且 language=en 时不使用本地 original 图片缓存", async () => {
+    const movie = createMovieWithPoster({
+        language: "en",
+        country: "US",
+    });
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(movie),
+        argument: {
+            posterImageMode: "original",
+        },
+        persistentData: createUnifiedPersistentData({
+            traktImage: {
+                "original:movies:123": {
+                    poster: {
+                        status: 1,
+                        url: "https://image.tmdb.org/t/p/original/cached-original-poster.jpg",
+                    },
+                    logo: {
+                        status: 1,
+                        url: "https://image.tmdb.org/t/p/original/cached-original-logo.png",
+                    },
+                },
+            },
+        }),
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.images.poster[0], movie.images.poster[0]);
+    assert.equal(payload.images.logo[0], movie.images.logo[0]);
+    assert.equal(
+        httpLogs.some((entry) => entry.method === "GET" && entry.url.startsWith("https://api.tmdb.org/3/")),
+        false,
+    );
+});
+
+test("posterImageMode=original 且中文原片无对应 country 时按中文地区优先级选图", async () => {
+    const movie = createMovieWithPoster({
+        language: "zh",
+        country: "MO",
+    });
+    const { result, persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(movie),
+        argument: {
+            posterImageMode: "original",
+        },
+        persistentData: createUnifiedPersistentData(),
+        httpGetMocks: {
+            [TEST_TMDB_MOVIE_IMAGES_ZH_URL]: createTmdbImagesResponse([
+                {
+                    iso_639_1: "zh",
+                    iso_3166_1: "HK",
+                    file_path: "/hk-high-score-original-poster.jpg",
+                    vote_average: 10,
+                    vote_count: 100,
+                },
+                {
+                    iso_639_1: "zh",
+                    iso_3166_1: "CN",
+                    file_path: "/cn-priority-original-poster.jpg",
+                    vote_average: 1,
+                    vote_count: 1,
+                },
+            ]),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    const cachePoster = parseUnifiedCache(persistentData).trakt.image["original:movies:123"].poster;
+    assert.equal(payload.images.poster[0], "https://image.tmdb.org/t/p/w780/cn-priority-original-poster.jpg");
+    assert.equal(cachePoster.status, 2);
+    assert.ok(cachePoster.expiresAt > Date.now() + 29 * 24 * 60 * 60 * 1000);
+});
+
+test("posterImageMode=original 缺少响应 language 时用 TMDb 详情 original_language", async () => {
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(createMovieWithPoster({ language: null })),
+        argument: {
+            posterImageMode: "original",
+        },
+        persistentData: createUnifiedPersistentData(),
+        httpGetMocks: {
+            [TEST_TMDB_MOVIE_DETAIL_URL]: JSON.stringify({
+                original_language: "ja",
+            }),
+            [TEST_TMDB_MOVIE_IMAGES_JA_URL]: createTmdbImagesResponse([
+                {
+                    iso_639_1: "ja",
+                    file_path: "/ja-detail-poster.jpg",
+                    vote_average: 6,
+                    vote_count: 2,
+                },
+            ]),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.images.poster[0], "https://image.tmdb.org/t/p/w780/ja-detail-poster.jpg");
+    assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === TEST_TMDB_MOVIE_DETAIL_URL));
+    assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === TEST_TMDB_MOVIE_IMAGES_JA_URL));
+});
+
+test("posterImageMode=original 缺少响应 country 时用 TMDb 详情 origin_country", async () => {
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(createMovieWithPoster({ language: "ja", country: null })),
+        argument: {
+            posterImageMode: "original",
+        },
+        persistentData: createUnifiedPersistentData(),
+        httpGetMocks: {
+            [TEST_TMDB_MOVIE_DETAIL_URL]: JSON.stringify({
+                original_language: "ja",
+                origin_country: ["JP"],
+            }),
+            [TEST_TMDB_MOVIE_IMAGES_JA_URL]: createTmdbImagesResponse([
+                {
+                    iso_639_1: "ja",
+                    iso_3166_1: "US",
+                    file_path: "/ja-us-detail-country-poster.jpg",
+                    vote_average: 10,
+                    vote_count: 100,
+                },
+                {
+                    iso_639_1: "ja",
+                    iso_3166_1: "JP",
+                    file_path: "/ja-jp-detail-country-poster.jpg",
+                    vote_average: 1,
+                    vote_count: 1,
+                },
+            ]),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.images.poster[0], "https://image.tmdb.org/t/p/w780/ja-jp-detail-country-poster.jpg");
+    assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === TEST_TMDB_MOVIE_DETAIL_URL));
+});
+
+test("posterImageMode=original 补查 TMDb country 失败时仍保持详情响应", async () => {
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(createMovieWithPoster({ language: "ja", country: null })),
+        argument: {
+            posterImageMode: "original",
+        },
+        persistentData: createUnifiedPersistentData(),
+        httpGetMocks: {
+            [TEST_TMDB_MOVIE_DETAIL_URL]: createHttpStatusMock(500),
+            [TEST_TMDB_MOVIE_IMAGES_JA_URL]: createTmdbImagesResponse([
+                {
+                    iso_639_1: "ja",
+                    iso_3166_1: "US",
+                    file_path: "/ja-us-detail-failed-poster.jpg",
+                    vote_average: 10,
+                    vote_count: 100,
+                },
+            ]),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.images.poster[0], "https://image.tmdb.org/t/p/w780/ja-us-detail-failed-poster.jpg");
+    assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === TEST_TMDB_MOVIE_DETAIL_URL));
+    assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === TEST_TMDB_MOVIE_IMAGES_JA_URL));
+});
+
+test("/movies/:id 会用 TMDb 中文 logo 替换 images.logo[0] 并写回后端图片缓存", async () => {
+    const backendImagePostQueue = [createHttpStatusMock(200, "{}")];
+    const { result, persistentData, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(
+            createMovieWithPoster({
+                language: "ja",
+                country: "JP",
+            }),
+        ),
+        argument: {
+            backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "chinese",
+        },
+        persistentData: createUnifiedPersistentData(),
+        httpGetMocks: {
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&movies=123`]: "{}",
+            [TEST_TMDB_MOVIE_IMAGES_JA_URL]: createTmdbImagesResponse(
                 [
+                    {
+                        iso_639_1: "ja",
+                        iso_3166_1: "JP",
+                        file_path: "/ja-original-poster.jpg",
+                        vote_average: 9,
+                        vote_count: 10,
+                    },
                     {
                         iso_639_1: "zh",
                         file_path: "/movie-poster.jpg",
@@ -619,6 +887,13 @@ test("/movies/:id 会用 TMDb 中文 logo 替换 images.logo[0] 并写回后端�
                     },
                 ],
                 [
+                    {
+                        iso_639_1: "ja",
+                        iso_3166_1: "JP",
+                        file_path: "/ja-original-logo.png",
+                        vote_average: 9,
+                        vote_count: 10,
+                    },
                     {
                         iso_639_1: "zh",
                         iso_3166_1: "HK",
@@ -636,15 +911,127 @@ test("/movies/:id 会用 TMDb 中文 logo 替换 images.logo[0] 并写回后端�
                 ],
             ),
         },
+        httpPostMocks: {
+            [TEST_BACKEND_IMAGES_URL]: backendImagePostQueue,
+        },
     });
 
     const payload = JSON.parse(result.body);
-    const cache = parseUnifiedCache(persistentData).trakt.image["movie:123"];
+    const imageCache = parseUnifiedCache(persistentData).trakt.image;
+    const cache = imageCache["movie:123"];
+    const imagePost = httpLogs.find((entry) => entry.method === "POST" && entry.url === TEST_BACKEND_IMAGES_URL);
+    const imagePostBody = JSON.parse(imagePost.body);
     assert.equal(payload.images.poster[0], "https://image.tmdb.org/t/p/w780/movie-poster.jpg");
     assert.equal(payload.images.logo[0], "https://image.tmdb.org/t/p/w500/cn-logo.png");
     assert.equal(cache.poster.url, "https://image.tmdb.org/t/p/original/movie-poster.jpg");
     assert.equal(cache.logo.url, "https://image.tmdb.org/t/p/original/cn-logo.png");
-    assert.ok(httpLogs.some((entry) => entry.method === "POST" && entry.url === TEST_BACKEND_IMAGES_URL));
+    assert.equal(imageCache["original:movies:123"], undefined);
+    assert.equal(imagePostBody.modes.chinese.movies["123"].poster.url, "https://image.tmdb.org/t/p/original/movie-poster.jpg");
+    assert.equal(imagePostBody.modes.original.movies["123"].poster.url, "https://image.tmdb.org/t/p/original/ja-original-poster.jpg");
+});
+
+test("后端原片语言图片写入不受本地 original 缓存影响", async () => {
+    const { persistentData, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(
+            createMovieWithPoster({
+                language: "ja",
+                country: "JP",
+            }),
+        ),
+        argument: {
+            backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "chinese",
+        },
+        persistentData: createUnifiedPersistentData({
+            traktImage: {
+                "original:movies:123": {
+                    poster: {
+                        status: 1,
+                        url: "https://image.tmdb.org/t/p/original/stale-original-poster.jpg",
+                    },
+                    logo: {
+                        status: 1,
+                        url: "https://image.tmdb.org/t/p/original/stale-original-logo.png",
+                    },
+                },
+            },
+        }),
+        httpGetMocks: {
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&movies=123`]: "{}",
+            [TEST_TMDB_MOVIE_IMAGES_JA_URL]: createTmdbImagesResponse(
+                [
+                    {
+                        iso_639_1: "zh",
+                        iso_3166_1: "CN",
+                        file_path: "/fresh-chinese-poster.jpg",
+                        vote_average: 7,
+                        vote_count: 3,
+                    },
+                    {
+                        iso_639_1: "ja",
+                        iso_3166_1: "JP",
+                        file_path: "/fresh-original-poster.jpg",
+                        vote_average: 7,
+                        vote_count: 3,
+                    },
+                ],
+                [
+                    {
+                        iso_639_1: "zh",
+                        iso_3166_1: "CN",
+                        file_path: "/fresh-chinese-logo.png",
+                        vote_average: 7,
+                        vote_count: 3,
+                    },
+                    {
+                        iso_639_1: "ja",
+                        iso_3166_1: "JP",
+                        file_path: "/fresh-original-logo.png",
+                        vote_average: 7,
+                        vote_count: 3,
+                    },
+                ],
+            ),
+        },
+    });
+
+    const imagePost = httpLogs.find((entry) => entry.method === "POST" && entry.url === TEST_BACKEND_IMAGES_URL);
+    const imagePostBody = JSON.parse(imagePost.body);
+    const imageCache = parseUnifiedCache(persistentData).trakt.image;
+    assert.equal(imagePostBody.modes.original.movies["123"].poster.url, "https://image.tmdb.org/t/p/original/fresh-original-poster.jpg");
+    assert.equal(imageCache["original:movies:123"].poster.url, "https://image.tmdb.org/t/p/original/stale-original-poster.jpg");
+});
+
+test("posterImageMode=chinese 时原片语言详情失败不影响中文海报", async () => {
+    const movie = createMovieWithPoster({
+        language: null,
+    });
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(movie),
+        argument: {
+            posterImageMode: "chinese",
+        },
+        persistentData: createUnifiedPersistentData(),
+        httpGetMocks: {
+            [TEST_TMDB_MOVIE_DETAIL_URL]: createHttpStatusMock(500),
+            [TEST_TMDB_MOVIE_IMAGES_ZH_URL]: createTmdbImagesResponse([
+                {
+                    iso_639_1: "zh",
+                    iso_3166_1: "CN",
+                    file_path: "/safe-chinese-poster.jpg",
+                    vote_average: 6,
+                    vote_count: 2,
+                },
+            ]),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.images.poster[0], "https://image.tmdb.org/t/p/w780/safe-chinese-poster.jpg");
+    assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === TEST_TMDB_MOVIE_DETAIL_URL));
+    assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === TEST_TMDB_MOVIE_IMAGES_ZH_URL));
 });
 
 test("movie/show 向 TMDb 请求图片时会同时缓存 poster 和 logo", async () => {
@@ -658,10 +1045,11 @@ test("movie/show 向 TMDb 请求图片时会同时缓存 poster 和 logo", async
         body: JSON.stringify(movie),
         argument: {
             backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "chinese",
         },
         persistentData: createUnifiedPersistentData(),
         httpGetMocks: {
-            [`${TEST_BACKEND_IMAGES_URL}?movies=123`]: "{}",
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&movies=123`]: "{}",
             [TEST_TMDB_MOVIE_IMAGES_URL]: createTmdbImagesResponse(
                 [
                     {
@@ -699,10 +1087,11 @@ test("/movies/:id 命中后端图片缓存时替换 poster/logo 且不请求 TMD
         body: JSON.stringify(createMovieWithPoster()),
         argument: {
             backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "chinese",
         },
         persistentData: createUnifiedPersistentData(),
         httpGetMocks: {
-            [`${TEST_BACKEND_IMAGES_URL}?movies=123`]: JSON.stringify({
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&movies=123`]: JSON.stringify({
                 movies: {
                     123: {
                         poster: {
@@ -738,7 +1127,7 @@ test("后端图片缓存命中 NOT_FOUND 时不再请求 TMDb", async () => {
         },
         persistentData: createUnifiedPersistentData(),
         httpGetMocks: {
-            [`${TEST_BACKEND_IMAGES_URL}?movies=123`]: JSON.stringify({
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&movies=123`]: JSON.stringify({
                 movies: {
                     123: {
                         poster: { status: 3 },
@@ -762,6 +1151,9 @@ test("本地图片缓存 PARTIAL_FOUND 未过期时直接替换且不请求 TMDb
     const { result, httpLogs } = await runResponseCase({
         url: "https://api.trakt.tv/movies/123",
         body: JSON.stringify(createMovieWithPoster()),
+        argument: {
+            posterImageMode: "chinese",
+        },
         persistentData: createUnifiedPersistentData({
             traktImage: {
                 "movie:123": {
@@ -789,10 +1181,173 @@ test("本地图片缓存 PARTIAL_FOUND 未过期时直接替换且不请求 TMDb
     );
 });
 
+test("TMDb 获取后本地当前模式缓存会写入新获取的完整图片数据", async () => {
+    const { result, persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(createMovieWithPoster()),
+        argument: {
+            posterImageMode: "chinese",
+        },
+        persistentData: createUnifiedPersistentData({
+            traktImage: {
+                "movie:123": {
+                    poster: {
+                        status: 1,
+                        url: "https://image.tmdb.org/t/p/original/old-poster.jpg",
+                    },
+                },
+            },
+        }),
+        httpGetMocks: {
+            [TEST_TMDB_MOVIE_IMAGES_URL]: createTmdbImagesResponse(
+                [
+                    {
+                        iso_639_1: "zh",
+                        iso_3166_1: "CN",
+                        file_path: "/new-poster.jpg",
+                        vote_average: 7,
+                        vote_count: 3,
+                    },
+                ],
+                [
+                    {
+                        iso_639_1: "zh",
+                        iso_3166_1: "CN",
+                        file_path: "/new-logo.png",
+                        vote_average: 7,
+                        vote_count: 3,
+                    },
+                ],
+            ),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    const cache = parseUnifiedCache(persistentData).trakt.image["movie:123"];
+    assert.equal(payload.images.poster[0], "https://image.tmdb.org/t/p/w780/new-poster.jpg");
+    assert.equal(payload.images.logo[0], "https://image.tmdb.org/t/p/w500/new-logo.png");
+    assert.equal(cache.poster.url, "https://image.tmdb.org/t/p/original/new-poster.jpg");
+    assert.equal(cache.logo.url, "https://image.tmdb.org/t/p/original/new-logo.png");
+});
+
+test("当前模式本地图片缓存命中时不请求另一种模式后端缓存", async () => {
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(createMovieWithPoster()),
+        argument: {
+            backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "chinese",
+        },
+        persistentData: createUnifiedPersistentData({
+            traktImage: {
+                "movie:123": {
+                    poster: {
+                        status: 1,
+                        url: "https://image.tmdb.org/t/p/original/cached-poster.jpg",
+                    },
+                    logo: {
+                        status: 1,
+                        url: "https://image.tmdb.org/t/p/original/cached-logo.png",
+                    },
+                },
+            },
+        }),
+        httpGetMocks: {
+            [`${TEST_BACKEND_IMAGES_URL}?mode=original&movies=123`]: JSON.stringify({
+                movies: {
+                    123: {
+                        poster: {
+                            status: 1,
+                            url: "https://image.tmdb.org/t/p/original/original-poster.jpg",
+                        },
+                    },
+                },
+            }),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.images.poster[0], "https://image.tmdb.org/t/p/w780/cached-poster.jpg");
+    assert.equal(payload.images.logo[0], "https://image.tmdb.org/t/p/w500/cached-logo.png");
+    assert.equal(
+        httpLogs.some((entry) => entry.url === `${TEST_BACKEND_IMAGES_URL}?mode=original&movies=123`),
+        false,
+    );
+    assert.equal(
+        httpLogs.some((entry) => entry.url.startsWith("https://api.tmdb.org/3/")),
+        false,
+    );
+});
+
+test("当前模式后端图片缓存未命中时不请求另一种模式后端缓存", async () => {
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123",
+        body: JSON.stringify(
+            createMovieWithPoster({
+                language: "ja",
+                country: "JP",
+            }),
+        ),
+        argument: {
+            backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "original",
+        },
+        persistentData: createUnifiedPersistentData(),
+        httpGetMocks: {
+            [`${TEST_BACKEND_IMAGES_URL}?mode=original&movies=123`]: "{}",
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&movies=123`]: JSON.stringify({
+                movies: {
+                    123: {
+                        poster: {
+                            status: 1,
+                            url: "https://image.tmdb.org/t/p/original/chinese-poster.jpg",
+                        },
+                        logo: {
+                            status: 1,
+                            url: "https://image.tmdb.org/t/p/original/chinese-logo.png",
+                        },
+                    },
+                },
+            }),
+            [TEST_TMDB_MOVIE_IMAGES_JA_URL]: createTmdbImagesResponse(
+                [
+                    {
+                        iso_639_1: "ja",
+                        iso_3166_1: "JP",
+                        file_path: "/ja-poster.jpg",
+                        vote_average: 7,
+                        vote_count: 3,
+                    },
+                ],
+                [
+                    {
+                        iso_639_1: "ja",
+                        iso_3166_1: "JP",
+                        file_path: "/ja-logo.png",
+                        vote_average: 7,
+                        vote_count: 3,
+                    },
+                ],
+            ),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload.images.poster[0], "https://image.tmdb.org/t/p/w780/ja-poster.jpg");
+    assert.equal(payload.images.logo[0], "https://image.tmdb.org/t/p/w500/ja-logo.png");
+    assert.equal(
+        httpLogs.some((entry) => entry.url === `${TEST_BACKEND_IMAGES_URL}?mode=chinese&movies=123`),
+        false,
+    );
+});
+
 test("本地图片缓存 PARTIAL_FOUND/NOT_FOUND 过期后会重新请求 TMDb", async () => {
     const { result, persistentData, httpLogs } = await runResponseCase({
         url: "https://api.trakt.tv/movies/123",
         body: JSON.stringify(createMovieWithPoster()),
+        argument: {
+            posterImageMode: "chinese",
+        },
         persistentData: createUnifiedPersistentData({
             traktImage: {
                 "movie:123": {
@@ -844,6 +1399,9 @@ test("/shows 直出列表会用 TMDb 中文海报替换剧集 images.poster[0]",
     const { result, persistentData } = await runResponseCase({
         url: "https://api.trakt.tv/shows/popular",
         body: JSON.stringify([createShowWithPoster()]),
+        argument: {
+            posterImageMode: "chinese",
+        },
         persistentData: createUnifiedPersistentData({
             traktTranslation: {
                 "show:555": createMediaTranslationEntry({
@@ -882,6 +1440,42 @@ test("/shows 直出列表会用 TMDb 中文海报替换剧集 images.poster[0]",
     assert.ok(cachePoster.expiresAt > Date.now() + 29 * 24 * 60 * 60 * 1000);
 });
 
+test("posterImageMode=original 且列表项 language=en 时不使用本地 original 图片缓存", async () => {
+    const show = createShowWithPoster({
+        language: "en",
+        country: "US",
+    });
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/shows/popular",
+        body: JSON.stringify([show]),
+        argument: {
+            posterImageMode: "original",
+        },
+        persistentData: createUnifiedPersistentData({
+            traktImage: {
+                "original:shows:555": {
+                    poster: {
+                        status: 1,
+                        url: "https://image.tmdb.org/t/p/original/cached-original-show-poster.jpg",
+                    },
+                    logo: {
+                        status: 1,
+                        url: "https://image.tmdb.org/t/p/original/cached-original-show-logo.png",
+                    },
+                },
+            },
+        }),
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].images.poster[0], show.images.poster[0]);
+    assert.equal(payload[0].images.logo[0], show.images.logo[0]);
+    assert.equal(
+        httpLogs.some((entry) => entry.method === "GET" && entry.url.startsWith("https://api.tmdb.org/3/")),
+        false,
+    );
+});
+
 [
     {
         name: "没有中文海报",
@@ -908,6 +1502,9 @@ test("/shows 直出列表会用 TMDb 中文海报替换剧集 images.poster[0]",
         const { result } = await runResponseCase({
             url: "https://api.trakt.tv/movies/123",
             body: JSON.stringify(createMovieWithPoster()),
+            argument: {
+                posterImageMode: "chinese",
+            },
             persistentData: createUnifiedPersistentData(),
             httpGetMocks: {
                 [TEST_TMDB_MOVIE_IMAGES_URL]: mock,
@@ -932,6 +1529,10 @@ test("缺少 images.poster 时仍会请求 TMDb 写入图片缓存，缺少 ids.
                 },
             }),
         ]),
+        argument: {
+            backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "chinese",
+        },
         persistentData: createUnifiedPersistentData({
             traktTranslation: {
                 "movie:123": createMediaTranslationEntry(),
@@ -961,6 +1562,9 @@ test("TMDb poster 缓存命中时不会重复请求", async () => {
     const { result, httpLogs } = await runResponseCase({
         url: "https://api.trakt.tv/movies/123",
         body: JSON.stringify(createMovieWithPoster()),
+        argument: {
+            posterImageMode: "chinese",
+        },
         persistentData: createUnifiedPersistentData({
             traktImage: {
                 "movie:123": {
@@ -1039,6 +1643,10 @@ test("/shows/:id/seasons 会用 TMDb 中文季海报替换 season images.poster[
                 ],
             },
         ]),
+        argument: {
+            backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "chinese",
+        },
         persistentData: createUnifiedPersistentData({
             persistentCurrentSeason: { showId: "555", seasonNumber: 1 },
             traktLinkIds: {
@@ -1057,11 +1665,15 @@ test("/shows/:id/seasons 会用 TMDb 中文季海报替换 season images.poster[
             },
         }),
         httpGetMocks: {
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&seasons=555:1`]: "{}",
+            [`${TEST_BACKEND_IMAGES_URL}?mode=original&seasons=555:1`]: "{}",
             "https://api.trakt.tv/shows/555?extended=cloud9,full,watchnow": JSON.stringify({
                 ids: {
                     trakt: 555,
                     tmdb: 777,
                 },
+                language: "en",
+                country: "US",
             }),
             [TEST_TMDB_SEASON_IMAGES_URL]: createTmdbImagesResponse([
                 {
@@ -1085,9 +1697,148 @@ test("/shows/:id/seasons 会用 TMDb 中文季海报替换 season images.poster[
     const payload = JSON.parse(result.body);
     assert.equal(payload[0].images.poster[0], "https://image.tmdb.org/t/p/w780/best-season-poster.jpg");
     assert.equal(payload[0].episodes[0].title, "第一集中文");
-    assert.equal(parseUnifiedCache(persistentData).trakt.image["season:555:1"].poster.url, "https://image.tmdb.org/t/p/original/best-season-poster.jpg");
+    assert.equal(parseUnifiedCache(persistentData).trakt.image["season:seasons:555:1"].poster.url, "https://image.tmdb.org/t/p/original/best-season-poster.jpg");
     assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === "https://api.trakt.tv/shows/555?extended=cloud9,full,watchnow"));
+    assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === `${TEST_BACKEND_IMAGES_URL}?mode=chinese&seasons=555:1`));
     assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === TEST_TMDB_SEASON_IMAGES_URL));
+});
+
+test("posterImageMode=original 时季海报缺 show language/country 会补查 show detail", async () => {
+    const seasonPoster = "https://walter.trakt.tv/images/seasons/000/001/posters/original.jpg";
+    const seasonImagesUrl = "https://api.tmdb.org/3/tv/777/season/1/images?language=zh%2Cja&api_key=a0a4d50000eeb10604c5f9342c8b3f62";
+    const { result, persistentData, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/shows/555/seasons",
+        body: JSON.stringify([
+            {
+                number: 1,
+                first_aired: "2024-01-01T00:00:00.000Z",
+                images: {
+                    poster: [seasonPoster],
+                },
+                episodes: [],
+            },
+        ]),
+        argument: {
+            backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "original",
+        },
+        persistentData: createUnifiedPersistentData({
+            traktLinkIds: {
+                555: {
+                    ids: {
+                        trakt: 555,
+                        tmdb: 777,
+                    },
+                },
+            },
+        }),
+        httpGetMocks: {
+            [`${TEST_BACKEND_IMAGES_URL}?mode=original&seasons=555:1`]: "{}",
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&seasons=555:1`]: "{}",
+            "https://api.trakt.tv/shows/555?extended=cloud9,full,watchnow": JSON.stringify({
+                ids: {
+                    trakt: 555,
+                    tmdb: 777,
+                },
+                language: "ja",
+                country: "JP",
+            }),
+            [seasonImagesUrl]: createTmdbImagesResponse([
+                {
+                    iso_639_1: "ja",
+                    iso_3166_1: "US",
+                    file_path: "/ja-us-season-poster.jpg",
+                    vote_average: 10,
+                    vote_count: 100,
+                },
+                {
+                    iso_639_1: "ja",
+                    iso_3166_1: "JP",
+                    file_path: "/ja-jp-season-poster.jpg",
+                    vote_average: 1,
+                    vote_count: 1,
+                },
+            ]),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    const cache = parseUnifiedCache(persistentData);
+    assert.equal(payload[0].images.poster[0], "https://image.tmdb.org/t/p/w780/ja-jp-season-poster.jpg");
+    assert.equal(cache.trakt.image["original:seasons:555:1"].poster.url, "https://image.tmdb.org/t/p/original/ja-jp-season-poster.jpg");
+    assert.equal(cache.trakt.linkIds["555"].language, "ja");
+    assert.equal(cache.trakt.linkIds["555"].country, "JP");
+    assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === "https://api.trakt.tv/shows/555?extended=cloud9,full,watchnow"));
+});
+
+test("posterImageMode=original 时季海报缺 show country 会用 TMDb detail 补国家", async () => {
+    const seasonPoster = "https://walter.trakt.tv/images/seasons/000/001/posters/original.jpg";
+    const tmdbShowDetailUrl = "https://api.tmdb.org/3/tv/777?api_key=a0a4d50000eeb10604c5f9342c8b3f62";
+    const seasonImagesUrl = "https://api.tmdb.org/3/tv/777/season/1/images?language=zh%2Cja&api_key=a0a4d50000eeb10604c5f9342c8b3f62";
+    const { result, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/shows/555/seasons",
+        body: JSON.stringify([
+            {
+                number: 1,
+                first_aired: "2024-01-01T00:00:00.000Z",
+                images: {
+                    poster: [seasonPoster],
+                },
+                episodes: [],
+            },
+        ]),
+        argument: {
+            backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "original",
+        },
+        persistentData: createUnifiedPersistentData({
+            traktLinkIds: {
+                555: {
+                    ids: {
+                        trakt: 555,
+                        tmdb: 777,
+                    },
+                    language: "ja",
+                },
+            },
+        }),
+        httpGetMocks: {
+            [`${TEST_BACKEND_IMAGES_URL}?mode=original&seasons=555:1`]: "{}",
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&seasons=555:1`]: "{}",
+            "https://api.trakt.tv/shows/555?extended=cloud9,full,watchnow": JSON.stringify({
+                ids: {
+                    trakt: 555,
+                    tmdb: 777,
+                },
+                language: "ja",
+                country: null,
+            }),
+            [tmdbShowDetailUrl]: JSON.stringify({
+                original_language: "ja",
+                origin_country: ["JP"],
+            }),
+            [seasonImagesUrl]: createTmdbImagesResponse([
+                {
+                    iso_639_1: "ja",
+                    iso_3166_1: "US",
+                    file_path: "/ja-us-season-country-poster.jpg",
+                    vote_average: 10,
+                    vote_count: 100,
+                },
+                {
+                    iso_639_1: "ja",
+                    iso_3166_1: "JP",
+                    file_path: "/ja-jp-season-country-poster.jpg",
+                    vote_average: 1,
+                    vote_count: 1,
+                },
+            ]),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].images.poster[0], "https://image.tmdb.org/t/p/w780/ja-jp-season-country-poster.jpg");
+    assert.ok(httpLogs.some((entry) => entry.method === "GET" && entry.url === tmdbShowDetailUrl));
 });
 
 test("/shows/:id/seasons 没有 currentSeason 时仍会替换季海报", async () => {
@@ -1104,6 +1855,10 @@ test("/shows/:id/seasons 没有 currentSeason 时仍会替换季海报", async (
                 episodes: [],
             },
         ]),
+        argument: {
+            backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "chinese",
+        },
         persistentData: createUnifiedPersistentData({
             traktLinkIds: {
                 555: {
@@ -1111,10 +1866,14 @@ test("/shows/:id/seasons 没有 currentSeason 时仍会替换季海报", async (
                         trakt: 555,
                         tmdb: 777,
                     },
+                    language: "en",
+                    country: "US",
                 },
             },
         }),
         httpGetMocks: {
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&seasons=555:1`]: "{}",
+            [`${TEST_BACKEND_IMAGES_URL}?mode=original&seasons=555:1`]: "{}",
             [TEST_TMDB_SEASON_IMAGES_URL]: createTmdbImagesResponse([
                 {
                     iso_639_1: "zh",
@@ -1131,7 +1890,62 @@ test("/shows/:id/seasons 没有 currentSeason 时仍会替换季海报", async (
     assert.equal(payload[0].images.poster[0], "https://image.tmdb.org/t/p/w780/direct-season-poster.jpg");
 });
 
-test("chineseImageEnabled=false 时 season 不补 TMDb ID 且不替换季海报", async () => {
+test("/shows/:id/seasons 命中后端季图片缓存时写入新 season 本地 key 且不请求 TMDb", async () => {
+    const seasonPoster = "https://walter.trakt.tv/images/seasons/000/001/posters/original.jpg";
+    const { result, persistentData, httpLogs } = await runResponseCase({
+        url: "https://api.trakt.tv/shows/555/seasons",
+        body: JSON.stringify([
+            {
+                number: 1,
+                first_aired: "2024-01-01T00:00:00.000Z",
+                images: {
+                    poster: [seasonPoster],
+                },
+                episodes: [],
+            },
+        ]),
+        argument: {
+            backendBaseUrl: TEST_BACKEND_BASE_URL,
+            posterImageMode: "chinese",
+        },
+        persistentData: createUnifiedPersistentData({
+            traktLinkIds: {
+                555: {
+                    ids: {
+                        trakt: 555,
+                        tmdb: 777,
+                    },
+                    language: "en",
+                    country: "US",
+                },
+            },
+        }),
+        httpGetMocks: {
+            [`${TEST_BACKEND_IMAGES_URL}?mode=chinese&seasons=555:1`]: JSON.stringify({
+                seasons: {
+                    "555:1": {
+                        poster: {
+                            status: 1,
+                            url: "https://image.tmdb.org/t/p/original/backend-season-poster.jpg",
+                        },
+                    },
+                },
+            }),
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    const imageCache = parseUnifiedCache(persistentData).trakt.image;
+    assert.equal(payload[0].images.poster[0], "https://image.tmdb.org/t/p/w780/backend-season-poster.jpg");
+    assert.equal(imageCache["season:seasons:555:1"].poster.url, "https://image.tmdb.org/t/p/original/backend-season-poster.jpg");
+    assert.equal(imageCache["season:555:1"], undefined);
+    assert.equal(
+        httpLogs.some((entry) => entry.method === "GET" && entry.url === TEST_TMDB_SEASON_IMAGES_URL),
+        false,
+    );
+});
+
+test("posterImageMode=default 时 season 不补 TMDb ID 且不替换季海报", async () => {
     const seasonPoster = "https://walter.trakt.tv/images/seasons/000/001/posters/original.jpg";
     const { result, httpLogs } = await runResponseCase({
         url: "https://api.trakt.tv/shows/555/seasons",
@@ -1146,7 +1960,7 @@ test("chineseImageEnabled=false 时 season 不补 TMDb ID 且不替换季海报"
             },
         ]),
         argument: {
-            chineseImageEnabled: false,
+            posterImageMode: "default",
         },
         persistentData: createUnifiedPersistentData({
             traktLinkIds: {

@@ -6,13 +6,27 @@ import { WATCHNOW_REDIRECT_URL } from "../trakt_simplified_chinese/src/features/
 
 import { createUnifiedPersistentData, parseUnifiedCache, readFixture, runRequestCase, runResponseCase } from "./helpers/trakt-test-helpers.mjs";
 
-test("字符串参数第一位解析为 chineseImageEnabled，不兼容旧顺序", () => {
-    const parsed = normalizeArgument(applyArgumentStringConfig(createDefaultArgumentConfig(), "[false,true,true,false]"));
+test("字符串参数第一位解析为 posterImageMode，不兼容旧顺序", () => {
+    const parsed = normalizeArgument(applyArgumentStringConfig(createDefaultArgumentConfig(), "[original,true,true,false]"));
 
-    assert.equal(parsed.chineseImageEnabled, false);
+    assert.equal(parsed.posterImageMode, "original");
     assert.equal(parsed.historyEpisodesMergedByShow, true);
     assert.equal(parsed.googleTranslationEnabled, true);
     assert.equal(parsed.playerButtonEnabled.eplayerx, false);
+});
+
+test("posterImageMode 非法值回退 chinese", () => {
+    const parsed = normalizeArgument(applyArgumentStringConfig(createDefaultArgumentConfig(), "[bogus]"));
+
+    assert.equal(parsed.posterImageMode, "chinese");
+});
+
+test("posterImageMode 支持中文选项标签", () => {
+    const parsed = normalizeArgument(applyArgumentStringConfig(createDefaultArgumentConfig(), "[原片语言]"));
+    const defaultParsed = normalizeArgument(applyArgumentStringConfig(createDefaultArgumentConfig(), "[原图]"));
+
+    assert.equal(parsed.posterImageMode, "original");
+    assert.equal(defaultParsed.posterImageMode, "default");
 });
 
 test("historyEpisodesMergedByShow=false 时历史剧集请求不改写 limit", async () => {

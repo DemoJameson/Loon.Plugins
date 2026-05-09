@@ -224,7 +224,7 @@ test("live script: /movies/:id 会在 /translations/zh 写入本地缓存后应�
         url: `https://api.trakt.tv/movies/${sample.traktId}`,
         argument: {
             backendBaseUrl: config.backendBaseUrl,
-            chineseImageEnabled: false,
+            posterImageMode: "default",
         },
         headers: createScriptRequestHeaders(config, {
             "user-agent": "Rippple/1.0",

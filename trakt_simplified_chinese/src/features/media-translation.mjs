@@ -63,10 +63,13 @@ async function handleMediaDetail() {
         context.env.log(`Trakt backend override read failed: ${error}`);
     }
 
-    if (context.argument.chineseImageEnabled) {
-        await traktTranslationHelper.enhanceImagesInPlace(data, mediaType, {
+    if (traktTranslationHelper.shouldReplaceImages()) {
+        await traktTranslationHelper.replaceImagesInPlace(data, mediaType, {
             ...ref,
             tmdbId: data?.ids?.tmdb ?? null,
+            imageMode: context.argument.posterImageMode,
+            language: data?.language ?? null,
+            country: data?.country ?? null,
         });
     }
 
@@ -125,27 +128,42 @@ async function handleSeasonEpisodesList() {
     if (traktLinkIds.cacheEpisodeIdsFromSeasonList(linkCache, target.showId, seasons)) {
         cacheUtils.saveLinkIdsCache(context.env, linkCache);
     }
-    const shouldEnhanceSeasonImages =
-        context.argument.chineseImageEnabled && seasons.some((season) => commonUtils.isArray(season?.images?.poster) && season.images.poster.length > 0);
-    let showTmdbId = shouldEnhanceSeasonImages ? (traktLinkIds.getLinkIdsCacheEntry(linkCache, target.showId)?.ids?.tmdb ?? null) : null;
-    if (shouldEnhanceSeasonImages && commonUtils.isNullish(showTmdbId)) {
+    const shouldReplaceSeasonImages =
+        traktTranslationHelper.shouldReplaceImages() && seasons.some((season) => commonUtils.isArray(season?.images?.poster) && season.images.poster.length > 0);
+    const cachedShowEntry = shouldReplaceSeasonImages ? traktLinkIds.getLinkIdsCacheEntry(linkCache, target.showId) : null;
+    let showTmdbId = cachedShowEntry?.ids?.tmdb ?? null;
+    let showLanguage = cachedShowEntry?.language ?? null;
+    let showCountry = cachedShowEntry?.country ?? null;
+    const shouldFetchShowDetailForSeasonImages =
+        shouldReplaceSeasonImages &&
+        (commonUtils.isNullish(showTmdbId) || (context.argument.posterImageMode === "original" && (commonUtils.isNullish(showLanguage) || commonUtils.isNullish(showCountry))));
+    if (shouldFetchShowDetailForSeasonImages) {
         try {
-            const showEntry = await traktLinkIds.ensureMediaIdsCacheEntry(
-                traktTranslationHelper.fetchMediaDetail,
-                (cache) => cacheUtils.saveLinkIdsCache(context.env, cache),
-                linkCache,
-                mediaTypes.MEDIA_TYPE.SHOW,
-                target.showId,
-            );
+            const showEntry = commonUtils.isNullish(showTmdbId)
+                ? await traktLinkIds.ensureMediaIdsCacheEntry(
+                      traktTranslationHelper.fetchMediaDetail,
+                      (cache) => cacheUtils.saveLinkIdsCache(context.env, cache),
+                      linkCache,
+                      mediaTypes.MEDIA_TYPE.SHOW,
+                      target.showId,
+                  )
+                : await traktTranslationHelper.fetchMediaDetail(mediaTypes.MEDIA_TYPE.SHOW, target.showId).then((payload) => {
+                      if (traktLinkIds.cacheMediaIdsFromDetailResponse(linkCache, mediaTypes.MEDIA_TYPE.SHOW, target, payload)) {
+                          cacheUtils.saveLinkIdsCache(context.env, linkCache);
+                      }
+                      return traktLinkIds.getLinkIdsCacheEntry(linkCache, target.showId);
+                  });
             showTmdbId = showEntry?.ids?.tmdb ?? null;
+            showLanguage = showEntry?.language ?? null;
+            showCountry = showEntry?.country ?? null;
         } catch (error) {
             context.env.log(`Trakt show TMDb id lookup failed for show=${target.showId}: ${error}`);
         }
     }
 
-    const seasonImagePromise = shouldEnhanceSeasonImages
-        ? traktTranslationHelper.enhanceSeasonImagesInPlace(seasons, target.showId, showTmdbId).catch((error) => {
-              context.env.log(`Trakt season image enhancement failed for show=${target.showId}: ${error}`);
+    const seasonImagePromise = shouldReplaceSeasonImages
+        ? traktTranslationHelper.replaceSeasonImagesInPlace(seasons, target.showId, showTmdbId, showLanguage, showCountry).catch((error) => {
+              context.env.log(`Trakt season image replacement failed for show=${target.showId}: ${error}`);
               return false;
           })
         : Promise.resolve(false);

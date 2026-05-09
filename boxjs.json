@@ -10,7 +10,7 @@
             "id": "demojameson_trakt_simplified_chinese",
             "name": "Trakt 增强",
             "keys": [
-                "@dj_trakt_boxjs_configs.chineseImageEnabled",
+                "@dj_trakt_boxjs_configs.posterImageMode",
                 "@dj_trakt_boxjs_configs.historyEpisodesMergedByShow",
                 "@dj_trakt_boxjs_configs.googleTranslationEnabled",
                 "@dj_trakt_boxjs_configs.eplayerxEnabled",
@@ -28,11 +28,25 @@
             ],
             "settings": [
                 {
-                    "id": "@dj_trakt_boxjs_configs.chineseImageEnabled",
-                    "name": "中文海报",
-                    "val": true,
-                    "type": "boolean",
-                    "desc": "启用后会使用 TMDb 中文图片替换电影、剧集和季的海报"
+                    "id": "@dj_trakt_boxjs_configs.posterImageMode",
+                    "name": "海报语言",
+                    "val": "chinese",
+                    "type": "select",
+                    "desc": "中文使用 TMDb 中文图片；原片语言使用 TMDb 影片原始语言图片；原图保留 Trakt 原图",
+                    "items": [
+                        {
+                            "key": "chinese",
+                            "label": "中文"
+                        },
+                        {
+                            "key": "original",
+                            "label": "原片语言"
+                        },
+                        {
+                            "key": "default",
+                            "label": "原图"
+                        }
+                    ]
                 },
                 {
                     "id": "@dj_trakt_boxjs_configs.historyEpisodesMergedByShow",
