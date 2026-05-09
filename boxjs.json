@@ -30,17 +30,17 @@
                 {
                     "id": "@dj_trakt_boxjs_configs.posterImageMode",
                     "name": "海报语言",
-                    "val": "chinese",
+                    "val": "original",
                     "type": "select",
-                    "desc": "中文使用 TMDb 中文图片；原片语言使用 TMDb 影片原始语言图片；原图保留 Trakt 原图",
+                    "desc": "原片语言使用 TMDb 影片原始语言图片；中文使用 TMDb 中文图片；原图保留 Trakt 原图",
                     "items": [
-                        {
-                            "key": "chinese",
-                            "label": "中文"
-                        },
                         {
                             "key": "original",
                             "label": "原片语言"
+                        },
+                        {
+                            "key": "chinese",
+                            "label": "中文"
                         },
                         {
                             "key": "default",

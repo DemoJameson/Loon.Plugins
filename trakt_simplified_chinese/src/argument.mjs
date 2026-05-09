@@ -110,7 +110,7 @@ function normalizePosterImageMode(value) {
     if (labelMap[normalized]) {
         return labelMap[normalized];
     }
-    return ["default", "chinese", "original"].includes(normalized) ? normalized : "chinese";
+    return ["default", "chinese", "original"].includes(normalized) ? normalized : "original";
 }
 
 function normalizeArgument(argument) {

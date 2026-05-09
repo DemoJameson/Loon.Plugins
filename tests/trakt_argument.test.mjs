@@ -15,10 +15,10 @@ test("字符串参数第一位解析为 posterImageMode，不兼容旧顺序", (
     assert.equal(parsed.playerButtonEnabled.eplayerx, false);
 });
 
-test("posterImageMode 非法值回退 chinese", () => {
+test("posterImageMode 非法值回退 original", () => {
     const parsed = normalizeArgument(applyArgumentStringConfig(createDefaultArgumentConfig(), "[bogus]"));
 
-    assert.equal(parsed.posterImageMode, "chinese");
+    assert.equal(parsed.posterImageMode, "original");
 });
 
 test("posterImageMode 支持中文选项标签", () => {

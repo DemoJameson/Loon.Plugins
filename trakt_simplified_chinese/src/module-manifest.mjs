@@ -25,12 +25,12 @@ const BOXJS_CONFIG_KEY = "dj_trakt_boxjs_configs";
 const argumentFields = [
     {
         key: "posterImageMode",
-        defaultValue: "chinese",
+        defaultValue: "original",
         type: "select",
-        options: ["中文", "原片语言", "原图"],
-        optionValues: ["chinese", "original", "default"],
+        options: ["原片语言", "中文", "原图"],
+        optionValues: ["original", "chinese", "default"],
         tag: "海报语言",
-        desc: "中文使用 TMDb 中文图片；原片语言使用 TMDb 影片原始语言图片；原图保留 Trakt 原图",
+        desc: "原片语言使用 TMDb 影片原始语言图片；中文使用 TMDb 中文图片；原图保留 Trakt 原图",
     },
     {
         key: "historyEpisodesMergedByShow",
