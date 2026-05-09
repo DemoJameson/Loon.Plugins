@@ -250,6 +250,10 @@ function runResponseCase(input) {
     return runScript({
         hasResponse: true,
         ...input,
+        headers: {
+            "user-agent": "Trakt/1.0",
+            ...input?.headers,
+        },
     });
 }
 

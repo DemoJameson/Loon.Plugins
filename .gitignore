@@ -6,11 +6,6 @@ node_modules/
 .idea/
 .ai/
 .claude/
-.sisyphus/
 
 .trakt-live-test.local.json
-/AGENTS.md
-.serena/
-
 .vercel
-.env*.local

@@ -189,8 +189,12 @@ function getPosterImageMode() {
     return mode === POSTER_IMAGE_MODE.CHINESE || mode === POSTER_IMAGE_MODE.ORIGINAL ? mode : POSTER_IMAGE_MODE.DEFAULT;
 }
 
+function isPosterImageReplacementUserAgent(userAgent = globalThis.$ctx?.userAgent) {
+    return /^(Trakt|Rippple)/i.test(String(userAgent ?? "").trim());
+}
+
 function shouldReplaceImages() {
-    return getPosterImageMode() !== POSTER_IMAGE_MODE.DEFAULT;
+    return getPosterImageMode() !== POSTER_IMAGE_MODE.DEFAULT && isPosterImageReplacementUserAgent();
 }
 
 function getImageFetchModes() {
@@ -1441,6 +1445,7 @@ export {
     getOverrideForTarget,
     getOverrideFromTable,
     hydrateFromBackend,
+    isPosterImageReplacementUserAgent,
     isScriptInitiatedTranslationRequest,
     loadTranslationOverrides,
     MEDIA_CONFIG,
