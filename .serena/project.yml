@@ -36,7 +36,7 @@ encoding: "utf-8"
 # line ending convention to use when writing source files.
 # Possible values: unset (use global setting), "lf", "crlf", or "native" (platform default)
 # This does not affect Serena's own files (e.g. memories and configuration files), which always use native line endings.
-line_ending:
+line_ending: "lf"
 
 # The language backend to use for this project.
 # If not set, the global setting from serena_config.yml is used.

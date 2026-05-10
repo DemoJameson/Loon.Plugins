@@ -1046,8 +1046,9 @@ function applyOverrideToTranslationObject(target, translationOverrides) {
     }
 
     translationCache.TRANSLATION_FIELDS.forEach((field) => {
-        if (!translationCache.isEmptyTranslationValue(translationOverrides[field])) {
-            target[field] = translationOverrides[field];
+        const normalizedValue = translationCache.normalizeTranslationText(translationOverrides[field]);
+        if (!translationCache.isEmptyTranslationValue(normalizedValue)) {
+            target[field] = normalizedValue;
         }
     });
 

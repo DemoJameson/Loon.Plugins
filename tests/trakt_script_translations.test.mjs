@@ -286,6 +286,33 @@ test("/translations/zh 混合来源时只转换来自 hk 或 tw 的字段", asyn
     });
 });
 
+test("/translations/zh 应用中文翻译前会 trim 首尾空白和全角空格", async () => {
+    const { result, persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
+        body: JSON.stringify([
+            {
+                language: "zh",
+                country: "cn",
+                title: "　 港版标题 　",
+                overview: "\u3000中文简介\t",
+                tagline: "  中文标语　",
+            },
+        ]),
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].title, "港版标题");
+    assert.equal(payload[0].overview, "中文简介");
+    assert.equal(payload[0].tagline, "中文标语");
+
+    const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["movie:123"];
+    assert.deepEqual(cacheEntry.translation, {
+        title: "港版标题",
+        overview: "中文简介",
+        tagline: "中文标语",
+    });
+});
+
 [
     {
         name: "空响应体",

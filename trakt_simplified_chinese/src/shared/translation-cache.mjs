@@ -16,6 +16,15 @@ function isEmptyTranslationValue(value) {
     return value === undefined || value === null || value === "";
 }
 
+function normalizeTranslationText(value) {
+    if (value === undefined || value === null) {
+        return null;
+    }
+
+    const normalized = String(value).trim();
+    return normalized || null;
+}
+
 function extractEpisodePlaceholderNumber(value) {
     const match = String(value ?? "").match(EPISODE_PLACEHOLDER_TITLE_RE);
     if (!match) {
@@ -66,12 +75,29 @@ function normalizeTranslationPayload(translation) {
     }
 
     const normalized = {
-        title: translation.title ?? null,
-        overview: translation.overview ?? null,
-        tagline: translation.tagline ?? null,
+        title: normalizeTranslationText(translation.title),
+        overview: normalizeTranslationText(translation.overview),
+        tagline: normalizeTranslationText(translation.tagline),
     };
 
     return hasUsefulTranslation(normalized) ? normalized : null;
+}
+
+function normalizeTranslationFieldsInPlace(translation) {
+    if (!translation || typeof translation !== "object") {
+        return translation;
+    }
+
+    TRANSLATION_FIELDS.forEach((field) => {
+        const normalizedValue = normalizeTranslationText(translation[field]);
+        if (normalizedValue === null) {
+            delete translation[field];
+            return;
+        }
+        translation[field] = normalizedValue;
+    });
+
+    return translation;
 }
 
 function findTranslationByRegion(items, region) {
@@ -123,6 +149,7 @@ function normalizeTranslations(items) {
     TRANSLATION_FIELDS.forEach((field) => {
         copyFallbackFieldToCnTranslation(cnTranslation, items, field);
     });
+    normalizeTranslationFieldsInPlace(cnTranslation);
 
     cnTranslation.status = originalCnHasTitle ? CACHE_STATUS.FOUND : hasAnyChineseField ? CACHE_STATUS.PARTIAL_FOUND : CACHE_STATUS.NOT_FOUND;
 
@@ -173,7 +200,9 @@ export {
     hasUsefulTranslation,
     isChineseTranslation,
     isEmptyTranslationValue,
+    normalizeTranslationFieldsInPlace,
     normalizeTranslationPayload,
+    normalizeTranslationText,
     normalizeTranslations,
     pickCnTranslation,
     sortTranslations,
