@@ -180,6 +180,42 @@ function createUpNextBody() {
     ]);
 }
 
+function createWatchingEpisodeBody() {
+    return JSON.stringify({
+        started_at: "2026-05-14T10:00:00.000Z",
+        action: "scrobble",
+        type: "episode",
+        show: {
+            title: "Original Show Title",
+            overview: "Original Show Overview",
+            first_aired: "2025-01-01T00:00:00.000Z",
+            network: "HBO",
+            tagline: "Original Show Tagline",
+            ids: {
+                trakt: 555,
+            },
+        },
+        episode: {
+            season: 1,
+            number: 2,
+            title: "Original Episode Title",
+            overview: "Original Episode Overview",
+            ids: {
+                trakt: 1001,
+            },
+        },
+    });
+}
+
+function createWatchingMovieBody() {
+    return JSON.stringify({
+        started_at: "2026-05-14T10:00:00.000Z",
+        action: "scrobble",
+        type: "movie",
+        movie: JSON.parse(readFixture("recommendations-movies.json"))[0],
+    });
+}
+
 function createListWrapperBody() {
     return JSON.stringify([
         {
@@ -695,6 +731,58 @@ test("handleWrapperMediaList 按 wrapper 路由分组生效", async (t) => {
         await t.test(item.name, async () => {
             const { result } = await runResponseCase({
                 url: item.url,
+                body: item.body,
+                persistentData: item.persistentData,
+            });
+
+            item.assertPayload(JSON.parse(result.body));
+        });
+    }
+});
+
+test("handleWrapperMediaObject 覆盖 watching 单对象响应", async (t) => {
+    const cases = [
+        {
+            name: "watching episode object",
+            body: createWatchingEpisodeBody(),
+            persistentData: createUnifiedPersistentData({
+                traktTranslation: {
+                    "show:555": createMediaTranslationEntry({
+                        translation: {
+                            title: "中文剧名",
+                            overview: "中文剧集简介",
+                            tagline: "中文剧集标语",
+                        },
+                    }),
+                    "episode:555:1:2": createMediaTranslationEntry({
+                        translation: {
+                            title: "第二集中文",
+                            overview: "第二集中文简介",
+                            tagline: "第二集中文标语",
+                        },
+                    }),
+                },
+            }),
+            assertPayload(payload) {
+                assert.equal(payload.show.title, "中文剧名");
+                assert.equal(payload.episode.title, "第二集中文");
+            },
+        },
+        {
+            name: "watching movie object",
+            body: createWatchingMovieBody(),
+            persistentData: createMoviePersistentData(),
+            assertPayload(payload) {
+                assert.equal(payload.movie.title, "中文电影");
+                assert.equal(payload.movie.overview, "中文简介");
+            },
+        },
+    ];
+
+    for (const item of cases) {
+        await t.test(item.name, async () => {
+            const { result } = await runResponseCase({
+                url: "https://apiz.trakt.tv/users/me/watching?extended=cloud9,full",
                 body: item.body,
                 persistentData: item.persistentData,
             });
@@ -1406,6 +1494,7 @@ test("response phase migrated conditions 逐条覆盖且互斥", () => {
         ["directMedia.related", "https://apiz.trakt.tv/movies/531178/related?extended=cloud9,full"],
         ["directMedia.related", "https://apiz.trakt.tv/shows/531178/related?extended=cloud9,full"],
         ["wrapperMedia.popularNext", "https://api.trakt.tv/media/popular/next"],
+        ["users.watching", "https://apiz.trakt.tv/users/me/watching?extended=cloud9,full"],
         ["search.media", "https://apiz.trakt.tv/search/movie,show?extended=cloud9,full&limit=100&page=1&query=%E5%AE%B6%E5%BC%91%E6%9C%8D%E5%8A%A1"],
         ["search.media", "https://apiz.trakt.tv/search/movie,show/exact?extended=cloud9,full&limit=100&page=1&query=%E5%AE%B6%E5%BC%91%E6%9C%8D%E5%8A%A1"],
         ["search.media", "https://apiz.trakt.tv/search/show,movie?extended=cloud9,full&limit=100&page=1&query=%E5%AE%B6%E5%BC%91%E6%9C%8D%E5%8A%A1"],

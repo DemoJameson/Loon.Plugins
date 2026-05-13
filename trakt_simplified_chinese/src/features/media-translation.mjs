@@ -32,6 +32,19 @@ async function handleWrapperMediaList() {
     return traktTranslationHelper.translateWrapperItems();
 }
 
+async function handleWrapperMediaObject() {
+    const context = globalThis.$ctx;
+    const sourceBody = context.responseBody;
+    const parsed = JSON.parse(sourceBody);
+    if (!commonUtils.isPlainObject(parsed) || (!parsed.show && !parsed.episode && !parsed.movie)) {
+        return { type: "respond", body: sourceBody };
+    }
+
+    const wrapped = [parsed];
+    await traktTranslationHelper.translateMediaItemsInPlace(wrapped, sourceBody);
+    return { type: "respond", body: JSON.stringify(wrapped[0]) };
+}
+
 async function handleMediaDetail() {
     const context = globalThis.$ctx;
     const data = JSON.parse(context.responseBody);
@@ -287,4 +300,13 @@ async function handleMonthlyReview() {
     return { type: "respond", body: JSON.stringify(data) };
 }
 
-export { handleCurrentSeasonRequest, handleDirectMediaList, handleMediaDetail, handleMonthlyReview, handleSeasonEpisodesList, handleTranslations, handleWrapperMediaList };
+export {
+    handleCurrentSeasonRequest,
+    handleDirectMediaList,
+    handleMediaDetail,
+    handleMonthlyReview,
+    handleSeasonEpisodesList,
+    handleTranslations,
+    handleWrapperMediaList,
+    handleWrapperMediaObject,
+};
