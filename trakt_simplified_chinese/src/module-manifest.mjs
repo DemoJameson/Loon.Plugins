@@ -79,7 +79,7 @@ const argumentFields = [
         defaultValue: false,
         type: "boolean",
         tag: "借助快捷指令跳转",
-        desc: `启用后播放器跳转链接改为通过快捷指令打开 DeepLink，用于规避弹框确认。Safari浏览器需处于非无痕模式，配置快捷指令 ${SHORTCUT_URL}`,
+        desc: `启用后播放器跳转链接改为通过快捷指令打开 DeepLink，用于规避弹框确认。Safari浏览器需处于非无痕模式，配套快捷指令 ${SHORTCUT_URL}`,
     },
     {
         key: "backendBaseUrl",

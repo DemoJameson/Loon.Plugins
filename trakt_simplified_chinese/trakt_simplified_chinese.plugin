@@ -13,7 +13,7 @@ characterTranslationEnabled = switch, "true", tag=用豆瓣翻译角色名, desc
 eplayerxEnabled = switch, "true", tag=EplayerX 跳转按钮, desc=启用后在 Trakt 和 SofaTime 中添加 EplayerX 跳转按钮
 forwardEnabled = switch, "true", tag=Forward 跳转按钮, desc=启用后在 Trakt 和 SofaTime 中添加 Forward 跳转按钮
 infuseEnabled = switch, "true", tag=Infuse 跳转按钮, desc=启用后在 Trakt 和 SofaTime 中添加 Infuse 跳转按钮
-useShortcutsJumpEnabled = switch, "false", tag=借助快捷指令跳转, desc=启用后播放器跳转链接改为通过快捷指令打开 DeepLink，用于规避弹框确认。Safari浏览器需处于非无痕模式，配置快捷指令 https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d
+useShortcutsJumpEnabled = switch, "false", tag=借助快捷指令跳转, desc=启用后播放器跳转链接改为通过快捷指令打开 DeepLink，用于规避弹框确认。Safari浏览器需处于非无痕模式，配套快捷指令 https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d
 backendBaseUrl = input, "https://proxy-modules.demojameson.de5.net", tag=翻译缓存接口, desc=用于批量获取 Trakt 的中文翻译，一般留空即可
 debugEnabled = switch, "false", tag=调试模式, desc=启用后每次都会刷新 translation-overrides 覆盖数据
 

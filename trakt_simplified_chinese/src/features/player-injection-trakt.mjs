@@ -46,8 +46,20 @@ function buildWatchnowFavoriteSource(source, regionCode) {
     return `${regionCode || WATCHNOW_DEFAULT_REGION}-${source}`;
 }
 
-function buildWatchnowRedirectLink(deeplink) {
-    return deeplink ? `${WATCHNOW_REDIRECT_URL}?deeplink=${encodeURIComponent(deeplink)}` : "";
+function isUniversalLink(link) {
+    return link.startsWith("https://");
+}
+
+function buildWatchnowLink(link) {
+    if (!link) {
+        return "";
+    }
+
+    if (isUniversalLink(link)) {
+        return link;
+    }
+
+    return `${WATCHNOW_REDIRECT_URL}?deeplink=${encodeURIComponent(link)}`;
 }
 
 function buildShortcutsJumpLink(deeplink) {
@@ -204,7 +216,7 @@ function buildCustomWatchnowEntries(target, watchnowContext, enabledPlayerTypes)
                 return null;
             }
 
-            const link = buildWatchnowRedirectLink(deeplink);
+            const link = buildWatchnowLink(deeplink);
             return link ? createWatchnowLinkEntry(source, link) : null;
         })
         .filter(Boolean);

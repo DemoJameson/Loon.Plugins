@@ -295,6 +295,61 @@ test("Sofa streaming availability 会注入自定义 streaming options", async (
     assert.ok(payload.streamingOptions.us.every((item) => typeof item.link === "string" && item.link.length > 0));
 });
 
+test("Sofa streaming availability 默认使用 EplayerX Universal Link movie 链接", async () => {
+    const { result } = await runResponseCase({
+        url: "https://streaming-availability.p.rapidapi.com/shows/tt1234567",
+        body: readFixture("sofa-streaming-availability.json"),
+        headers: {
+            "user-agent": "Sofa Time/1.0",
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    const eplayerxOption = payload.streamingOptions.us.find((item) => item.service.id === "eplayerx");
+    assert.equal(eplayerxOption.link, "https://eplayerx.com/tmdb-info/detail?id=123&type=movie");
+    assert.equal(eplayerxOption.videoLink, "https://eplayerx.com/tmdb-info/detail?id=123&type=movie");
+});
+
+test("Sofa streaming availability 默认使用 EplayerX Universal Link TV 链接且不追加季集参数", async () => {
+    const { result } = await runResponseCase({
+        url: "https://streaming-availability.p.rapidapi.com/shows/tt1234567",
+        body: JSON.stringify({
+            tmdbId: "tv/299167",
+            streamingOptions: {
+                us: [],
+            },
+            seasons: [
+                {
+                    number: 1,
+                    streamingOptions: {
+                        us: [],
+                    },
+                    episodes: [
+                        {
+                            number: 2,
+                            streamingOptions: {
+                                us: [],
+                            },
+                        },
+                    ],
+                },
+            ],
+        }),
+        headers: {
+            "user-agent": "Sofa Time/1.0",
+        },
+    });
+
+    const payload = JSON.parse(result.body);
+    const showOption = payload.streamingOptions.us.find((item) => item.service.id === "eplayerx");
+    const seasonOption = payload.seasons[0].streamingOptions.us.find((item) => item.service.id === "eplayerx");
+    const episodeOption = payload.seasons[0].episodes[0].streamingOptions.us.find((item) => item.service.id === "eplayerx");
+    assert.equal(showOption.link, "https://eplayerx.com/tmdb-info/detail?id=299167&type=tv");
+    assert.equal(seasonOption.link, "https://eplayerx.com/tmdb-info/detail?id=299167&type=tv");
+    assert.equal(episodeOption.link, "https://eplayerx.com/tmdb-info/detail?id=299167&type=tv");
+    assert.equal(episodeOption.videoLink, "https://eplayerx.com/tmdb-info/detail?id=299167&type=tv");
+});
+
 test("Sofa streaming availability 在 404 时会反查 IMDb 到 TMDb 并返回注入结果", async () => {
     const lookupUrl = "https://film-show-ratings.p.rapidapi.com/item/?id=tt1234567";
     const { result } = await runResponseCase({

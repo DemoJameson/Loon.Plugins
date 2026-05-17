@@ -100,6 +100,52 @@ test("/movies/:id/watchnow 会根据缓存 ids 注入自定义播放器条目", 
     );
 });
 
+test("/movies/:id/watchnow 默认使用 EplayerX Universal Link", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/watchnow",
+        body: readFixture("movie-watchnow.json"),
+        persistentData: createUnifiedPersistentData({
+            traktLinkIds: JSON.parse(
+                createWatchnowIdsCache({
+                    123: createWatchnowIdsEntry({
+                        ids: {
+                            tmdb: 456,
+                            imdb: "tt123",
+                        },
+                    }),
+                }),
+            ),
+        }),
+    });
+
+    const payload = JSON.parse(result.body);
+    const entry = payload.us.free.find((item) => item.source === "eplayerx");
+    assert.equal(entry.link, "https://eplayerx.com/tmdb-info/detail?id=456&type=movie");
+});
+
+test("/episodes/:id/watchnow 默认使用 EplayerX Universal Link 并追加季集参数", async () => {
+    const { result } = await runResponseCase({
+        url: "https://api.trakt.tv/episodes/1001/watchnow",
+        body: readFixture("movie-watchnow.json"),
+        persistentData: createUnifiedPersistentData({
+            traktLinkIds: JSON.parse(
+                createWatchnowIdsCache({
+                    1001: createEpisodeWatchnowIdsEntry({
+                        showIds: {
+                            trakt: 555,
+                            tmdb: 777,
+                        },
+                    }),
+                }),
+            ),
+        }),
+    });
+
+    const payload = JSON.parse(result.body);
+    const entry = payload.us.free.find((item) => item.source === "eplayerx");
+    assert.equal(entry.link, "https://eplayerx.com/tmdb-info/detail?id=777&type=tv&traktSeason=1&traktEpisode=2");
+});
+
 test("/movies/:id/watchnow 在禁用部分 player button 时只注入启用的播放器", async () => {
     const { result } = await runResponseCase({
         url: "https://api.trakt.tv/movies/123/watchnow",

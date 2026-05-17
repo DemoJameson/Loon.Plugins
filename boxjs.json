@@ -96,7 +96,7 @@
                     "name": "借助快捷指令跳转",
                     "val": false,
                     "type": "boolean",
-                    "desc": "启用后播放器跳转链接改为通过快捷指令打开 DeepLink，用于规避弹框确认。Safari浏览器需处于非无痕模式，配置快捷指令 https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d"
+                    "desc": "启用后播放器跳转链接改为通过快捷指令打开 DeepLink，用于规避弹框确认。Safari浏览器需处于非无痕模式，配套快捷指令 https://www.icloud.com/shortcuts/9238bef05b144159a4351c2fa9e2570d"
                 },
                 {
                     "id": "@dj_trakt_boxjs_configs.backendBaseUrl",

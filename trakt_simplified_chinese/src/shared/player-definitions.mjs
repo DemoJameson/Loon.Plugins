@@ -100,15 +100,25 @@ function buildEplayerXDeeplink(target, deeplinkContext) {
         return "";
     }
 
+    const baseUrl = "https://eplayerx.com/tmdb-info/detail";
+
     if (target.mediaType === mediaTypes.MEDIA_TYPE.MOVIE && commonUtils.isNonNullish(deeplinkContext.tmdbId)) {
-        return `eplayerx://tmdb-info/detail?id=${deeplinkContext.tmdbId}&type=movie`;
+        return `${baseUrl}?id=${deeplinkContext.tmdbId}&type=movie`;
     }
 
     if (
         (target.mediaType === mediaTypes.MEDIA_TYPE.SHOW || target.mediaType === mediaTypes.MEDIA_TYPE.EPISODE) &&
         commonUtils.isNonNullish(deeplinkContext.showTmdbId ?? deeplinkContext.tmdbId)
     ) {
-        return `eplayerx://tmdb-info/detail?id=${deeplinkContext.showTmdbId ?? deeplinkContext.tmdbId}&type=tv`;
+        const link = `${baseUrl}?id=${deeplinkContext.showTmdbId ?? deeplinkContext.tmdbId}&type=tv`;
+        if (commonUtils.isNonNullish(deeplinkContext.seasonNumber)) {
+            const seasonLink = `${link}&traktSeason=${deeplinkContext.seasonNumber}`;
+            if (commonUtils.isNonNullish(deeplinkContext.episodeNumber)) {
+                return `${seasonLink}&traktEpisode=${deeplinkContext.episodeNumber}`;
+            }
+            return seasonLink;
+        }
+        return link;
     }
 
     return "";
