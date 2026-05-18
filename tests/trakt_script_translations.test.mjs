@@ -328,6 +328,31 @@ test("/translations/zh 应用中文翻译前会 trim 首尾空白和全角空格
     });
 });
 
+test("/translations/zh 会把简介中间连续两个或多个全角空格转成换行", async () => {
+    const { result, persistentData } = await runResponseCase({
+        url: "https://api.trakt.tv/movies/123/translations/zh?extended=all",
+        body: JSON.stringify([
+            {
+                language: "zh",
+                country: "cn",
+                title: "中文标题",
+                overview: "第一段　　第二段　　　第三段",
+                tagline: "中文标语",
+            },
+        ]),
+    });
+
+    const payload = JSON.parse(result.body);
+    assert.equal(payload[0].overview, "第一段\n第二段\n第三段");
+
+    const cacheEntry = parseUnifiedCache(persistentData).trakt.translation["movie:123"];
+    assert.deepEqual(cacheEntry.translation, {
+        title: "中文标题",
+        overview: "第一段\n第二段\n第三段",
+        tagline: "中文标语",
+    });
+});
+
 [
     {
         name: "空响应体",

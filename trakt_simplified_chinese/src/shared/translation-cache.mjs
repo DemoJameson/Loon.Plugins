@@ -5,6 +5,7 @@ import * as chineseScriptConverter from "./chinese-script-converter.mjs";
 const TRANSLATION_FIELDS = ["title", "overview", "tagline"];
 const TRANSLATION_FALLBACK_REGIONS = ["sg", "tw", "hk"];
 const EPISODE_PLACEHOLDER_TITLE_RE = /^\s*episode\s+0*(\d+)\s*$/i;
+const OVERVIEW_FULL_WIDTH_SPACE_BREAK_RE = /\u3000{2,}/g;
 
 const CACHE_STATUS = {
     FOUND: 1,
@@ -23,6 +24,20 @@ function normalizeTranslationText(value) {
 
     const normalized = String(value).trim();
     return normalized || null;
+}
+
+function normalizeTranslationFieldValue(field, value) {
+    const normalized = normalizeTranslationText(value);
+    if (normalized === null) {
+        return null;
+    }
+
+    const simplified = chineseScriptConverter.convertTraditionalChineseToSimplified(normalized);
+    if (field === "overview") {
+        return normalizeTranslationText(simplified.replace(OVERVIEW_FULL_WIDTH_SPACE_BREAK_RE, "\n"));
+    }
+
+    return simplified;
 }
 
 function extractEpisodePlaceholderNumber(value) {
@@ -75,9 +90,9 @@ function normalizeTranslationPayload(translation) {
     }
 
     const normalized = {
-        title: normalizeTranslationText(translation.title),
-        overview: normalizeTranslationText(translation.overview),
-        tagline: normalizeTranslationText(translation.tagline),
+        title: normalizeTranslationFieldValue("title", translation.title),
+        overview: normalizeTranslationFieldValue("overview", translation.overview),
+        tagline: normalizeTranslationFieldValue("tagline", translation.tagline),
     };
 
     return hasUsefulTranslation(normalized) ? normalized : null;
@@ -89,12 +104,12 @@ function normalizeTranslationFieldsInPlace(translation) {
     }
 
     TRANSLATION_FIELDS.forEach((field) => {
-        const normalizedValue = normalizeTranslationText(translation[field]);
+        const normalizedValue = normalizeTranslationFieldValue(field, translation[field]);
         if (normalizedValue === null) {
             delete translation[field];
             return;
         }
-        translation[field] = chineseScriptConverter.convertTraditionalChineseToSimplified(normalizedValue);
+        translation[field] = normalizedValue;
     });
 
     return translation;
@@ -203,6 +218,7 @@ export {
     normalizeTranslationFieldsInPlace,
     normalizeTranslationPayload,
     normalizeTranslations,
+    normalizeTranslationFieldValue,
     normalizeTranslationText,
     pickCnTranslation,
     sortTranslations,
