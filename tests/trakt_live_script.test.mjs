@@ -1872,15 +1872,6 @@ test("live script: request route coverage matrix covers all request phase routes
                 assert.equal(result.url, "https://api.trakt.tv/users/test/history/episodes?page=2&limit=500");
             },
         },
-        {
-            url: "https://api.trakt.tv/users/test/history?page=2&limit=10",
-            headers: {
-                "user-agent": "Rippple/1.0",
-            },
-            assertResult(result) {
-                assert.equal(result.url, "https://api.trakt.tv/users/test/history?page=2&limit=100");
-            },
-        },
     ];
 
     const requestRoutes = createRequestPhaseRoutes();

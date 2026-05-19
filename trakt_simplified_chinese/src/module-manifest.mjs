@@ -142,15 +142,6 @@ const scriptRules = [
         argumentKeys: CORE_ARGUMENT_KEYS,
     },
     {
-        title: "Trakt Rippple History Request",
-        comment: "拦截 Rippple 的 history 请求，确保 limit 至少为 100",
-        phase: "http-request",
-        pattern: String.raw`^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/?(\?.*)?$`,
-        scriptFile: TRAKT_SCRIPT_FILE,
-        timeout: 10,
-        argumentKeys: CORE_ARGUMENT_KEYS,
-    },
-    {
         title: "Trakt Current Season Request",
         comment: "拦截带季号的请求，记录当前浏览季",
         phase: "http-request",

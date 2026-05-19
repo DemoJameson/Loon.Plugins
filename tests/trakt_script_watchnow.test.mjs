@@ -444,7 +444,7 @@ test("merged history episodes 请求在关闭 historyEpisodesMergedByShow 后不
     assert.equal(Object.keys(result).length, 0);
 });
 
-test("关闭 historyEpisodesMergedByShow 不会影响 Rippple history 的最小 limit 改写", async () => {
+test("关闭 historyEpisodesMergedByShow 时 Rippple history 请求也不会改写", async () => {
     const { result } = await runRequestCase({
         url: "https://api.trakt.tv/users/me/history?page=1&limit=20",
         headers: {
@@ -455,10 +455,10 @@ test("关闭 historyEpisodesMergedByShow 不会影响 Rippple history 的最小 
         },
     });
 
-    assert.equal(result.url, "https://api.trakt.tv/users/me/history?page=1&limit=100");
+    assert.equal(Object.keys(result).length, 0);
 });
 
-test("Rippple history 请求在非 Rippple UA 下不会误改写", async () => {
+test("普通 history 请求在非 Rippple UA 下不会误改写", async () => {
     const { result } = await runRequestCase({
         url: "https://api.trakt.tv/users/me/history?page=1&limit=20",
         headers: {

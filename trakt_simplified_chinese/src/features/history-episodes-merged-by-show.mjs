@@ -5,7 +5,6 @@ import * as cacheUtils from "../utils/cache.mjs";
 import * as commonUtils from "../utils/common.mjs";
 
 const HISTORY_EPISODES_LIMIT = 500;
-const RIPPPLE_HISTORY_MIN_LIMIT = 100;
 
 function buildMinimumLimitRequestUrl(url, minimumLimit) {
     const normalizedMinimumLimit = Number(minimumLimit);
@@ -31,36 +30,18 @@ function isHistoryEpisodesListUrl(url) {
     return /^(?:users\/[^/]+\/history\/episodes|sync\/history\/episodes)$/.test(url.shortPathname);
 }
 
-function isBrowserUserAgent() {
-    const userAgent = globalThis.$ctx.userAgent;
-    return !!userAgent && /mozilla\/5\.0/i.test(userAgent);
-}
-
-function isRipppleUserAgent() {
-    return /^Rippple/i.test(globalThis.$ctx.userAgent);
-}
-
-function isRipppleHistoryListUrl(url) {
-    return /^users\/[^/]+\/history$/.test(url.shortPathname);
+function isTraktUserAgent() {
+    return /^Trakt/i.test(globalThis.$ctx.userAgent);
 }
 
 function shouldMergeHistoryEpisodesByShow(url) {
     const context = globalThis.$ctx;
     const resolvedUrl = url ?? context.url;
-    return context.argument.historyEpisodesMergedByShow && !isBrowserUserAgent() && isHistoryEpisodesListUrl(resolvedUrl);
-}
-
-function shouldApplyRipppleHistoryLimit(url) {
-    const resolvedUrl = url ?? globalThis.$ctx.url;
-    return isRipppleUserAgent() && isRipppleHistoryListUrl(resolvedUrl);
+    return context.argument.historyEpisodesMergedByShow && isTraktUserAgent() && isHistoryEpisodesListUrl(resolvedUrl);
 }
 
 function buildMergedHistoryEpisodesRequestUrl(url, shouldApply) {
     return shouldApply ? buildMinimumLimitRequestUrl(url, HISTORY_EPISODES_LIMIT) : String(url.href);
-}
-
-function buildRipppleHistoryRequestUrl(url, shouldApply) {
-    return shouldApply ? buildMinimumLimitRequestUrl(url, RIPPPLE_HISTORY_MIN_LIMIT) : String(url.href);
 }
 
 function getHistoryShowBucketKey(url) {
@@ -204,14 +185,12 @@ function processMergedHistoryEpisodeListBody(sourceBody, url) {
 
 async function handleMergedHistoryEpisodesRewriteRequest() {
     const context = globalThis.$ctx;
-    const isRippple = isRipppleHistoryListUrl(context.url);
-    const shouldApply = isRippple ? shouldApplyRipppleHistoryLimit(context.url) : shouldMergeHistoryEpisodesByShow(context.url);
-    if (!shouldApply) {
+    if (!shouldMergeHistoryEpisodesByShow(context.url)) {
         return { type: "passThrough" };
     }
     return {
         type: "rewriteRequest",
-        url: (isRippple ? buildRipppleHistoryRequestUrl : buildMergedHistoryEpisodesRequestUrl)(context.url, true),
+        url: buildMergedHistoryEpisodesRequestUrl(context.url, true),
     };
 }
 
@@ -222,4 +201,4 @@ async function handleMergedHistoryEpisodeList() {
     return mediaTranslationHelper.translateWrapperItems(historyBody);
 }
 
-export { handleMergedHistoryEpisodeList, handleMergedHistoryEpisodesRewriteRequest, shouldApplyRipppleHistoryLimit, shouldMergeHistoryEpisodesByShow };
+export { handleMergedHistoryEpisodeList, handleMergedHistoryEpisodesRewriteRequest, shouldMergeHistoryEpisodesByShow };

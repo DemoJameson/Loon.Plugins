@@ -13,8 +13,6 @@
 ^https:\/\/apiz?\.trakt\.tv\/sync\/history\/episodes\/?(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截 history/episodes 请求，放大 limit
 ^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/episodes\/?(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/trakt_simplified_chinese.js
-# 拦截 Rippple 的 history 请求，确保 limit 至少为 100
-^https:\/\/apiz?\.trakt\.tv\/users\/[^\/]+?\/history\/?(\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 拦截带季号的请求，记录当前浏览季
 ^https:\/\/apiz?\.trakt\.tv\/shows\/[^\/]+\/seasons\/\d+(?:\/.*|\?.*)?$ url script-request-header https://raw.githubusercontent.com/DemoJameson/Proxy.Modules/main/trakt_simplified_chinese/trakt_simplified_chinese.js
 # 统一拦截 Trakt 响应，由脚本内部分流处理

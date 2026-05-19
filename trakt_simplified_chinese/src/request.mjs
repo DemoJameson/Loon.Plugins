@@ -36,7 +36,6 @@ function createRequestPhaseRoutes() {
             pattern: /^(?:users\/[^/]+\/history\/episodes|sync\/history\/episodes)$/,
             handler: historyEpisodesMergedByShowHandler.handleMergedHistoryEpisodesRewriteRequest,
         }),
-        createRoute({ id: "history.rippple.rewrite", pattern: /^users\/[^/]+\/history$/, handler: historyEpisodesMergedByShowHandler.handleMergedHistoryEpisodesRewriteRequest }),
     ];
 }
 
